@@ -1,6 +1,11 @@
 import re
+from difflib import SequenceMatcher
 
-HYPHENS = dict.fromkeys(map(ord, "\u2010\u2011\u2012\u2013\u2014\u2015\u2212"), "-")
+CHOICE_PATTERNS = (
+    r"Answer:\s*\**\s*\(?([A-J])\)?",
+    r"answer is\s*\**\s*\(?([A-J])\)?",
+    r"\\boxed\{\s*\(?([A-J])\)?\s*\}",
+)
 
 
 def last_boxed(text):
@@ -21,13 +26,8 @@ def last_boxed(text):
     return None
 
 
-def mmlupro(content, gold):
-    patterns = (
-        r"Answer:\s*\**\s*\(?([A-J])\)?",
-        r"answer is\s*\**\s*\(?([A-J])\)?",
-        r"\\boxed\{\s*\(?([A-J])\)?\s*\}",
-    )
-    for pattern in patterns:
+def choice(content, gold):
+    for pattern in CHOICE_PATTERNS:
         hits = re.findall(pattern, content, flags=re.IGNORECASE)
         if hits:
             prediction = hits[-1].upper()
@@ -35,54 +35,43 @@ def mmlupro(content, gold):
     return None, 0.0
 
 
-def aime(content, gold):
+def math(content, gold):
+    """The last \\boxed{} answer against the gold one, compared symbolically so 7/2, \\frac{7}{2} and 3.5 all count."""
+    from math_verify import parse, verify
+
     boxed = last_boxed(content)
     if boxed is None:
         return None, 0.0
-    cleaned = re.sub(r"\\(?:text|mathrm|mathbf)\{([^}]*)\}", r"\1", boxed).rsplit("=", 1)[-1]
-    cleaned = cleaned.replace(",", "").replace("$", "").replace(" ", "")
-    match = re.search(r"-?\d+", cleaned)
-    prediction = str(int(match.group())) if match else cleaned
-    return prediction, float(prediction == gold)
+    try:
+        return boxed.strip(), float(verify(parse(f"${gold}$"), parse(f"${boxed}$")))
+    except Exception:
+        return boxed.strip(), float(boxed.strip() == gold.strip())
 
 
-def niah(content, gold):
-    content = content.translate(HYPHENS)
-    found = {}
-    for key in gold:
-        match = re.search(re.escape(key) + r"[^\n\d]*?(\d{7})", content, flags=re.IGNORECASE)
-        found[key] = match.group(1) if match else None
-    return found, sum(found[key] == code for key, code in gold.items()) / len(gold)
+def mrcr(content, gold):
+    """OpenAI's MRCR grade: zero without the requested prefix, otherwise the difflib ratio against the needle."""
+    response = content.lstrip()
+    if not response.startswith(gold["prefix"]):
+        return None, 0.0
+    answer = gold["answer"].removeprefix(gold["prefix"])
+    return response[:80], SequenceMatcher(None, response.removeprefix(gold["prefix"]), answer).ratio()
 
 
-def normalize_argument(value):
-    if isinstance(value, str):
-        return value.strip().lower().rstrip("/")
-    if isinstance(value, float) and value.is_integer():
-        return int(value)
-    if isinstance(value, list):
-        return sorted(normalize_argument(item) for item in value)
-    return value
+def graphwalks(content, gold):
+    """F1 of the node set on the response's last line; an unformatted answer scores zero."""
+    lines = content.rstrip().split("\n")
+    match = re.search(r"Final Answer: ?\[(.*)\]", lines[-1]) if lines else None
+    if match is None:
+        return None, 0.0
+    predicted = {item.strip().strip("'\"") for item in match.group(1).split(",") if item.strip()}
+    truth = set(gold)
+    if not predicted and not truth:
+        return [], 1.0
+    overlap = len(predicted & truth)
+    if overlap == 0:
+        return sorted(predicted), 0.0
+    precision, recall = overlap / len(predicted), overlap / len(truth)
+    return sorted(predicted), 2 * precision * recall / (precision + recall)
 
 
-def arguments_match(expected, actual):
-    return all(key in actual and normalize_argument(actual[key]) == normalize_argument(value)
-               for key, value in expected.items())
-
-
-def tools(expected, calls):
-    """Exact tool name plus every expected argument; extra optional arguments are allowed, extra calls are not."""
-    if not expected:
-        return not calls
-    if len(calls) != len(expected):
-        return False
-    remaining = list(calls)
-    for name, arguments in expected:
-        found = next((call for call in remaining if call[0] == name and arguments_match(arguments, call[1])), None)
-        if found is None:
-            return False
-        remaining.remove(found)
-    return True
-
-
-TEXT_SCORERS = {"mmlupro": mmlupro, "aime": aime, "niah": niah}
+TEXT_SCORERS = {"supergpqa": choice, "math": math, "mrcr": mrcr, "graphwalks": graphwalks}

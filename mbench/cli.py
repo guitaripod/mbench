@@ -1,6 +1,7 @@
 import argparse
 import json
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -9,11 +10,13 @@ from importlib import metadata
 from pathlib import Path
 from typing import NoReturn
 
-from . import __version__, board, gpu, lmx, paths, profiles, store, suite, swap
+from . import __version__, board, gpu, lmx, metrics, paths, profiles, store, suite, swap
 from .engine import resolve_effort
 
 ACTIVE = ("queued", "running")
-DURATIONS = {"full": "1–4 hours", "quick": "30–60 minutes", "smoke": "about 5 minutes"}
+DURATIONS = {"full": "2–5 hours", "quick": "45–90 minutes", "smoke": "about 10 minutes"}
+REUSE_FILES = {"speed": ("speed.json",), "lcb": ("lcb.jsonl", "lcb.graded.jsonl")}
+REUSE_STATUSES = ("complete", "failed", "cancelled")
 
 
 def fail(message) -> NoReturn:
@@ -127,9 +130,9 @@ class Follower:
             rate = (event["done"] - first[1]) / max(1e-6, event["t"] - first[0])
             eta = (event["total"] - event["done"]) / rate if rate > 0 else None
             filled = int(24 * event["done"] / max(1, event["total"]))
-            text = f"{stamp}  {phase:<8} [{'#' * filled}{'.' * (24 - filled)}] {event['done']}/{event['total']}  eta {duration(eta)}"
+            text = f"{stamp}  {phase:<10} [{'#' * filled}{'.' * (24 - filled)}] {event['done']}/{event['total']}  eta {duration(eta)}"
             if self.tty:
-                print("\r" + text.ljust(78), end="", flush=True)
+                print("\r" + text.ljust(80), end="", flush=True)
                 self.open_line = event["done"] < event["total"]
                 if not self.open_line:
                     print()
@@ -140,21 +143,26 @@ class Follower:
             print()
             self.open_line = False
         details = " ".join(f"{key}={value}" for key, value in event.items() if key not in ("t", "phase"))
-        print(f"{stamp}  {phase:<8} {details}".rstrip())
+        print(f"{stamp}  {phase:<10} {details}".rstrip())
+
+
+def definition_of(run):
+    return suite.DEFINITIONS.get(suite.version_of(run["suite"]), suite.DEFINITIONS[suite.VERSION])
 
 
 def summary(db, run_id):
-    metrics = store.metrics_of(db, run_id)
+    metrics_ = store.metrics_of(db, run_id)
+    definition = definition_of(store.get_run(db, run_id))
 
     def show(key, label, unit=""):
-        entry = metrics.get(key)
+        entry = metrics_.get(key)
         if entry and entry.get("value") is not None:
             interval = f"  ({entry['lo']:.1f}–{entry['hi']:.1f})" if entry.get("lo") is not None and unit == "%" else ""
             print(f"  {label:<26} {entry['value']:>8.1f} {unit}{interval}")
 
     show("index.quality", "Quality index", "%")
-    for task in suite.INDEX_TASKS:
-        show(f"{task}.score", suite.TASK_LABELS[task], "%")
+    for task in definition["index_tasks"]:
+        show(f"{task}.score", definition["labels"][task], "%")
     show("speed.decode", "Decode, one request", "tok/s")
     show("speed.conc.4", "Throughput, 4 at once", "tok/s")
     show("speed.ttft.32000", "First token, 32k prompt", "s")
@@ -184,6 +192,59 @@ def follow(run_id):
         print(f"\nDetached. {run_id} keeps running; see `mbench status` or `mbench logs -f`.")
 
 
+def level_of(run):
+    return (run.get("flags") or {}).get("effort_level") or run.get("effort")
+
+
+def reuse_problem(run, profile, level, suite_name):
+    """Why an earlier run's answers can't stand in for this one's, or None when they can."""
+    if run["model"] != profile.id:
+        return f"it measured {run['model']}"
+    if run["status"] not in REUSE_STATUSES:
+        return f"it is {run['status']}"
+    if suite.kind_of(run["suite"]) != suite_name:
+        return f"it ran the {suite.kind_of(run['suite'])} suite, not {suite_name}"
+    if level_of(run) != level:
+        return f"it ran at effort {level_of(run)}, not {level}"
+    if run.get("fingerprint") != profile.fingerprint:
+        return "the model's llama-swap command or launcher changed since"
+    return None
+
+
+def task_files(task):
+    return REUSE_FILES.get(task, (f"{task}.jsonl",))
+
+
+def carried_tasks(run, tasks):
+    """The tasks whose answers the earlier run has and whose items and scoring are unchanged in this suite version."""
+    source = paths.RUNS / run["id"]
+    return [task for task in tasks if suite.reusable(task, suite.version_of(run["suite"]))
+            and (source / task_files(task)[0]).exists()]
+
+
+def reuse_source(db, requested, profile, level, suite_name, tasks):
+    if requested != "latest":
+        run = store.get_run(db, requested) or fail(f"no run {requested}")
+        problem = reuse_problem(run, profile, level, suite_name)
+        if problem:
+            fail(f"can't reuse {requested}: {problem}")
+        return run
+    for run in store.list_runs(db, model=profile.id):
+        if reuse_problem(run, profile, level, suite_name) is None and carried_tasks(run, tasks):
+            return run
+    fail(f"no earlier {suite_name} run of {profile.id} at effort {level} with the same config has answers to reuse")
+
+
+def carry_over(run, run_id, tasks):
+    carried = carried_tasks(run, tasks)
+    for task in carried:
+        for name in task_files(task):
+            source = paths.RUNS / run["id"] / name
+            if source.exists():
+                shutil.copyfile(source, paths.RUNS / run_id / name)
+    return carried
+
+
 def cmd_run(args):
     profile = resolve_profile(args.model)
     if not swap.reachable():
@@ -207,18 +268,24 @@ def cmd_run(args):
     if active:
         fail(f"{active[0]['id']} is still running; follow it with `mbench status` or stop it with `mbench cancel`")
     suite_name = "smoke" if args.smoke else "quick" if args.quick else "full"
+    source = reuse_source(db, args.reuse, profile, level, suite_name, tasks) if args.reuse else None
     run_id = f"{datetime.now():%Y%m%d-%H%M%S}-{profile.id}"
     (paths.RUNS / run_id).mkdir(parents=True, exist_ok=True)
+    carried = carry_over(source, run_id, tasks) if source else []
+    flags = {"tasks": tasks, "submit": args.submit, "effort_level": level}
+    if carried:
+        flags["reused"] = {"run": source["id"], "tasks": carried}
     store.insert_run(db, {
         "id": run_id, "model": profile.id, "name": profile.name, "suite": suite.label(suite_name),
         "effort": args.effort, "status": "queued", "harness": harness(), "fingerprint": profile.fingerprint,
-        "profile": profile.to_dict(), "hardware": gpu.describe(),
-        "flags": {"tasks": tasks, "submit": args.submit, "effort_level": level},
-        "note": args.note,
+        "profile": profile.to_dict(), "hardware": gpu.describe(), "flags": flags, "note": args.note,
     })
     others = [entry["model"] for entry in swap.running() if entry["model"] != profile.id]
     print(f"{run_id}: {suite.label(suite_name)} on {profile.name} at effort {args.effort}"
           + (f" ({level})" if level != args.effort else "") + f", usually {DURATIONS[suite_name]}.")
+    if source:
+        print(f"Carrying over {', '.join(carried)} from {source['id']}." if carried
+              else f"{source['id']} has nothing that still applies; measuring everything.")
     if others:
         print(f"llama-swap will unload {', '.join(others)} to make room.")
     spawn(run_id, args.foreground)
@@ -291,6 +358,9 @@ def cmd_resume(args):
         fail(f"{run['id']} is already running")
     if run["status"] == "complete":
         fail(f"{run['id']} already finished")
+    if suite.version_of(run["suite"]) != suite.VERSION:
+        fail(f"{run['id']} was measured under suite v{suite.version_of(run['suite'])} and this mbench runs v{suite.VERSION}; "
+             f"`mbench run {run['model']} --reuse {run['id']}` starts a v{suite.VERSION} run that keeps what still applies")
     store.update_run(db, run["id"], status="queued", error=None)
     spawn(run["id"], args.foreground)
     if not args.foreground and not args.detach:
@@ -305,13 +375,20 @@ def cell(entry, digits=1):
 
 def cmd_ls(args):
     data = board.collect(store.connect())
-    models = data["rankings"].get(args.effort, [])
+    version = args.suite or suite.VERSION
+    if version not in data["suites"]:
+        fail(f"no suite v{version}; there are {', '.join('v' + name for name in data['suites'])}")
+    view = data["suites"][version]
+    models = view["rankings"].get(args.effort, [])
     if not models:
-        others = ", ".join(effort for effort in data["efforts"] if effort != args.effort)
-        print(f"No finished {args.effort}-effort runs yet." + (f" There are {others}-effort runs: `mbench ls --effort <level>`." if others else
-              " Start one with `mbench run <llama-swap model>`."))
+        others = ", ".join(effort for effort in view["efforts"] if effort != args.effort)
+        older = [name for name, other in data["suites"].items() if name != version and other["efforts"]]
+        print(f"No finished {args.effort}-effort runs on suite v{version} yet."
+              + (f" There are {others}-effort runs: `mbench ls --effort <level>`." if others else "")
+              + (f" Older suites have runs: `mbench ls --suite {older[0]}`." if older else "")
+              + ("" if others or older else " Start one with `mbench run <llama-swap model>`."))
         return
-    header = ["Model", "Quality", *[suite.TASK_LABELS[task].split()[0] for task in suite.INDEX_TASKS],
+    header = ["Model", "Quality", *[view["taskShort"][task] for task in view["indexTasks"]],
               "tok/s", "4× tok/s", "TTFT 32k", "Run"]
     rows = []
     ordered = sorted(models, key=lambda model: -((model["index"] or {}).get("value") or -1))
@@ -319,7 +396,7 @@ def cmd_ls(args):
         speed = model["speed"]
         kind = model["run"]["kind"]
         rows.append([
-            model["id"], cell(model["index"]), *[cell(model["tasks"].get(task)) for task in suite.INDEX_TASKS],
+            model["id"], cell(model["index"]), *[cell(model["tasks"].get(task)) for task in view["indexTasks"]],
             cell(speed.get("decode"), 0), cell(speed.get("conc.4"), 0), cell(speed.get("ttft.32000")),
             datetime.fromtimestamp(model["run"]["finished"]).strftime("%d %b") + ("" if kind == "full" else f" {kind}"),
         ])
@@ -327,6 +404,54 @@ def cmd_ls(args):
     for row in [header, *rows]:
         print("  ".join(str(value).ljust(width) if index == 0 else str(value).rjust(width)
                         for index, (value, width) in enumerate(zip(row, widths))))
+
+
+def comparison_run(db, name, effort):
+    """A run id as given, or a model's headline run at the effort on the current suite."""
+    run = store.get_run(db, name)
+    if run:
+        return run
+    runs = [run for run in store.list_runs(db, model=name, status="complete")
+            if suite.version_of(run["suite"]) == suite.VERSION]
+    chosen = board.headline(runs, effort).get(name)
+    return chosen or fail(f"{name} is neither a run id nor a model with a finished {effort}-effort v{suite.VERSION} run")
+
+
+def verdict(entry):
+    if entry["lo"] > 0:
+        return "A ahead"
+    if entry["hi"] < 0:
+        return "B ahead"
+    return "no clear difference"
+
+
+def cmd_compare(args):
+    db = store.connect()
+    first, second = comparison_run(db, args.a, args.effort), comparison_run(db, args.b, args.effort)
+    if suite.version_of(first["suite"]) != suite.version_of(second["suite"]):
+        fail(f"{first['id']} and {second['id']} ran different suite versions, so they answered different questions")
+    definition = definition_of(first)
+    print(f"A = {first['model']} ({first['id']})\nB = {second['model']} ({second['id']})\n"
+          "Paired over the questions both answered; the interval is a 95% bootstrap on A − B.\n")
+    header = f"  {'':<22} {'A':>6} {'B':>6} {'A − B':>7}  {'95% interval':<17} n"
+    print(header)
+    by_task = {}
+    for task in definition["index_tasks"]:
+        scores_a = metrics.run_question_scores(paths.RUNS / first["id"], task)
+        scores_b = metrics.run_question_scores(paths.RUNS / second["id"], task)
+        by_task[task] = (scores_a, scores_b)
+        entry = metrics.paired(scores_a, scores_b)
+        if entry is None:
+            print(f"  {definition['labels'][task]:<22} {'–':>6} {'–':>6}")
+            continue
+        interval = f"{entry['lo']:+.1f} to {entry['hi']:+.1f}"
+        print(f"  {definition['labels'][task]:<22} {entry['a']:>6.1f} {entry['b']:>6.1f} {entry['diff']:>+7.1f}  "
+              f"{interval:<17} {entry['n']:<4} {verdict(entry)}")
+    index = metrics.paired_index({task: pair[0] for task, pair in by_task.items()},
+                                 {task: pair[1] for task, pair in by_task.items()}, definition["groups"])
+    if index:
+        print(f"\n  {'Quality index':<22} {'':>6} {'':>6} {index['diff']:>+7.1f}  "
+              f"{index['lo']:+.1f} to {index['hi']:+.1f}{'':<4} {verdict(index)}")
 
 
 def cmd_board(args):
@@ -361,12 +486,13 @@ def cmd_worker(args):
 
 ROOT_EPILOG = """\
 examples:
-  mbench run qwen3-32b                          full suite at medium effort (1–4 h, in the background)
+  mbench run qwen3-32b                          full suite at medium effort (2–5 h, in the background)
   mbench run qwen3-32b --effort max --submit
                                                 the model at its maximum effort, recorded and submitted
-  mbench run qwen3-32b --quick                  30–60 min, ranked as provisional
+  mbench run qwen3-32b --quick                  45–90 min, ranked as provisional
   mbench status                                 what is running and how far along it is
   mbench ls --effort max                        ranked table for one effort level
+  mbench compare qwen3-32b gpt-oss-120b         which differences are real, task by task
   mbench board --open                           the leaderboard page
 
 A model is any llama-swap id (see `mbench profile <id>`). Only one run at a time; a run
@@ -379,16 +505,17 @@ Benchmark one llama-swap model and rank it on the leaderboard.
 
 A run: waits for the GPU to be idle, loads the model through llama-swap, measures speed
 (greedy: 1-request decode on 3 prompts, 1/2/4 requests at once, first-token wait from 1k
-to 250k-token prompts, board power), then quality at the chosen effort (needle retrieval,
-MMLU-Pro, AIME 2025 ×4, tool calls, LiveCodeBench graded in a sandbox), and rebuilds the
-leaderboard. Answers are saved as they arrive, so `mbench resume` continues a stopped run.
-It stops itself and unloads the model if free RAM drops under 4 GB.
+to 250k-token prompts, board power), then quality at the chosen effort (SuperGPQA, AIME
+and HMMT 2026, agentic tool use, MRCR and Graphwalks long context, LiveCodeBench graded
+in a sandbox), and rebuilds the leaderboard. Answers are saved as they arrive, so
+`mbench resume` continues a stopped run. It stops itself and unloads the model if free
+RAM drops under 4 GB.
 """
 
 RUN_EPILOG = """\
 suites:
-  (default)  full: ~1.5 h for a fast MoE model, up to ~4 h for a verbose dense 27B at medium
-  --quick    30–60 min, smaller samples, shown as provisional
+  (default)  full: ~2 h for a fast MoE model, up to ~5 h for a verbose dense 27B at medium
+  --quick    45–90 min, smaller samples, shown as provisional
   --smoke    a few items per task, checks the pipeline, never shown on the board
 
 effort (--effort LEVEL, default medium):
@@ -397,7 +524,13 @@ effort (--effort LEVEL, default medium):
   "xhigh" on a Qwen3.x template that declares it and "high" on gpt-oss. Named levels work;
   `mbench profile <id>` lists them. Each effort gets its own ranking on the board and in
   `mbench ls --effort`, so a max run sits next to the everyday medium one. Higher effort
-  means more tokens per answer; a full max run of a verbose dense model can take 6 h+.
+  means more tokens per answer; a full max run of a verbose dense model can take 8 h+.
+
+reuse (--reuse [RUN]):
+  Copies the answers of an earlier run of the same model, config, effort and suite size
+  for every task whose questions and scoring haven't changed since (speed and
+  LiveCodeBench carry over from suite v1), and measures only the rest. Without a run id
+  it takes the newest run that qualifies.
 
 localmaxxing (--submit [all|speed|evals], needs hf_id and quantization in
 ~/.config/mbench/models.toml):
@@ -407,14 +540,16 @@ localmaxxing (--submit [all|speed|evals], needs hf_id and quantization in
          quantization, answered at the run's effort
   all    both; what a bare --submit means
 
-tasks (for --only/--skip): speed, niah, mmlupro, aime, tools, lcb
-  The quality index needs niah, mmlupro, aime, tools and lcb all present.
+tasks (for --only/--skip): speed, supergpqa, math, tools, mrcr, graphwalks, lcb
+  The quality index needs every quality task. It averages five groups equally:
+  knowledge (supergpqa), math, code (lcb), long context (mrcr and graphwalks) and
+  tool use.
 
 examples:
   mbench run gpt-oss-120b                        full suite; Ctrl-C detaches, the run continues
   mbench run gpt-oss-120b --effort max --submit  maximum effort, full suite, everything submitted
   mbench run qwen3-32b --quick --effort max      a quick look at maximum effort
-  mbench run gpt-oss-120b --effort low           a named level the model declares
+  mbench run gpt-oss-120b --reuse                keep speed and LiveCodeBench from the last run
   mbench run qwen3-32b --only speed --submit speed
                                                  speed only, submitted as verified runs
   mbench run qwen3-32b --skip lcb --detach       everything except LiveCodeBench, return at once
@@ -428,18 +563,20 @@ def parser():
                                    epilog=ROOT_EPILOG, formatter_class=formatter)
     root.add_argument("--version", action="version", version=f"mbench {__version__}")
     commands = root.add_subparsers(dest="command", required=True, title="commands",
-                                   metavar="{run,status,logs,cancel,resume,ls,board,profile}")
+                                   metavar="{run,status,logs,cancel,resume,ls,compare,board,profile}")
 
     run = commands.add_parser("run", help="benchmark a llama-swap model", description=RUN_DESCRIPTION,
                               epilog=RUN_EPILOG, formatter_class=formatter)
     run.add_argument("model", help="llama-swap model id or alias, e.g. qwen3-32b")
     size = run.add_mutually_exclusive_group()
-    size.add_argument("--quick", action="store_true", help="smaller samples (30–60 min), ranked as provisional")
-    size.add_argument("--smoke", action="store_true", help="a few items per task (~5 min) to check the pipeline; never ranked")
+    size.add_argument("--quick", action="store_true", help="smaller samples (45–90 min), ranked as provisional")
+    size.add_argument("--smoke", action="store_true", help="a few items per task (~10 min) to check the pipeline; never ranked")
     run.add_argument("--effort", default="medium", metavar="LEVEL",
                      help="reasoning effort: max, min, or a level the model declares (default medium); ranked per effort")
-    run.add_argument("--only", metavar="TASKS", help="comma-separated tasks to run, e.g. speed or niah,mmlupro")
+    run.add_argument("--only", metavar="TASKS", help="comma-separated tasks to run, e.g. speed or math,tools")
     run.add_argument("--skip", metavar="TASKS", help="comma-separated tasks to leave out, e.g. lcb")
+    run.add_argument("--reuse", nargs="?", const="latest", metavar="RUN",
+                     help="carry over answers that still apply from an earlier run (default: the newest that qualifies)")
     run.add_argument("--submit", nargs="?", const="all", choices=lmx.SUBMIT_CHOICES, metavar="{all,speed,evals}",
                      help="also submit to localmaxxing: all (default), speed or evals")
     run.add_argument("--note", help="free text stored with the run")
@@ -462,7 +599,15 @@ def parser():
     resume.set_defaults(handler=cmd_resume)
     ls = commands.add_parser("ls", help="ranked table of every model in the terminal")
     ls.add_argument("--effort", default="medium", metavar="LEVEL", help="which effort's ranking, e.g. medium or max (default medium)")
+    ls.add_argument("--suite", metavar="VERSION", help=f"which suite version's ranking (default {suite.VERSION})")
     ls.set_defaults(handler=cmd_ls)
+    compare = commands.add_parser("compare", help="paired comparison of two models or runs, task by task",
+                                  description="Compares two runs on the questions both answered, with a 95% bootstrap "
+                                              "interval on each difference, so you can tell a real gap from noise.")
+    compare.add_argument("a", help="model id (its headline run at --effort) or run id")
+    compare.add_argument("b", help="model id or run id")
+    compare.add_argument("--effort", default="medium", metavar="LEVEL", help="effort of the headline runs (default medium)")
+    compare.set_defaults(handler=cmd_compare)
     board_parser = commands.add_parser("board", help="rebuild the leaderboard page and print its path")
     board_parser.add_argument("--open", action="store_true", help="also open it in the browser")
     board_parser.set_defaults(handler=cmd_board)

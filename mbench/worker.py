@@ -104,6 +104,19 @@ def submit(db, run_id, profile, effort, run_dir, events, which):
         store.set_metrics(db, run_id, extra)
 
 
+def measure_speed(db, run_id, profile, spec, level, run_dir, events, abort):
+    """Measures speed once; a speed.json already in the run (resumed, or carried over with --reuse) is scored instead."""
+    speed_file = run_dir / "speed.json"
+    if speed_file.exists():
+        result = json.loads(speed_file.read_text())
+    else:
+        result = asyncio.run(speed.SpeedRun(profile, spec, level, run_id, events.progress, abort).run())
+        if not abort.is_set():
+            speed_file.write_text(json.dumps(result, indent=1))
+    store.set_metrics(db, run_id, metrics.speed_metrics(result))
+    return [app["name"] for app in result.get("contention", [])]
+
+
 def execute(run_id):
     db = store.connect()
     run = store.get_run(db, run_id)
@@ -111,7 +124,7 @@ def execute(run_id):
     run_dir.mkdir(parents=True, exist_ok=True)
     events = Events(run_dir)
     profile = Profile(**run["profile"])
-    spec = suite.SUITES[run["suite"].split("/")[0]]
+    spec = suite.SUITES[suite.kind_of(run["suite"])]
     flags = run["flags"] or {}
     tasks = flags.get("tasks") or ["speed", *suite.QUALITY_TASKS]
     level = flags.get("effort_level") or run["effort"]
@@ -122,6 +135,9 @@ def execute(run_id):
     events.emit("started", model=profile.id, suite=run["suite"], effort=f"{run['effort']} ({level})")
     contention = []
     try:
+        if suite.version_of(run["suite"]) != suite.VERSION:
+            raise RuntimeError(f"this run was started under suite v{suite.version_of(run['suite'])} and this mbench runs "
+                               f"v{suite.VERSION}; start a new run, with --reuse {run_id} to carry over what still applies")
         contention += wait_for_gpu(events)
         seconds = swap.ensure_loaded(profile.id)
         info = swap.server_info(profile.id)
@@ -129,13 +145,8 @@ def execute(run_id):
         profile.context = profile.context or swap.context_from(info)
         store.update_run(db, run_id, server={"load_s": seconds, **swap.trimmed_info(info)}, profile=profile.to_dict())
         events.emit("loaded", seconds=seconds, context=profile.context)
-        speed_file = run_dir / "speed.json"
-        if "speed" in tasks and not speed_file.exists():
-            result = asyncio.run(speed.SpeedRun(profile, spec["speed"], level, run_id, events.progress, abort).run())
-            if not abort.is_set():
-                speed_file.write_text(json.dumps(result, indent=1))
-            store.set_metrics(db, run_id, metrics.speed_metrics(result))
-            contention += [app["name"] for app in result.get("contention", [])]
+        if "speed" in tasks:
+            contention += measure_speed(db, run_id, profile, spec["speed"], level, run_dir, events, abort)
         runner = engine.QualityRunner(profile, run_dir, level, suite.CONCURRENCY, events.progress, abort)
         failed_items = 0
         for task in suite.QUALITY_TASKS:
@@ -153,7 +164,7 @@ def execute(run_id):
             store.set_metrics(db, run_id, metrics.task_metrics(task, metrics.load(run_dir, task), graded))
         if abort.is_set():
             raise RuntimeError(f"stopped because free RAM fell below {RAM_FLOOR_GB:.0f} GB")
-        store.set_metrics(db, run_id, metrics.quality_index(store.metrics_of(db, run_id)))
+        store.set_metrics(db, run_id, metrics.quality_index(store.metrics_of(db, run_id), run_dir))
         if flags.get("submit"):
             which = flags["submit"] if flags["submit"] in lmx.SUBMIT_CHOICES else "all"
             submit(db, run_id, profile, level, run_dir, events, which)

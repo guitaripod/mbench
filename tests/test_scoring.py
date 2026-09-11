@@ -1,48 +1,48 @@
 from mbench import scoring
 
 
-def test_mmlupro_final_answer_formats():
-    assert scoring.mmlupro("Reasoning...\nAnswer: **C**", "C") == ("C", 1.0)
-    assert scoring.mmlupro("So the answer is (b).", "B") == ("B", 1.0)
-    assert scoring.mmlupro("It must be \\boxed{D}", "D") == ("D", 1.0)
-    assert scoring.mmlupro("I cannot decide.", "A") == (None, 0.0)
+def test_choice_final_answer_formats():
+    assert scoring.choice("Reasoning...\nAnswer: **C**", "C") == ("C", 1.0)
+    assert scoring.choice("So the answer is (b).", "B") == ("B", 1.0)
+    assert scoring.choice("It must be \\boxed{J}", "J") == ("J", 1.0)
+    assert scoring.choice("I cannot decide.", "A") == (None, 0.0)
 
 
-def test_aime_takes_the_value_after_an_equation_chain():
-    content = r"\boxed{\; \mathbb{E}[R]=n+1+\mathbb{E}[I]=27+1+176=204 \; }"
-    assert scoring.aime(content, "204") == ("204", 1.0)
+def test_math_accepts_equivalent_forms():
+    assert scoring.math(r"so \boxed{\dfrac{7}{2}}", r"\frac{7}{2}")[1] == 1.0
+    assert scoring.math(r"\boxed{-1/21}", r"-\frac{1}{21}")[1] == 1.0
+    assert scoring.math(r"\boxed{\frac{2\sqrt{435}}{3}}", r"\frac{\sqrt{1740}}{3}")[1] == 1.0
+    assert scoring.math(r"\boxed{74^{\circ}}", r"74^\circ")[1] == 1.0
+    assert scoring.math(r"\boxed{420,261}", "420261")[1] == 1.0
 
 
-def test_aime_rejects_fractions_and_accepts_leading_zeros():
-    assert scoring.aime(r"\boxed{\dfrac{487}{3}}", "204")[1] == 0.0
-    assert scoring.aime(r"\boxed{070}", "70") == ("70", 1.0)
-    assert scoring.aime("no box here", "70") == (None, 0.0)
+def test_math_integer_answers_and_misses():
+    assert scoring.math(r"\boxed{070}", "70")[1] == 1.0
+    assert scoring.math(r"\boxed{\dfrac{487}{3}}", "204")[1] == 0.0
+    assert scoring.math("no box here", "70") == (None, 0.0)
 
 
-def test_niah_accepts_non_breaking_hyphens():
-    gold = {"scarlet-otter": "1133098", "copper-badger": "6675485"}
-    found, score = scoring.niah("scarlet‑otter: 1133098\ncopper‑badger: 6675485", gold)
-    assert score == 1.0
-    assert found == gold
+def test_math_takes_the_last_box():
+    assert scoring.math(r"first \boxed{5}, then after checking \boxed{8\sqrt6}", r"8\sqrt{6}")[1] == 1.0
+    assert scoring.math(r"\boxed{8\sqrt6} but finally \boxed{5}", r"8\sqrt{6}")[1] == 0.0
 
 
-def test_niah_partial_credit():
-    gold = {"iron-ember": "5368025", "rapid-prism": "3135960"}
-    assert scoring.niah("iron-ember: 5368025\nrapid-prism: 1111111", gold)[1] == 0.5
+def test_mrcr_needs_the_prefix_and_rates_similarity():
+    gold = {"answer": "abc123Roses are red, violets are blue.", "prefix": "abc123"}
+    assert scoring.mrcr("abc123Roses are red, violets are blue.", gold)[1] == 1.0
+    assert scoring.mrcr("\nabc123Roses are red, violets are blue.", gold)[1] == 1.0
+    assert scoring.mrcr("Roses are red, violets are blue.", gold)[1] == 0.0
+    assert 0.3 < scoring.mrcr("abc123Roses are red, skies are grey.", gold)[1] < 1.0
 
 
-def test_tools_parallel_calls_any_order():
-    expected = [["get_weather", {"city": "Tokyo"}], ["get_weather", {"city": "Paris"}]]
-    calls = [["get_weather", {"city": "paris"}], ["get_weather", {"city": "Tokyo", "unit": "celsius"}]]
-    assert scoring.tools(expected, calls)
-    assert not scoring.tools(expected, calls[:1])
+def test_graphwalks_f1_on_the_last_line():
+    assert scoring.graphwalks("thinking\nFinal Answer: [a1, b2]", ["b2", "a1"])[1] == 1.0
+    assert abs(scoring.graphwalks("Final Answer: [a1, c3]", ["a1", "b2"])[1] - 0.5) < 1e-9
+    assert scoring.graphwalks("Final Answer: []", [])[1] == 1.0
+    assert scoring.graphwalks("Final Answer: [a1]\nhope that helps", ["a1"])[1] == 0.0
+    assert scoring.graphwalks("the nodes are a1 and b2", ["a1", "b2"])[1] == 0.0
 
 
-def test_tools_no_call_expected():
-    assert scoring.tools([], [])
-    assert not scoring.tools([], [["get_weather", {"city": "Oslo"}]])
-
-
-def test_tools_numbers_and_lists_normalise():
-    assert scoring.tools([["convert_currency", {"amount": 250}]], [["convert_currency", {"amount": 250.0}]])
-    assert scoring.tools([["git_commit", {"files": ["b", "a"]}]], [["git_commit", {"files": ["A", "B"]}]])
+def test_graphwalks_disjoint_answers_score_zero_not_one():
+    assert scoring.graphwalks("Final Answer: [x9]", ["a1"])[1] == 0.0
+    assert scoring.graphwalks("Final Answer: []", ["a1"])[1] == 0.0

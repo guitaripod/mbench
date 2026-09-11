@@ -1,8 +1,7 @@
-import json
 import shutil
 import subprocess
 
-from . import datasets, paths
+from . import datasets, metrics, paths
 
 IMAGE = "mbench-lcb-grader"
 LCB_REPO = "https://github.com/LiveCodeBench/LiveCodeBench.git"
@@ -33,9 +32,14 @@ def ensure_runner():
 
 
 def grade(run_dir):
+    """Grades every answer in the container, unless an earlier grading (a resumed or reused run) already covers them all."""
     results = run_dir / "lcb.jsonl"
     if not results.exists() or not results.read_text().strip():
         return {}
+    answered = {record["id"] for record in metrics.load(run_dir, "lcb")}
+    graded = metrics.graded_of(run_dir)
+    if answered <= set(graded):
+        return graded
     ensure_image()
     runner = ensure_runner()
     dataset = datasets.fetch("lcb")
@@ -46,5 +50,4 @@ def grade(run_dir):
         IMAGE, "python", "/grade_lcb.py", "/work/lcb.jsonl", "/work/lcb.graded.jsonl", f"/data/{dataset.name}",
     ]
     subprocess.run(command, check=True, capture_output=True, text=True, timeout=7200)
-    with (run_dir / "lcb.graded.jsonl").open() as handle:
-        return {row["id"]: row["passed"] for row in map(json.loads, handle)}
+    return metrics.graded_of(run_dir)

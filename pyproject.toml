@@ -1,6 +1,6 @@
 [project]
 name = "mbench"
-version = "0.2.0"
+version = "0.3.0"
 description = "Benchmark the local LLMs behind llama-swap and rank them on one leaderboard."
 readme = "README.md"
 license = "GPL-3.0-or-later"
@@ -22,6 +22,7 @@ dependencies = [
   "tokenizers>=0.19",
   "huggingface_hub>=0.24",
   "pyyaml>=6",
+  "math-verify>=0.9",
 ]
 
 [project.urls]

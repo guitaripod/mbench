@@ -7,10 +7,11 @@ KINDS = ("full", "quick", "legacy")
 EFFORT_ORDER = ("medium", "max", "high", "xhigh", "low", "min", "minimal")
 DEFAULT_EFFORT = "medium"
 TEMPLATE = paths.PACKAGE / "templates" / "leaderboard.html"
+PART_PREFIXES = (".bin.", ".part.")
 
 
 def kind_of(run):
-    return run["suite"].split("/")[0]
+    return suite.kind_of(run["suite"])
 
 
 def effort_of(run):
@@ -34,11 +35,14 @@ def task_entry(metrics, task):
     score = metrics.get(f"{task}.score")
     if not score:
         return None
+    parts = {key.split(".", 2)[2]: entry["value"] for key, entry in metrics.items()
+             if key.startswith(task) and any(key.startswith(task + prefix) for prefix in PART_PREFIXES)}
     return {**score, **{field: (metrics.get(f"{task}.{field}") or {}).get("value")
-                        for field in ("tokens", "latency", "truncated")}}
+                        for field in ("tokens", "latency", "truncated", "unreachable", "malformed")},
+            "parts": parts}
 
 
-def model_entry(db, run, history):
+def model_entry(db, run, history, definition):
     metrics = store.metrics_of(db, run["id"])
     profile = run.get("profile") or {}
     flags = run.get("flags") or {}
@@ -66,9 +70,10 @@ def model_entry(db, run, history):
             "id": run["id"], "suite": run["suite"], "kind": kind_of(run), "finished": run.get("finished"),
             "effort": effort_of(run), "harness": run.get("harness"), "contended": flags.get("contended") or [],
             "failedItems": flags.get("failed_items") or 0, "notes": flags.get("notes"),
+            "reused": flags.get("reused"),
         },
         "index": metrics.get("index.quality"),
-        "tasks": {task: entry for task in suite.INDEX_TASKS if (entry := task_entry(metrics, task))},
+        "tasks": {task: entry for task in definition["index_tasks"] if (entry := task_entry(metrics, task))},
         "speed": {key.removeprefix("speed."): entry for key, entry in metrics.items() if key.startswith("speed.")},
         "lmx": lmx_scores,
         "submissions": submissions,
@@ -82,25 +87,44 @@ def model_entry(db, run, history):
     }
 
 
+def effort_key(name):
+    return (EFFORT_ORDER.index(name) if name in EFFORT_ORDER else len(EFFORT_ORDER), name)
+
+
+def suite_view(db, runs, version):
+    """One suite version's rankings; versions measure different tasks, so their indexes are never ranked together."""
+    definition = suite.DEFINITIONS[version]
+    rankings = {}
+    for effort in sorted({effort_of(run) for run in runs}, key=effort_key):
+        chosen = headline(runs, effort)
+        if chosen:
+            rankings[effort] = [model_entry(db, run, [entry for entry in runs if entry["model"] == model_id], definition)
+                                for model_id, run in chosen.items()]
+    return {
+        "indexTasks": list(definition["index_tasks"]),
+        "taskLabels": definition["labels"],
+        "taskShort": definition["short"],
+        "taskNotes": definition["notes"],
+        "groups": {name: list(tasks) for name, tasks in definition["groups"].items()},
+        "efforts": list(rankings),
+        "rankings": rankings,
+    }
+
+
 def collect(db):
     runs = store.list_runs(db, status="complete")
-    ranked = [run for run in runs if kind_of(run) in KINDS]
-    rankings = {}
-    present = {effort_of(run) for run in ranked}
-    for effort in sorted(present, key=lambda name: (EFFORT_ORDER.index(name) if name in EFFORT_ORDER else len(EFFORT_ORDER), name)):
-        chosen = headline(ranked, effort)
-        if chosen:
-            rankings[effort] = [model_entry(db, run, [entry for entry in ranked if entry["model"] == model_id])
-                                for model_id, run in chosen.items()]
+    ranked = [run for run in runs if kind_of(run) in KINDS and suite.version_of(run["suite"]) in suite.DEFINITIONS]
+    versions = sorted({suite.version_of(run["suite"]) for run in ranked} | {suite.VERSION}, key=int, reverse=True)
+    suites = {version: suite_view(db, [run for run in ranked if suite.version_of(run["suite"]) == version], version)
+              for version in versions}
     latest = ranked[0] if ranked else None
     return {
         "generated": time.time(),
         "suite": suite.label("full"),
+        "current": suite.VERSION,
         "hardware": (latest or {}).get("hardware") or {},
-        "indexTasks": list(suite.INDEX_TASKS),
-        "taskLabels": suite.TASK_LABELS,
-        "efforts": list(rankings),
-        "rankings": rankings,
+        "suites": suites,
+        **{key: suites[suite.VERSION][key] for key in ("indexTasks", "taskLabels", "efforts", "rankings")},
         "database": str(paths.DB),
     }
 

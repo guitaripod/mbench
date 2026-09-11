@@ -4,9 +4,13 @@ import re
 import statistics
 from collections import defaultdict
 
+import numpy as np
+
 from . import suite
 
-BINARY_TASKS = ("mmlupro", "lcb", "aime", "tools")
+BINARY_TASKS = ("supergpqa", "math", "lcb", "tools")
+BINNED_TASKS = ("mrcr", "graphwalks")
+BOOTSTRAP_DRAWS = 4000
 
 
 def wilson(successes, n, z=1.96):
@@ -35,52 +39,134 @@ def load(run_dir, task):
         return [json.loads(line) for line in handle if line.strip()]
 
 
+def graded_of(run_dir):
+    path = run_dir / "lcb.graded.jsonl"
+    if not path.exists():
+        return {}
+    with path.open() as handle:
+        return {row["id"]: row["passed"] for row in map(json.loads, handle) if row}
+
+
 def base_id(item_id):
     return re.sub(r"-(s|r)\d+$", "", item_id)
+
+
+def item_scores(task, records, graded=None):
+    if task == "lcb":
+        return {record["id"]: 1.0 if (graded or {}).get(record["id"]) else 0.0 for record in records}
+    return {record["id"]: float(record["score"] or 0.0) for record in records}
+
+
+def question_scores(task, records, graded=None):
+    """Each question's mean over its samples or repeats, so a question asked four times still counts once."""
+    groups = defaultdict(list)
+    for item_id, score in item_scores(task, records, graded).items():
+        groups[base_id(item_id)].append(score)
+    return {question: statistics.mean(values) for question, values in groups.items()}
+
+
+def run_question_scores(run_dir, task):
+    return question_scores(task, load(run_dir, task), graded_of(run_dir) if task == "lcb" else None)
+
+
+def percent(values, unit="%"):
+    return {"value": 100 * statistics.mean(values), "unit": unit, "n": len(values)}
+
+
+def breakdown(task, records, scores):
+    """Scores by length bin for the long-context tasks, by category for tool use and by competition for math."""
+    field = {"mrcr": "bin", "graphwalks": "bin", "tools": "category", "math": "competition"}.get(task)
+    if not field:
+        return {}
+    groups = defaultdict(list)
+    for record in records:
+        groups[record["meta"].get(field)].append(scores[record["id"]])
+    return {f"{task}.{'bin' if field == 'bin' else 'part'}.{key}": percent(values)
+            for key, values in groups.items() if key is not None}
 
 
 def task_metrics(task, records, graded=None):
     """Score with a 95% interval: Wilson for single-sample pass/fail tasks, otherwise the spread of per-question means."""
     if not records:
         return {}
-    if task == "lcb":
-        scores = {record["id"]: 1.0 if (graded or {}).get(record["id"]) else 0.0 for record in records}
-    else:
-        scores = {record["id"]: float(record["score"] or 0.0) for record in records}
-    groups = defaultdict(list)
-    for item_id, score in scores.items():
-        groups[base_id(item_id)].append(score)
-    per_question = [statistics.mean(values) for values in groups.values()]
-    single_sample = all(len(values) == 1 for values in groups.values())
+    scores = item_scores(task, records, graded)
+    per_question = list(question_scores(task, records, graded).values())
+    single_sample = len(per_question) == len(scores)
     if task in BINARY_TASKS and single_sample:
         value = statistics.mean(per_question)
         lo, hi = wilson(sum(per_question), len(per_question))
     else:
         value, lo, hi = mean_interval(per_question)
     tokens = [record["completion_tokens"] for record in records if record.get("completion_tokens") is not None]
-    latencies = [record["latency"] for record in records if record.get("latency") is not None]
+    latencies = [record["latency"] for record in records if record.get("finish") != "context" and record.get("latency")]
     out = {f"{task}.score": {"value": 100 * value, "unit": "%", "n": len(per_question), "lo": 100 * lo, "hi": 100 * hi}}
     if tokens:
         out[f"{task}.tokens"] = {"value": statistics.mean(tokens), "unit": "tokens", "n": len(tokens)}
     if latencies:
         out[f"{task}.latency"] = {"value": statistics.median(latencies), "unit": "s", "n": len(latencies)}
-    truncated = [record.get("finish") == "length" for record in records]
-    out[f"{task}.truncated"] = {"value": 100 * sum(truncated) / len(truncated), "unit": "%", "n": len(truncated)}
+    out[f"{task}.truncated"] = percent([record.get("finish") == "length" for record in records])
+    if any(record.get("finish") == "context" for record in records):
+        out[f"{task}.unreachable"] = percent([record.get("finish") == "context" for record in records])
+    if task == "tools":
+        out["tools.malformed"] = percent([bool(record.get("malformed")) for record in records])
+    out.update(breakdown(task, records, scores))
     return out
 
 
-def quality_index(existing):
-    """Mean of the five index tasks; left out until every one of them has a score, so partial runs never rank."""
-    entries = [existing.get(f"{task}.score") for task in suite.INDEX_TASKS]
-    if any(entry is None or entry.get("value") is None for entry in entries):
+def resample_means(values, rng, draws=BOOTSTRAP_DRAWS):
+    values = np.asarray(values, dtype=float)
+    return values[rng.integers(0, len(values), size=(draws, len(values)))].mean(axis=1)
+
+
+def combine(task_means, groups):
+    """The quality index from per-task means: tasks average within their group, groups average equally."""
+    return np.mean([np.mean([task_means[task] for task in tasks], axis=0) for tasks in groups.values()], axis=0)
+
+
+def quality_index(existing, run_dir, groups=None):
+    """Mean of the index groups, left out until every task has a score; its interval bootstraps questions within each task."""
+    groups = groups or suite.INDEX_GROUPS
+    tasks = [task for members in groups.values() for task in members]
+    if any((existing.get(f"{task}.score") or {}).get("value") is None for task in tasks):
         return {}
+    per_task = {task: list(run_question_scores(run_dir, task).values()) for task in tasks}
+    if any(not values for values in per_task.values()):
+        return {}
+    rng = np.random.default_rng(0)
+    draws = combine({task: resample_means(values, rng) for task, values in per_task.items()}, groups)
+    value = combine({task: np.mean(values) for task, values in per_task.items()}, groups)
     return {"index.quality": {
-        "value": statistics.mean(entry["value"] for entry in entries),
-        "unit": "%",
-        "n": len(entries),
-        "lo": statistics.mean(entry["lo"] if entry.get("lo") is not None else entry["value"] for entry in entries),
-        "hi": statistics.mean(entry["hi"] if entry.get("hi") is not None else entry["value"] for entry in entries),
+        "value": 100 * float(value), "unit": "%", "n": len(groups),
+        "lo": 100 * float(np.percentile(draws, 2.5)), "hi": 100 * float(np.percentile(draws, 97.5)),
     }}
+
+
+def paired(scores_a, scores_b, rng=None):
+    """A minus B over the questions both runs answered, with a bootstrap 95% interval on the difference."""
+    shared = sorted(set(scores_a) & set(scores_b))
+    if not shared:
+        return None
+    a = np.array([scores_a[question] for question in shared])
+    b = np.array([scores_b[question] for question in shared])
+    draws = resample_means(a - b, rng or np.random.default_rng(0))
+    return {"n": len(shared), "a": 100 * a.mean(), "b": 100 * b.mean(), "diff": 100 * (a - b).mean(),
+            "lo": 100 * float(np.percentile(draws, 2.5)), "hi": 100 * float(np.percentile(draws, 97.5))}
+
+
+def paired_index(tasks_a, tasks_b, groups=None):
+    """The quality-index difference, resampling the same shared questions for both runs so their correlation cancels."""
+    groups = groups or suite.INDEX_GROUPS
+    rng = np.random.default_rng(0)
+    diffs, means = {}, {}
+    for task in (task for members in groups.values() for task in members):
+        shared = sorted(set(tasks_a.get(task, {})) & set(tasks_b.get(task, {})))
+        if not shared:
+            return None
+        delta = np.array([tasks_a[task][question] - tasks_b[task][question] for question in shared])
+        diffs[task], means[task] = resample_means(delta, rng), delta.mean()
+    draws = combine(diffs, groups)
+    return {"diff": 100 * float(combine(means, groups)),
+            "lo": 100 * float(np.percentile(draws, 2.5)), "hi": 100 * float(np.percentile(draws, 97.5))}
 
 
 def power_of(row):

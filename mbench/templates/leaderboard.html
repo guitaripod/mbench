@@ -157,14 +157,16 @@ footer { color: var(--muted); font-size: 0.8rem; }
   <header class="masthead">
     <p class="eyebrow" id="meta"></p>
     <h1>Model leaderboard</h1>
-    <p class="lede">Every model llama-swap serves, measured the same way on this GPU. The quality index is the mean of MMLU-Pro, AIME 2025, LiveCodeBench v6, needle retrieval and tool calls. Each reasoning effort is ranked on its own; max is the highest level each model offers. Speed is one request at a time unless a column says otherwise.</p>
+    <p class="lede" id="lede"></p>
   </header>
   <div id="content"></div>
   <section class="howto" aria-labelledby="howto-title">
     <h2 id="howto-title">Benchmark another model</h2>
-    <pre>mbench run &lt;llama-swap id&gt;          full suite, 1–4 hours, runs in the background
-mbench run &lt;id&gt; --quick             30–60 minutes, ranked as provisional
+    <pre>mbench run &lt;llama-swap id&gt;          full suite, 2–5 hours, runs in the background
+mbench run &lt;id&gt; --quick             45–90 minutes, ranked as provisional
+mbench run &lt;id&gt; --reuse             keep what still applies from the last run
 mbench run &lt;id&gt; --submit            also submit to localmaxxing
+mbench compare &lt;id&gt; &lt;id&gt;           which differences are real, task by task
 mbench status · mbench logs -f · mbench ls · mbench board --open</pre>
   </section>
   <footer id="footer"></footer>
@@ -173,13 +175,27 @@ mbench status · mbench logs -f · mbench ls · mbench board --open</pre>
 <script>
 const DATA = /*__DATA__*/null;
 const NS = "http://www.w3.org/2000/svg";
-const TASKS = DATA.indexTasks;
-const LABELS = DATA.taskLabels;
-const state = { sortKey: "index", sortDir: "desc", selected: null, effort: "medium" };
+const SUITES = DATA.suites || { [DATA.current || "1"]: { indexTasks: DATA.indexTasks, taskLabels: DATA.taskLabels, taskNotes: {}, groups: null, efforts: DATA.efforts, rankings: DATA.rankings } };
+const CURRENT = DATA.current || Object.keys(SUITES)[0];
+const WITH_RUNS = Object.keys(SUITES).filter(name => SUITES[name].efforts.length).sort((a, b) => Number(b) - Number(a));
+const state = { sortKey: "index", sortDir: "desc", selected: null, effort: "medium", suite: SUITES[CURRENT].efforts.length ? CURRENT : (WITH_RUNS[0] || CURRENT) };
 const EFFORT_LABELS = { medium: "Medium effort", max: "Max effort", min: "Min effort" };
+const COUNT_NOUNS = { math: "problems", aime: "problems", lcb: "problems", tools: "episodes", mrcr: "conversations", graphwalks: "graphs", niah: "prompts" };
+
+function view() {
+  return SUITES[state.suite] || SUITES[CURRENT];
+}
+
+function tasks() {
+  return view().indexTasks;
+}
+
+function label(task) {
+  return view().taskLabels[task] || task;
+}
 
 function current() {
-  return DATA.rankings[state.effort] || [];
+  return view().rankings[state.effort] || [];
 }
 
 function h(tag, attrs, children) {
@@ -219,19 +235,21 @@ function shortName(model) {
 }
 
 function avgTokens(model) {
-  const values = ["mmlupro", "aime", "lcb"].map(task => model.tasks[task] && model.tasks[task].tokens).filter(value => value != null);
+  const values = tasks().filter(task => task !== "tools").map(task => model.tasks[task] && model.tasks[task].tokens).filter(value => value != null);
   return values.length ? values.reduce((a, b) => a + b, 0) / values.length : null;
 }
 
-const COLUMNS = [
-  { key: "index", label: "Quality", get: m => m.index && m.index.value, better: "high", render: m => pctCell(m.index) },
-  ...TASKS.map(task => ({ key: task, label: LABELS[task].replace(" v6", "").replace(" 2025", ""), get: m => m.tasks[task] && m.tasks[task].value,
-    better: "high", render: m => pctCell(m.tasks[task], true) })),
-  { key: "decode", label: "Decode tok/s", get: m => m.speed.decode && m.speed.decode.value, better: "high", render: m => numCell(m.speed.decode && m.speed.decode.value, fmt.int) },
-  { key: "conc4", label: "4 at once", get: m => m.speed["conc.4"] && m.speed["conc.4"].value, better: "high", render: m => numCell(m.speed["conc.4"] && m.speed["conc.4"].value, fmt.int) },
-  { key: "ttft", label: "First token 32k", get: m => m.speed["ttft.32000"] && m.speed["ttft.32000"].value, better: "low", render: m => numCell(m.speed["ttft.32000"] && m.speed["ttft.32000"].value, fmt.secs) },
-  { key: "tokens", label: "Tokens/answer", get: avgTokens, better: "low", render: m => numCell(avgTokens(m), fmt.int) },
-];
+function columns() {
+  return [
+    { key: "index", label: "Quality", get: m => m.index && m.index.value, better: "high", render: m => pctCell(m.index) },
+    ...tasks().map(task => ({ key: task, label: label(task).replace(" v6", "").replace(" 2025", "").replace(" 2026", ""), get: m => m.tasks[task] && m.tasks[task].value,
+      better: "high", render: m => pctCell(m.tasks[task], true) })),
+    { key: "decode", label: "Decode tok/s", get: m => m.speed.decode && m.speed.decode.value, better: "high", render: m => numCell(m.speed.decode && m.speed.decode.value, fmt.int) },
+    { key: "conc4", label: "4 at once", get: m => m.speed["conc.4"] && m.speed["conc.4"].value, better: "high", render: m => numCell(m.speed["conc.4"] && m.speed["conc.4"].value, fmt.int) },
+    { key: "ttft", label: "First token 32k", get: m => m.speed["ttft.32000"] && m.speed["ttft.32000"].value, better: "low", render: m => numCell(m.speed["ttft.32000"] && m.speed["ttft.32000"].value, fmt.secs) },
+    { key: "tokens", label: "Tokens/answer", get: avgTokens, better: "low", render: m => numCell(avgTokens(m), fmt.int) },
+  ];
+}
 
 function pctCell(entry, meter) {
   if (!entry || entry.value == null) return h("td", { className: "num", text: "–" });
@@ -248,7 +266,8 @@ function numCell(value, format) {
 }
 
 function sortedModels() {
-  const column = COLUMNS.find(item => item.key === state.sortKey) || COLUMNS[0];
+  const list = columns();
+  const column = list.find(item => item.key === state.sortKey) || list[0];
   const direction = state.sortDir === "asc" ? 1 : -1;
   return [...current()].sort((a, b) => {
     const va = column.get(a), vb = column.get(b);
@@ -270,10 +289,11 @@ function modelMeta(model) {
 
 function renderTable(host) {
   const table = h("table", { "aria-label": "Models ranked" });
+  const cols = columns();
   const headRow = h("tr");
   headRow.appendChild(h("th", { scope: "col", text: "#" }));
   headRow.appendChild(h("th", { scope: "col", className: "model", text: "Model" }));
-  for (const column of COLUMNS) {
+  for (const column of cols) {
     const sort = state.sortKey === column.key ? (state.sortDir === "asc" ? "ascending" : "descending") : null;
     headRow.appendChild(h("th", { scope: "col", "aria-sort": sort }, [h("button", {
       type: "button", text: column.label,
@@ -295,7 +315,7 @@ function renderTable(host) {
     });
     row.appendChild(h("td", { className: "rank", text: String(index + 1) }));
     row.appendChild(h("td", { className: "model" }, [h("span", { className: "model-name", text: model.name }), modelMeta(model)]));
-    for (const column of COLUMNS) row.appendChild(column.render(model));
+    for (const column of cols) row.appendChild(column.render(model));
     row.appendChild(h("td", { className: "num", text: fmt.date(model.run.finished) }));
     body.appendChild(row);
   });
@@ -394,7 +414,7 @@ function strip(task, model) {
   const entry = model.tasks[task];
   const width = 320, height = 26, pad = 6;
   const x = value => pad + (width - 2 * pad) * value / 100;
-  const svgNode = s("svg", { viewBox: `0 0 ${width} ${height}`, role: "img", "aria-label": `${LABELS[task]} scores across models` });
+  const svgNode = s("svg", { viewBox: `0 0 ${width} ${height}`, role: "img", "aria-label": `${label(task)} scores across models` });
   s("line", { x1: pad, x2: width - pad, y1: 13, y2: 13, class: "grid" }, svgNode);
   for (const t of [0, 25, 50, 75, 100]) s("line", { x1: x(t), x2: x(t), y1: 9, y2: 17, class: "grid" }, svgNode);
   for (const other of current()) {
@@ -408,18 +428,27 @@ function strip(task, model) {
   }
   const notes = [];
   if (entry) {
-    notes.push(`${entry.n} ${task === "aime" ? "problems" : "questions"}`);
-    if (entry.tokens != null) notes.push(`${fmt.int(entry.tokens)} tokens per answer`);
+    notes.push(`${entry.n} ${COUNT_NOUNS[task] || "questions"}`);
+    if (entry.tokens != null) notes.push(`${fmt.int(entry.tokens)} tokens per ${task === "tools" ? "episode" : "answer"}`);
     if (entry.latency != null) notes.push(`median ${fmt.secs(entry.latency)}`);
     if (entry.truncated) notes.push(`${entry.truncated.toFixed(0)}% hit the token limit`);
+    if (entry.unreachable) notes.push(`${entry.unreachable.toFixed(0)}% longer than the context window`);
+    if (entry.malformed) notes.push(`${entry.malformed.toFixed(0)}% with malformed calls`);
   }
+  const parts = Object.entries((entry && entry.parts) || {});
+  const numeric = parts.every(([key]) => /^\d+$/.test(key));
+  const partText = parts.sort((a, b) => numeric ? Number(a[0]) - Number(b[0]) : a[0].localeCompare(b[0]))
+    .map(([key, value]) => `${numeric ? fmt.ctx(Number(key)) : key} ${Math.round(value)}`).join(" · ");
+  const note = (view().taskNotes || {})[task];
   return h("div", { className: "strip" }, [
     h("div", { className: "strip-head" }, [
-      h("h3", { text: LABELS[task] }),
+      h("h3", { text: label(task), title: note || null }),
       h("b", { text: entry ? `${fmt.pct(entry.value)}%` + (entry.lo != null ? `  (${entry.lo.toFixed(1)}–${entry.hi.toFixed(1)})` : "") : "not run" }),
     ]),
     svgNode,
     h("span", { className: "strip-note", text: notes.join(" · ") }),
+    partText ? h("span", { className: "strip-note", text: (numeric ? "By length: " : "By part: ") + partText }) : null,
+    note ? h("span", { className: "strip-note", text: note }) : null,
   ]);
 }
 
@@ -502,8 +531,9 @@ function renderDetail(host) {
       h("span", { text: `effort ${model.run.effort || "–"}` }), h("span", { text: `config ${model.fingerprint || "–"}` }),
     ]),
     model.run.notes ? h("p", { className: "lede", text: model.run.notes }) : null,
+    model.run.reused ? h("p", { className: "strip-note", text: `Answers for ${model.run.reused.tasks.join(", ")} carried over from ${model.run.reused.run}.` }) : null,
   ]));
-  panel.appendChild(h("div", { className: "strips" }, TASKS.map(task => strip(task, model))));
+  panel.appendChild(h("div", { className: "strips" }, tasks().map(task => strip(task, model))));
   panel.appendChild(h("div", { className: "ladders" }, [
     ladder(model, "ttft.", { title: "Wait for the first token", caption: "Seconds by prompt length, log scale. Others in grey.", log: true, tick: t => (t < 1 ? t.toString() : Math.round(t)) + " s", value: fmt.secs }),
     ladder(model, "decode_at.", { title: "Decode speed as the prompt grows", caption: "tok/s while answering after a long prompt.", log: false, tick: t => String(t), value: value => fmt.int(value) }),
@@ -539,12 +569,35 @@ function select(id) {
   if (detail) detail.scrollIntoView({ block: "nearest", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
 }
 
+function renderLede() {
+  const groups = view().groups;
+  const describe = ([name, members]) => members.length === 1 && label(members[0]) === name ? name : `${name} (${members.map(label).join(" and ")})`;
+  const parts = groups ? Object.entries(groups).map(describe) : tasks().map(label);
+  document.getElementById("lede").textContent = "Every model llama-swap serves, measured the same way on this GPU. "
+    + `The quality index averages ${groups && Object.keys(groups).length < tasks().length ? "these groups equally" : "these tasks"}: ${parts.join(", ")}. `
+    + "Each reasoning effort is ranked on its own; max is the highest level each model offers. Speed is one request at a time unless a column says otherwise.";
+}
+
+function renderSuiteTabs(host) {
+  const names = Object.keys(SUITES).sort((a, b) => Number(b) - Number(a));
+  if (names.length < 2 || (WITH_RUNS.length < 2 && WITH_RUNS[0] === CURRENT)) return;
+  host.appendChild(h("div", { className: "tabs", role: "group", "aria-label": "Suite version" }, names.map(name => h("button", {
+    type: "button", text: `Suite v${name}` + (name === CURRENT ? " (current)" : ""), "aria-pressed": name === state.suite ? "true" : "false",
+    onclick: () => { state.suite = name; state.selected = null; render(); },
+  }))));
+  if (state.suite !== CURRENT) {
+    host.appendChild(h("p", { className: "lede", text: `Suite v${state.suite} measured different tasks, so its scores are not ranked against suite v${CURRENT}. `
+      + `\`mbench run <id> --reuse\` measures a model on v${CURRENT} and keeps what still applies.` }));
+  }
+}
+
 function render() {
   const host = document.getElementById("content");
   host.replaceChildren();
   host.style.display = "grid";
   host.style.gap = "1.5rem";
-  if (!DATA.efforts.length) {
+  renderLede();
+  if (!WITH_RUNS.length) {
     host.appendChild(h("div", { className: "panel empty" }, [
       h("h2", { text: "No finished runs yet" }),
       h("p", { text: "Pick a model from llama-swap and run the suite; this page rebuilds itself when the run ends." }),
@@ -552,9 +605,19 @@ function render() {
     ]));
     return;
   }
-  if (!DATA.efforts.includes(state.effort)) state.effort = DATA.efforts[0];
-  if (DATA.efforts.length > 1) {
-    host.appendChild(h("div", { className: "tabs", role: "group", "aria-label": "Reasoning effort" }, DATA.efforts.map(effort => h("button", {
+  renderSuiteTabs(host);
+  const efforts = view().efforts;
+  if (!efforts.length) {
+    host.appendChild(h("div", { className: "panel empty" }, [
+      h("h2", { text: `No model has run suite v${state.suite} yet` }),
+      h("p", { text: "Earlier results are under the other suite tab. A new run can carry over the answers whose questions did not change." }),
+      h("pre", { text: "mbench run <llama-swap id> --reuse" }),
+    ]));
+    return;
+  }
+  if (!efforts.includes(state.effort)) state.effort = efforts[0];
+  if (efforts.length > 1) {
+    host.appendChild(h("div", { className: "tabs", role: "group", "aria-label": "Reasoning effort" }, efforts.map(effort => h("button", {
       type: "button", text: EFFORT_LABELS[effort] || `Effort ${effort}`, "aria-pressed": effort === state.effort ? "true" : "false",
       onclick: () => { state.effort = effort; render(); },
     }))));
