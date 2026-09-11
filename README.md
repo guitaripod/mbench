@@ -68,7 +68,7 @@ quantization = "MXFP4"
 spec = { method = "EAGLE3", draft = "lmsys/EAGLE3-gpt-oss-120b-bf16", tokens_per_step = 3 }
 ```
 
-- `thinking` says how the model takes a reasoning level: `openai` sends `reasoning_effort`, `qwen` sends `chat_template_kwargs` with `enable_thinking` and `reasoning_effort`, `none` sends nothing.
+- `thinking` says how the model takes a reasoning level: `openai` sends `reasoning_effort`, `qwen` sends `chat_template_kwargs` with `enable_thinking` and `reasoning_effort`, `muse` sends `chat_template_kwargs` with `reasoning_strength` (Muse Glimmer), `none` sends nothing.
 - `efforts` lists the levels the model's chat template accepts, lowest first. `--effort max` and `--effort min` pick the last and the first, and any other level has to be on the list. Without `efforts`, `--effort` is sent as written and max/min are refused.
 - `context` caps the long-prompt tests. When it is missing, mbench asks the server once the model is loaded.
 - `hf_id` and `quantization` are only needed for `--submit`. `spec = { method, draft, tokens_per_step, window }` and `engine = { repository, commit, version }` add detail to those submissions.

@@ -53,6 +53,8 @@ def request_kwargs(profile, effort, *, greedy=False, seed=None):
     elif profile.thinking == "qwen":
         extra["chat_template_kwargs"] = ({"enable_thinking": False} if effort == EFFORT_OFF
                                          else {"enable_thinking": True, "reasoning_effort": effort})
+    elif profile.thinking == "muse":
+        extra["chat_template_kwargs"] = {"reasoning_strength": effort}
     if greedy:
         kwargs["temperature"] = 0
     if seed is not None and supports_seed(profile):

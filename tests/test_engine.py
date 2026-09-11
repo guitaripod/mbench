@@ -37,6 +37,13 @@ def test_levels_reach_the_request_unchanged():
     assert request_kwargs(profile("none", "llama.cpp"), "medium", seed=7) == {"seed": 7}
 
 
+def test_muse_takes_its_level_as_reasoning_strength():
+    muse = profile("muse", efforts=("low", "medium", "high", "xhigh"))
+    assert request_kwargs(muse, "xhigh") == {"extra_body": {"chat_template_kwargs": {"reasoning_strength": "xhigh"}}}
+    with pytest.raises(ValueError, match="can't switch thinking off"):
+        resolve_effort(muse, "none")
+
+
 def refusal(message, body=None):
     response = httpx.Response(400, request=httpx.Request("POST", "http://swap/v1/chat/completions"))
     return openai.BadRequestError(message, response=response, body=body)
