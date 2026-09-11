@@ -114,11 +114,12 @@ def execute(run_id):
     spec = suite.SUITES[run["suite"].split("/")[0]]
     flags = run["flags"] or {}
     tasks = flags.get("tasks") or ["speed", *suite.QUALITY_TASKS]
+    level = flags.get("effort_level") or run["effort"]
     abort = threading.Event()
     guard = MemoryGuard(abort, events)
     guard.start()
     store.update_run(db, run_id, status="running", started=time.time(), error=None)
-    events.emit("started", model=profile.id, suite=run["suite"])
+    events.emit("started", model=profile.id, suite=run["suite"], effort=f"{run['effort']} ({level})")
     contention = []
     try:
         contention += [app["name"] for app in wait_for_gpu(events)]
@@ -130,12 +131,12 @@ def execute(run_id):
         events.emit("loaded", seconds=seconds, context=profile.context)
         speed_file = run_dir / "speed.json"
         if "speed" in tasks and not speed_file.exists():
-            result = asyncio.run(speed.SpeedRun(profile, spec["speed"], run["effort"], run_id, events.progress, abort).run())
+            result = asyncio.run(speed.SpeedRun(profile, spec["speed"], level, run_id, events.progress, abort).run())
             if not abort.is_set():
                 speed_file.write_text(json.dumps(result, indent=1))
             store.set_metrics(db, run_id, metrics.speed_metrics(result))
             contention += [app["name"] for app in result.get("contention", [])]
-        runner = engine.QualityRunner(profile, run_dir, run["effort"], suite.CONCURRENCY, events.progress, abort)
+        runner = engine.QualityRunner(profile, run_dir, level, suite.CONCURRENCY, events.progress, abort)
         failed_items = 0
         for task in suite.QUALITY_TASKS:
             if task not in tasks or abort.is_set():
@@ -155,7 +156,7 @@ def execute(run_id):
         store.set_metrics(db, run_id, metrics.quality_index(store.metrics_of(db, run_id)))
         if flags.get("submit"):
             which = flags["submit"] if flags["submit"] in lmx.SUBMIT_CHOICES else "all"
-            submit(db, run_id, profile, run["effort"], run_dir, events, which)
+            submit(db, run_id, profile, level, run_dir, events, which)
         flags.update(contended=sorted(set(contention)), failed_items=failed_items)
         store.update_run(db, run_id, status="complete", finished=time.time(), flags=flags)
         events.emit("complete")

@@ -6,9 +6,9 @@ Benchmarks the models llama-swap serves on this box and ranks them on one leader
 mbench run <llama-swap id>          full suite, 1–4 hours, runs in the background
 mbench run <id> --quick             30–60 minutes, ranked as provisional
 mbench run <id> --smoke             a few items per task to check the pipeline; never ranked
-mbench run <id> --effort high       the model at its maximum effort (gpt-oss high, Qwen xhigh), ranked separately
+mbench run <id> --effort max        the model at its highest declared effort (gpt-oss high, Qwen xhigh), ranked separately
 mbench run <id> --submit            also submit to localmaxxing: all (default), speed or evals
-mbench run <id> --effort high --submit
+mbench run <id> --effort max --submit
                                     a model's best-case numbers, recorded and submitted
 mbench status                       what is running and how far along it is
 mbench logs -f                      follow the worker log
@@ -31,7 +31,7 @@ mbench profile <id>                 what mbench knows about a model and where ea
 | Needle retrieval | 60 prompts at 16k, 32k, 64k and 120k tokens | three of ten vault codes |
 | Tool calls | 20 cases × 3 | exact function and arguments |
 
-The quality index is the mean of the five quality tasks. It only exists once all five have run. Every effort level has its own ranking, so a max-effort run sits next to the everyday medium one; `mbench ls --effort high` and the tabs on the board switch between them.
+The quality index is the mean of the five quality tasks. It only exists once all five have run. Every effort level has its own ranking, so a max-effort run sits next to the everyday medium one; `mbench ls --effort max` and the tabs on the board switch between them. `max` and `min` resolve from the model's declared levels (Oh My Pi's `thinking.efforts`, or `efforts = [...]` in `models.toml`); any declared level also works by name.
 
 With `--submit speed`, lmx measures its two canonical prompts and mbench submits them through the localmaxxing API itself, including the prompt hash, output sample and timings the lmx client leaves out, so the runs are Verified. `--submit evals` answers the GSM8K and HellaSwag shards the site doesn't have yet for that model and quantization, at the run's effort; they appear per model but stay out of the index.
 

@@ -4,7 +4,7 @@ import time
 from . import paths, store, suite
 
 KINDS = ("full", "quick", "legacy")
-EFFORTS = ("medium", "high", "low")
+EFFORT_ORDER = ("medium", "max", "high", "xhigh", "low", "min", "minimal")
 DEFAULT_EFFORT = "medium"
 TEMPLATE = paths.PACKAGE / "templates" / "leaderboard.html"
 
@@ -86,7 +86,8 @@ def collect(db):
     runs = store.list_runs(db, status="complete")
     ranked = [run for run in runs if kind_of(run) in KINDS]
     rankings = {}
-    for effort in EFFORTS:
+    present = {effort_of(run) for run in ranked}
+    for effort in sorted(present, key=lambda name: (EFFORT_ORDER.index(name) if name in EFFORT_ORDER else len(EFFORT_ORDER), name)):
         chosen = headline(ranked, effort)
         if chosen:
             rankings[effort] = [model_entry(db, run, [entry for entry in ranked if entry["model"] == model_id])

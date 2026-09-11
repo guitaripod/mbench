@@ -8,6 +8,7 @@ from datetime import datetime
 from typing import NoReturn
 
 from . import __version__, board, gpu, lmx, paths, profiles, store, suite, swap
+from .engine import resolve_effort
 
 ACTIVE = ("queued", "running")
 DURATIONS = {"full": "1–4 hours", "quick": "30–60 minutes", "smoke": "about 5 minutes"}
@@ -168,6 +169,10 @@ def cmd_run(args):
     if unknown:
         fail(f"unknown task {', '.join(sorted(unknown))}; tasks are {', '.join(tasks)}")
     tasks = [task for task in tasks if task in chosen and task not in skipped]
+    try:
+        level = resolve_effort(profile, args.effort)
+    except ValueError as error:
+        fail(str(error))
     if args.submit and lmx.missing_fields(profile):
         fail(f"--submit needs {', '.join(lmx.missing_fields(profile))} for {profile.id} in {paths.PROFILES}")
     db = store.connect()
@@ -181,11 +186,13 @@ def cmd_run(args):
     store.insert_run(db, {
         "id": run_id, "model": profile.id, "name": profile.name, "suite": suite.label(suite_name),
         "effort": args.effort, "status": "queued", "harness": harness(), "fingerprint": profile.fingerprint,
-        "profile": profile.to_dict(), "hardware": gpu.describe(), "flags": {"tasks": tasks, "submit": args.submit},
+        "profile": profile.to_dict(), "hardware": gpu.describe(),
+        "flags": {"tasks": tasks, "submit": args.submit, "effort_level": level},
         "note": args.note,
     })
     others = [entry["model"] for entry in swap.running() if entry["model"] != profile.id]
-    print(f"{run_id}: {suite.label(suite_name)} on {profile.name}, usually {DURATIONS[suite_name]}.")
+    print(f"{run_id}: {suite.label(suite_name)} on {profile.name} at effort {args.effort}"
+          + (f" ({level})" if level != args.effort else "") + f", usually {DURATIONS[suite_name]}.")
     if others:
         print(f"llama-swap will unload {', '.join(others)} to make room.")
     spawn(run_id, args.foreground)
@@ -337,11 +344,11 @@ def cmd_worker(args):
 ROOT_EPILOG = """\
 examples:
   mbench run qwen38-nvfp4                       full suite at medium effort (1–4 h, in the background)
-  mbench run qwen38-nvfp4 --effort high --submit
+  mbench run qwen38-nvfp4 --effort max --submit
                                                 the model at its maximum effort, recorded and submitted
   mbench run qwen38-nvfp4 --quick               30–60 min, ranked as provisional
   mbench status                                 what is running and how far along it is
-  mbench ls --effort high                       ranked table for one effort level
+  mbench ls --effort max                        ranked table for one effort level
   mbench board --open                           the leaderboard page
 
 A model is any llama-swap id (see `mbench profile <id>`). Only one run at a time; a run
@@ -366,11 +373,13 @@ suites:
   --quick    30–60 min, smaller samples, shown as provisional
   --smoke    a few items per task, checks the pipeline, never shown on the board
 
-effort (--effort low|medium|high, default medium):
-  How hard the model reasons. high is each model's maximum: gpt-oss "high", Qwen
-  templates "xhigh". Each effort gets its own ranking on the board and in `mbench ls
-  --effort`, so a max-effort run sits next to the everyday medium one. Higher effort
-  means more tokens per answer; a full high-effort run of a verbose 27B can take 6 h+.
+effort (--effort LEVEL, default medium):
+  How hard the model reasons. max and min pick the top or bottom of the levels the model
+  declares (Oh My Pi's thinking.efforts, or efforts = [...] in models.toml): max is
+  "xhigh" on the Qwen templates and "high" on gpt-oss. Any declared level works by name;
+  `mbench profile <id>` lists them. Each effort gets its own ranking on the board and in
+  `mbench ls --effort`, so a max run sits next to the everyday medium one. Higher effort
+  means more tokens per answer; a full max run of a verbose 27B can take 6 h or more.
 
 localmaxxing (--submit [all|speed|evals], needs hf_id and quantization in
 ~/.config/mbench/models.toml):
@@ -385,8 +394,9 @@ tasks (for --only/--skip): speed, niah, mmlupro, aime, tools, lcb
 
 examples:
   mbench run sglang-gptoss120b                        full suite; Ctrl-C detaches, the run continues
-  mbench run sglang-gptoss120b --effort high --submit maximum effort, full suite, everything submitted
-  mbench run qwen38-nvfp4 --quick --effort high       a quick look at maximum effort
+  mbench run sglang-gptoss120b --effort max --submit  maximum effort, full suite, everything submitted
+  mbench run qwen38-nvfp4 --quick --effort max        a quick look at maximum effort
+  mbench run sglang-gptoss120b --effort low           a named level the model declares
   mbench run qwen38-nvfp4 --only speed --submit speed speed only, submitted as verified runs
   mbench run sglang-27b --skip lcb --detach           everything except LiveCodeBench, return at once
   mbench run sglang-27b --submit evals                full suite plus GSM8K/HellaSwag shards
@@ -407,8 +417,8 @@ def parser():
     size = run.add_mutually_exclusive_group()
     size.add_argument("--quick", action="store_true", help="smaller samples (30–60 min), ranked as provisional")
     size.add_argument("--smoke", action="store_true", help="a few items per task (~5 min) to check the pipeline; never ranked")
-    run.add_argument("--effort", default="medium", choices=("low", "medium", "high"),
-                     help="reasoning effort (default medium); high is the model's maximum; ranked per effort")
+    run.add_argument("--effort", default="medium", metavar="LEVEL",
+                     help="reasoning effort: max, min, or a level the model declares (default medium); ranked per effort")
     run.add_argument("--only", metavar="TASKS", help="comma-separated tasks to run, e.g. speed or niah,mmlupro")
     run.add_argument("--skip", metavar="TASKS", help="comma-separated tasks to leave out, e.g. lcb")
     run.add_argument("--submit", nargs="?", const="all", choices=lmx.SUBMIT_CHOICES, metavar="{all,speed,evals}",
@@ -432,7 +442,7 @@ def parser():
     resume.add_argument("--foreground", action="store_true", help="run in this process instead of a systemd unit")
     resume.set_defaults(handler=cmd_resume)
     ls = commands.add_parser("ls", help="ranked table of every model in the terminal")
-    ls.add_argument("--effort", default="medium", choices=("low", "medium", "high"), help="which effort's ranking (default medium)")
+    ls.add_argument("--effort", default="medium", metavar="LEVEL", help="which effort's ranking, e.g. medium or max (default medium)")
     ls.set_defaults(handler=cmd_ls)
     board_parser = commands.add_parser("board", help="rebuild the leaderboard page and print its path")
     board_parser.add_argument("--open", action="store_true", help="also open it in the browser")

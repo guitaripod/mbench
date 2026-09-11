@@ -33,6 +33,6 @@ def test_spec_counts_add_up_to_the_output_tokens():
 
 
 def test_injection_flattens_the_thinking_setting():
-    assert injection(profile(), "high") == {"chat_template_kwargs": {"enable_thinking": True, "reasoning_effort": "xhigh"}}
+    assert injection(profile(), "xhigh") == {"chat_template_kwargs": {"enable_thinking": True, "reasoning_effort": "xhigh"}}
     assert injection(profile(thinking="openai"), "high") == {"reasoning_effort": "high"}
     assert injection(profile(thinking="none"), "high") == {}

@@ -16,6 +16,7 @@ class Profile:
     engine: str
     thinking: str
     context: int | None
+    efforts: list = field(default_factory=list)
     hf_id: str | None = None
     quantization: str | None = None
     spec: dict = field(default_factory=dict)
@@ -127,6 +128,7 @@ def resolve(model_id):
         "name": "models.toml" if user.get("name") else "llama-swap",
         "thinking": "models.toml" if user.get("thinking") else (f"omp thinkingFormat={omp_format}" if omp_format else "default"),
         "context": "models.toml" if user.get("context") else ("omp contextWindow" if omp.get("contextWindow") else "server"),
+        "efforts": "models.toml" if user.get("efforts") else ("omp thinking.efforts" if (omp.get("thinking") or {}).get("efforts") else "none declared"),
         "hf_id": "models.toml" if user.get("hf_id") else "missing",
     }
     return Profile(
@@ -135,6 +137,7 @@ def resolve(model_id):
         engine=user.get("engine_kind") or engine_of(cmd),
         thinking=user.get("thinking") or thinking_style(omp_format),
         context=user.get("context") or omp.get("contextWindow"),
+        efforts=list(user.get("efforts") or (omp.get("thinking") or {}).get("efforts") or []),
         hf_id=user.get("hf_id"),
         quantization=user.get("quantization"),
         spec=user.get("spec") or {},

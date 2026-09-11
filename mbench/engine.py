@@ -7,7 +7,17 @@ from openai import AsyncOpenAI
 
 from . import paths, scoring
 
-QWEN_EFFORTS = {"high": "xhigh"}
+
+def resolve_effort(profile, requested):
+    """Turns "max"/"min" into the model's own top or bottom level from its declared effort list; a named level must be one it declares."""
+    levels = profile.efforts
+    if requested in ("max", "min"):
+        if not levels:
+            raise ValueError(f"{profile.id} declares no effort levels; add efforts = [...] to its entry in models.toml")
+        return levels[-1] if requested == "max" else levels[0]
+    if levels and requested not in levels:
+        raise ValueError(f"{profile.id} has no '{requested}' effort; it takes {', '.join(levels)} (or max/min)")
+    return requested
 
 
 def supports_seed(profile):
@@ -25,7 +35,7 @@ def request_kwargs(profile, effort, *, greedy=False, seed=None):
     if profile.thinking == "openai":
         kwargs["reasoning_effort"] = effort
     elif profile.thinking == "qwen":
-        extra["chat_template_kwargs"] = {"enable_thinking": True, "reasoning_effort": QWEN_EFFORTS.get(effort, effort)}
+        extra["chat_template_kwargs"] = {"enable_thinking": True, "reasoning_effort": effort}
     if greedy:
         kwargs["temperature"] = 0
     if seed is not None and supports_seed(profile):

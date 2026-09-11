@@ -157,7 +157,7 @@ footer { color: var(--muted); font-size: 0.8rem; }
   <header class="masthead">
     <p class="eyebrow" id="meta"></p>
     <h1>Model leaderboard</h1>
-    <p class="lede">Every model llama-swap serves, measured the same way on this GPU. The quality index is the mean of MMLU-Pro, AIME 2025, LiveCodeBench v6, needle retrieval and tool calls. Each reasoning effort is ranked on its own; high is each model's maximum. Speed is one request at a time unless a column says otherwise.</p>
+    <p class="lede">Every model llama-swap serves, measured the same way on this GPU. The quality index is the mean of MMLU-Pro, AIME 2025, LiveCodeBench v6, needle retrieval and tool calls. Each reasoning effort is ranked on its own; max is the highest level each model offers. Speed is one request at a time unless a column says otherwise.</p>
   </header>
   <div id="content"></div>
   <section class="howto" aria-labelledby="howto-title">
@@ -176,7 +176,7 @@ const NS = "http://www.w3.org/2000/svg";
 const TASKS = DATA.indexTasks;
 const LABELS = DATA.taskLabels;
 const state = { sortKey: "index", sortDir: "desc", selected: null, effort: "medium" };
-const EFFORT_LABELS = { medium: "Medium effort", high: "High effort (maximum)", low: "Low effort" };
+const EFFORT_LABELS = { medium: "Medium effort", max: "Max effort", min: "Min effort" };
 
 function current() {
   return DATA.rankings[state.effort] || [];
@@ -555,7 +555,7 @@ function render() {
   if (!DATA.efforts.includes(state.effort)) state.effort = DATA.efforts[0];
   if (DATA.efforts.length > 1) {
     host.appendChild(h("div", { className: "tabs", role: "group", "aria-label": "Reasoning effort" }, DATA.efforts.map(effort => h("button", {
-      type: "button", text: EFFORT_LABELS[effort] || effort, "aria-pressed": effort === state.effort ? "true" : "false",
+      type: "button", text: EFFORT_LABELS[effort] || `Effort ${effort}`, "aria-pressed": effort === state.effort ? "true" : "false",
       onclick: () => { state.effort = effort; render(); },
     }))));
   }
