@@ -122,7 +122,7 @@ def execute(run_id):
     events.emit("started", model=profile.id, suite=run["suite"], effort=f"{run['effort']} ({level})")
     contention = []
     try:
-        contention += [app["name"] for app in wait_for_gpu(events)]
+        contention += wait_for_gpu(events)
         seconds = swap.ensure_loaded(profile.id)
         info = swap.server_info(profile.id)
         (run_dir / "server_info.json").write_text(json.dumps(info, indent=1))
