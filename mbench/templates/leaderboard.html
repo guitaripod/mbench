@@ -111,6 +111,10 @@ td.model { white-space: normal; min-width: 17rem; }
 .meter { display: block; height: 3px; margin-top: 4px; background: var(--grid); border-radius: 2px; overflow: hidden; }
 .meter i { display: block; height: 100%; background: var(--series); border-radius: 0 2px 2px 0; }
 .empty { padding: 2rem 1.25rem; display: grid; gap: 0.6rem; }
+.tabs { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.tabs button { font: inherit; font-size: 0.86rem; color: var(--ink-2); background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 0.3rem 0.85rem; cursor: pointer; }
+.tabs button[aria-pressed="true"] { color: var(--ink); border-color: var(--series); background: var(--select); font-weight: 600; }
+.tabs button:focus-visible { outline: 2px solid var(--series); outline-offset: 2px; }
 .detail { padding: 1.2rem 1.25rem 1.3rem; display: grid; gap: 1.4rem; }
 .detail-head { display: grid; gap: 0.35rem; }
 .detail-head .model-meta { font-size: 0.82rem; }
@@ -153,7 +157,7 @@ footer { color: var(--muted); font-size: 0.8rem; }
   <header class="masthead">
     <p class="eyebrow" id="meta"></p>
     <h1>Model leaderboard</h1>
-    <p class="lede">Every model llama-swap serves, measured the same way on this GPU. The quality index is the mean of MMLU-Pro, AIME 2025, LiveCodeBench v6, needle retrieval and tool calls at medium reasoning effort. Speed is one request at a time unless a column says otherwise.</p>
+    <p class="lede">Every model llama-swap serves, measured the same way on this GPU. The quality index is the mean of MMLU-Pro, AIME 2025, LiveCodeBench v6, needle retrieval and tool calls. Each reasoning effort is ranked on its own; high is each model's maximum. Speed is one request at a time unless a column says otherwise.</p>
   </header>
   <div id="content"></div>
   <section class="howto" aria-labelledby="howto-title">
@@ -171,7 +175,12 @@ const DATA = /*__DATA__*/null;
 const NS = "http://www.w3.org/2000/svg";
 const TASKS = DATA.indexTasks;
 const LABELS = DATA.taskLabels;
-const state = { sortKey: "index", sortDir: "desc", selected: null };
+const state = { sortKey: "index", sortDir: "desc", selected: null, effort: "medium" };
+const EFFORT_LABELS = { medium: "Medium effort", high: "High effort (maximum)", low: "Low effort" };
+
+function current() {
+  return DATA.rankings[state.effort] || [];
+}
 
 function h(tag, attrs, children) {
   const node = document.createElement(tag);
@@ -241,7 +250,7 @@ function numCell(value, format) {
 function sortedModels() {
   const column = COLUMNS.find(item => item.key === state.sortKey) || COLUMNS[0];
   const direction = state.sortDir === "asc" ? 1 : -1;
-  return [...DATA.models].sort((a, b) => {
+  return [...current()].sort((a, b) => {
     const va = column.get(a), vb = column.get(b);
     if (va == null && vb == null) return shortName(a).localeCompare(shortName(b));
     if (va == null) return 1;
@@ -314,8 +323,8 @@ function niceCeil(value, step) {
 }
 
 function renderFrontier(host) {
-  const points = DATA.models.filter(m => m.index && m.index.value != null && m.speed.decode && m.speed.decode.value != null);
-  const missing = DATA.models.length - points.length;
+  const points = current().filter(m => m.index && m.index.value != null && m.speed.decode && m.speed.decode.value != null);
+  const missing = current().length - points.length;
   const figure = h("figure", { className: "panel frontier" });
   figure.style.margin = "0";
   figure.appendChild(h("div", { className: "frontier-head" }, [
@@ -388,7 +397,7 @@ function strip(task, model) {
   const svgNode = s("svg", { viewBox: `0 0 ${width} ${height}`, role: "img", "aria-label": `${LABELS[task]} scores across models` });
   s("line", { x1: pad, x2: width - pad, y1: 13, y2: 13, class: "grid" }, svgNode);
   for (const t of [0, 25, 50, 75, 100]) s("line", { x1: x(t), x2: x(t), y1: 9, y2: 17, class: "grid" }, svgNode);
-  for (const other of DATA.models) {
+  for (const other of current()) {
     const value = other.tasks[task] && other.tasks[task].value;
     if (other.id === model.id || value == null) continue;
     s("circle", { cx: x(value), cy: 13, r: 3.5, class: "dot-other" }, svgNode);
@@ -416,7 +425,7 @@ function strip(task, model) {
 
 function depthsIn(prefix) {
   const set = new Set();
-  for (const model of DATA.models) for (const key of Object.keys(model.speed)) if (key.startsWith(prefix)) set.add(Number(key.slice(prefix.length)));
+  for (const model of current()) for (const key of Object.keys(model.speed)) if (key.startsWith(prefix)) set.add(Number(key.slice(prefix.length)));
   return [...set].filter(Number.isFinite).sort((a, b) => a - b);
 }
 
@@ -424,7 +433,7 @@ function ladder(model, prefix, options) {
   const depths = depthsIn(prefix);
   const box = h("div", { className: "ladder" }, [h("div", { className: "ladder-head" }, [h("h3", { text: options.title }), h("span", { text: options.caption })])]);
   if (!depths.length) { box.appendChild(h("span", { className: "strip-note", text: "No long-prompt measurements yet." })); return box; }
-  const series = DATA.models.map(item => ({ model: item, values: depths.map(depth => item.speed[prefix + depth] ? item.speed[prefix + depth].value : null) }));
+  const series = current().map(item => ({ model: item, values: depths.map(depth => item.speed[prefix + depth] ? item.speed[prefix + depth].value : null) }));
   const all = series.flatMap(item => item.values).filter(value => value != null && value > 0);
   const width = 420, height = 220, left = 46, right = 54, top = 10, bottom = 26;
   const x = index => left + (width - left - right) * (depths.length === 1 ? 0.5 : index / (depths.length - 1));
@@ -483,7 +492,7 @@ function kv(pairs) {
 }
 
 function renderDetail(host) {
-  const model = DATA.models.find(item => item.id === state.selected);
+  const model = current().find(item => item.id === state.selected);
   if (!model) return;
   const panel = h("section", { className: "panel detail", "aria-labelledby": "detail-title" });
   panel.appendChild(h("div", { className: "detail-head" }, [
@@ -518,7 +527,7 @@ function renderDetail(host) {
   panel.appendChild(h("details", {}, [h("summary", { text: "All numbers for this model" }), kv(pairs)]));
   if (model.history.length > 1) {
     panel.appendChild(h("details", {}, [h("summary", { text: `Run history (${model.history.length})` }),
-      kv(model.history.map(entry => [`${fmt.date(entry.finished)} · ${entry.suite}`, `quality ${fmt.pct(entry.index)} · ${fmt.int(entry.decode)} tok/s`]))]));
+      kv(model.history.map(entry => [`${fmt.date(entry.finished)} · ${entry.suite} · ${entry.effort}`, `quality ${fmt.pct(entry.index)} · ${fmt.int(entry.decode)} tok/s`]))]));
   }
   host.appendChild(panel);
 }
@@ -535,7 +544,7 @@ function render() {
   host.replaceChildren();
   host.style.display = "grid";
   host.style.gap = "1.5rem";
-  if (!DATA.models.length) {
+  if (!DATA.efforts.length) {
     host.appendChild(h("div", { className: "panel empty" }, [
       h("h2", { text: "No finished runs yet" }),
       h("p", { text: "Pick a model from llama-swap and run the suite; this page rebuilds itself when the run ends." }),
@@ -543,7 +552,14 @@ function render() {
     ]));
     return;
   }
-  if (!state.selected) state.selected = sortedModels()[0].id;
+  if (!DATA.efforts.includes(state.effort)) state.effort = DATA.efforts[0];
+  if (DATA.efforts.length > 1) {
+    host.appendChild(h("div", { className: "tabs", role: "group", "aria-label": "Reasoning effort" }, DATA.efforts.map(effort => h("button", {
+      type: "button", text: EFFORT_LABELS[effort] || effort, "aria-pressed": effort === state.effort ? "true" : "false",
+      onclick: () => { state.effort = effort; render(); },
+    }))));
+  }
+  if (!current().some(model => model.id === state.selected)) state.selected = sortedModels()[0].id;
   renderFrontier(host);
   renderTable(host);
   renderDetail(host);

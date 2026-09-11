@@ -35,10 +35,21 @@ def trim_generated_token(payload):
     return payload
 
 
+def inject_into(body, inject):
+    """Adds the run's thinking setting to a request that lacks one; nested settings merge and anything the client sent wins."""
+    for key, value in inject.items():
+        if isinstance(value, dict):
+            body[key] = {**value, **(body.get(key) or {})}
+        else:
+            body.setdefault(key, value)
+    return body
+
+
 class LogprobShim(BaseHTTPRequestHandler):
-    """Lets lmx's HellaSwag scorer talk to SGLang, which rejects the max_tokens=0 echo request lmx sends."""
+    """Sits between lmx and llama-swap: passes lmx's zero-token HellaSwag scoring through SGLang and gives chat requests the run's effort."""
 
     upstream = ""
+    inject = {}
     protocol_version = "HTTP/1.1"
 
     def log_message(self, format, *args):
@@ -56,16 +67,14 @@ class LogprobShim(BaseHTTPRequestHandler):
                 self.rfile.readline()
         return self.rfile.read(int(self.headers.get("Content-Length", 0)))
 
-    def forward(self, method, body=None):
+    def open_upstream(self, method, body=None):
         request = urllib.request.Request(self.upstream + self.path, data=body, method=method,
                                          headers={"Content-Type": self.headers.get("Content-Type", "application/json")})
         try:
-            with urllib.request.urlopen(request, timeout=3600) as response:
-                return response.status, response.read()
+            return urllib.request.urlopen(request, timeout=3600)
         except urllib.error.HTTPError as error:
-            payload = error.read()
-            print(f"shim: upstream {error.code} for {method} {self.path}: {payload[:200]!r}", file=sys.stderr, flush=True)
-            return error.code, payload
+            print(f"shim: upstream {error.code} for {method} {self.path}", file=sys.stderr, flush=True)
+            return error
 
     def reply(self, status, body):
         self.send_response(status)
@@ -74,32 +83,53 @@ class LogprobShim(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def relay_stream(self, response):
+        """Passes a server-sent-event stream on line by line, so the client sees each token when the server produces it."""
+        self.send_response(response.status)
+        self.send_header("Content-Type", response.headers.get("Content-Type", "text/event-stream"))
+        self.send_header("Connection", "close")
+        self.end_headers()
+        self.close_connection = True
+        while line := response.readline():
+            self.wfile.write(line)
+            self.wfile.flush()
+
     def do_GET(self):
-        self.reply(*self.forward("GET"))
+        response = self.open_upstream("GET")
+        self.reply(getattr(response, "status", None) or response.code, response.read())
 
     def do_POST(self):
         body = self.read_body()
-        trim = False
         path = self.path.rstrip("/")
-        if path.endswith("/completions") and not path.endswith("chat/completions"):
-            try:
-                request = json.loads(body)
-            except json.JSONDecodeError:
-                request = None
-            if isinstance(request, dict) and request.get("echo") and request.get("max_tokens") == 0:
-                request["max_tokens"] = 1
-                request["temperature"] = 0
+        try:
+            request = json.loads(body)
+        except json.JSONDecodeError:
+            request = None
+        trim = False
+        streaming = False
+        if isinstance(request, dict):
+            if path.endswith("chat/completions") and self.inject:
+                inject_into(request, self.inject)
+                body = json.dumps(request).encode()
+            elif path.endswith("/completions") and request.get("echo") and request.get("max_tokens") == 0:
+                request.update(max_tokens=1, temperature=0)
                 body = json.dumps(request).encode()
                 trim = True
-        status, payload = self.forward("POST", body)
+            streaming = bool(request.get("stream"))
+        response = self.open_upstream("POST", body)
+        status = getattr(response, "status", None) or response.code
+        if streaming and status == 200:
+            self.relay_stream(response)
+            return
+        payload = response.read()
         if trim and status == 200:
             payload = json.dumps(trim_generated_token(json.loads(payload))).encode()
         self.reply(status, payload)
 
 
-def start(upstream):
+def start(upstream, inject=None):
     """Serves the shim on a free loopback port chosen by the OS; returns the server (call shutdown()) and its port."""
-    handler = type("BoundLogprobShim", (LogprobShim,), {"upstream": upstream.rstrip("/")})
+    handler = type("BoundLogprobShim", (LogprobShim,), {"upstream": upstream.rstrip("/"), "inject": dict(inject or {})})
     server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     return server, server.server_address[1]

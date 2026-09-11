@@ -80,26 +80,28 @@ def wait_for_gpu(events):
         time.sleep(30)
 
 
-def submit(db, run_id, profile, effort, run_dir, events):
+def submit(db, run_id, profile, effort, run_dir, events, which):
     if not lmx.available():
-        events.emit("localmaxxing", skipped="lmx is not installed")
+        events.emit("localmaxxing", skipped="lmx is not installed or not logged in")
         return
     missing = lmx.missing_fields(profile)
     if missing:
         events.emit("localmaxxing", skipped=f"set {', '.join(missing)} for {profile.id} in {paths.PROFILES}")
         return
-    events.emit("localmaxxing", step="speed runs")
-    for entry in lmx.speed_runs(profile, run_dir, run_id, events.log):
-        store.add_submission(db, run_id, entry["kind"], entry["remote_id"], entry["value"], entry)
-    events.emit("localmaxxing", step="GSM8K and HellaSwag shards")
-    extra = {}
-    for dataset, entries in lmx.shard_runs(profile, effort, run_dir, events.log).items():
-        for entry in entries:
-            store.add_submission(db, run_id, f"shard.{dataset}", str(entry["shard"]), entry["accuracy"], entry)
-        if entries:
-            extra[f"lmx.{dataset}"] = {"value": statistics.mean(entry["accuracy"] for entry in entries),
-                                       "unit": "%", "n": len(entries)}
-    store.set_metrics(db, run_id, extra)
+    if which in ("all", "speed"):
+        events.emit("localmaxxing", step="speed runs")
+        for entry in lmx.speed_runs(profile, run_dir, run_id, events.log):
+            store.add_submission(db, run_id, entry["kind"], entry["remote_id"], entry["value"], entry)
+    if which in ("all", "evals"):
+        events.emit("localmaxxing", step="GSM8K and HellaSwag shards")
+        extra = {}
+        for dataset, entries in lmx.shard_runs(profile, effort, run_dir, events.log).items():
+            for entry in entries:
+                store.add_submission(db, run_id, f"shard.{dataset}", str(entry["shard"]), entry["accuracy"], entry)
+            if entries:
+                extra[f"lmx.{dataset}"] = {"value": statistics.mean(entry["accuracy"] for entry in entries),
+                                           "unit": "%", "n": len(entries)}
+        store.set_metrics(db, run_id, extra)
 
 
 def execute(run_id):
@@ -152,7 +154,8 @@ def execute(run_id):
             raise RuntimeError(f"stopped because free RAM fell below {RAM_FLOOR_GB:.0f} GB")
         store.set_metrics(db, run_id, metrics.quality_index(store.metrics_of(db, run_id)))
         if flags.get("submit"):
-            submit(db, run_id, profile, run["effort"], run_dir, events)
+            which = flags["submit"] if flags["submit"] in lmx.SUBMIT_CHOICES else "all"
+            submit(db, run_id, profile, run["effort"], run_dir, events, which)
         flags.update(contended=sorted(set(contention)), failed_items=failed_items)
         store.update_run(db, run_id, status="complete", finished=time.time(), flags=flags)
         events.emit("complete")

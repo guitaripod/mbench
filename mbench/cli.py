@@ -270,15 +270,18 @@ def cell(entry, digits=1):
     return f"{entry['value']:.{digits}f}"
 
 
-def cmd_ls(_args):
+def cmd_ls(args):
     data = board.collect(store.connect())
-    if not data["models"]:
-        print("No finished runs yet. Start one with `mbench run <llama-swap model>`.")
+    models = data["rankings"].get(args.effort, [])
+    if not models:
+        others = ", ".join(effort for effort in data["efforts"] if effort != args.effort)
+        print(f"No finished {args.effort}-effort runs yet." + (f" There are {others}-effort runs: `mbench ls --effort <level>`." if others else
+              " Start one with `mbench run <llama-swap model>`."))
         return
     header = ["Model", "Quality", *[suite.TASK_LABELS[task].split()[0] for task in suite.INDEX_TASKS],
               "tok/s", "4× tok/s", "TTFT 32k", "Run"]
     rows = []
-    ordered = sorted(data["models"], key=lambda model: -((model["index"] or {}).get("value") or -1))
+    ordered = sorted(models, key=lambda model: -((model["index"] or {}).get("value") or -1))
     for model in ordered:
         speed = model["speed"]
         kind = model["run"]["kind"]
@@ -333,16 +336,17 @@ def cmd_worker(args):
 
 ROOT_EPILOG = """\
 examples:
-  mbench run qwen38-nvfp4                 full suite at medium effort (1–4 h, runs in the background)
-  mbench run qwen38-nvfp4 --quick         30–60 min, ranked as provisional
-  mbench run qwen38-nvfp4 --smoke         ~5 min pipeline check, never ranked
-  mbench status                           what is running and how far along it is
-  mbench ls                               ranked table in the terminal
-  mbench board --open                     the leaderboard page
+  mbench run qwen38-nvfp4                       full suite at medium effort (1–4 h, in the background)
+  mbench run qwen38-nvfp4 --effort high --submit
+                                                the model at its maximum effort, recorded and submitted
+  mbench run qwen38-nvfp4 --quick               30–60 min, ranked as provisional
+  mbench status                                 what is running and how far along it is
+  mbench ls --effort high                       ranked table for one effort level
+  mbench board --open                           the leaderboard page
 
 A model is any llama-swap id (see `mbench profile <id>`). Only one run at a time; a run
 swaps its model into the GPU and unloads whatever llama-swap had loaded.
-Run `mbench run -h` for everything a run does and its options.
+Run `mbench run -h` for everything a run does and every option.
 """
 
 RUN_DESCRIPTION = """\
@@ -358,25 +362,34 @@ It stops itself and unloads the model if free RAM drops under 4 GB.
 
 RUN_EPILOG = """\
 suites:
-  (default)  full: ~1.5 h for a gpt-oss-sized model, up to ~4 h for a verbose 27B
+  (default)  full: ~1.5 h for a gpt-oss-sized model, up to ~4 h for a verbose 27B at medium
   --quick    30–60 min, smaller samples, shown as provisional
   --smoke    a few items per task, checks the pipeline, never shown on the board
 
-effort:
-  The leaderboard ranks medium-effort runs only, so every model is compared the same way.
-  low/high runs are kept in the model's history. Qwen templates get "xhigh" for high.
+effort (--effort low|medium|high, default medium):
+  How hard the model reasons. high is each model's maximum: gpt-oss "high", Qwen
+  templates "xhigh". Each effort gets its own ranking on the board and in `mbench ls
+  --effort`, so a max-effort run sits next to the everyday medium one. Higher effort
+  means more tokens per answer; a full high-effort run of a verbose 27B can take 6 h+.
+
+localmaxxing (--submit [all|speed|evals], needs hf_id and quantization in
+~/.config/mbench/models.toml):
+  speed  lmx measures the two canonical prompts, then mbench submits them through the
+         API with the prompt hash, output sample and timings, so they earn Verified
+  evals  GSM8K and HellaSwag shards the site doesn't have yet for this model and
+         quantization, answered at the run's effort
+  all    both; what a bare --submit means
 
 tasks (for --only/--skip): speed, niah, mmlupro, aime, tools, lcb
   The quality index needs niah, mmlupro, aime, tools and lcb all present.
 
 examples:
-  mbench run sglang-gptoss120b                    full suite; Ctrl-C detaches, the run continues
-  mbench run qwen38-nvfp4 --quick --detach        start and return immediately
-  mbench run qwen38-nvfp4 --effort high           same suite at high effort (history only)
-  mbench run sglang-27b --only speed              just the speed tests
-  mbench run sglang-27b --skip lcb                everything except LiveCodeBench
-  mbench run sglang-gptoss120b --submit           also submit to localmaxxing (needs hf_id and
-                                                  quantization in ~/.config/mbench/models.toml)
+  mbench run sglang-gptoss120b                        full suite; Ctrl-C detaches, the run continues
+  mbench run sglang-gptoss120b --effort high --submit maximum effort, full suite, everything submitted
+  mbench run qwen38-nvfp4 --quick --effort high       a quick look at maximum effort
+  mbench run qwen38-nvfp4 --only speed --submit speed speed only, submitted as verified runs
+  mbench run sglang-27b --skip lcb --detach           everything except LiveCodeBench, return at once
+  mbench run sglang-27b --submit evals                full suite plus GSM8K/HellaSwag shards
 """
 
 
@@ -395,10 +408,11 @@ def parser():
     size.add_argument("--quick", action="store_true", help="smaller samples (30–60 min), ranked as provisional")
     size.add_argument("--smoke", action="store_true", help="a few items per task (~5 min) to check the pipeline; never ranked")
     run.add_argument("--effort", default="medium", choices=("low", "medium", "high"),
-                     help="reasoning effort (default medium; only medium is ranked)")
+                     help="reasoning effort (default medium); high is the model's maximum; ranked per effort")
     run.add_argument("--only", metavar="TASKS", help="comma-separated tasks to run, e.g. speed or niah,mmlupro")
     run.add_argument("--skip", metavar="TASKS", help="comma-separated tasks to leave out, e.g. lcb")
-    run.add_argument("--submit", action="store_true", help="also submit localmaxxing speed runs and GSM8K/HellaSwag shards")
+    run.add_argument("--submit", nargs="?", const="all", choices=lmx.SUBMIT_CHOICES, metavar="{all,speed,evals}",
+                     help="also submit to localmaxxing: all (default), speed or evals")
     run.add_argument("--note", help="free text stored with the run")
     run.add_argument("--detach", action="store_true", help="start and return immediately instead of following progress")
     run.add_argument("--foreground", action="store_true", help="run in this process instead of a systemd unit (debugging)")
@@ -417,7 +431,9 @@ def parser():
     resume.add_argument("--detach", action="store_true", help="start and return immediately")
     resume.add_argument("--foreground", action="store_true", help="run in this process instead of a systemd unit")
     resume.set_defaults(handler=cmd_resume)
-    commands.add_parser("ls", help="ranked table of every model in the terminal").set_defaults(handler=cmd_ls)
+    ls = commands.add_parser("ls", help="ranked table of every model in the terminal")
+    ls.add_argument("--effort", default="medium", choices=("low", "medium", "high"), help="which effort's ranking (default medium)")
+    ls.set_defaults(handler=cmd_ls)
     board_parser = commands.add_parser("board", help="rebuild the leaderboard page and print its path")
     board_parser.add_argument("--open", action="store_true", help="also open it in the browser")
     board_parser.set_defaults(handler=cmd_board)

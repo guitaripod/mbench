@@ -35,6 +35,13 @@ def request_kwargs(profile, effort, *, greedy=False, seed=None):
     return kwargs
 
 
+def injection(profile, effort):
+    """The thinking setting as raw request fields, for clients like lmx that can't pass one themselves."""
+    kwargs = request_kwargs(profile, effort)
+    extra = kwargs.pop("extra_body", {})
+    return {**kwargs, **extra}
+
+
 def tool_calls(message):
     calls, malformed = [], 0
     for call in message.tool_calls or []:
