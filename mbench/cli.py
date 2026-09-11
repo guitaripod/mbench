@@ -324,8 +324,9 @@ def print_schedule(db):
         flags = run.get("flags") or {}
         window = flags.get("window") or {}
         start = f"starts {schedule.describe(flags['not_before'])}" if flags.get("not_before", 0) > time.time() else "due next"
-        print(f"{run['id']}  {run['suite']}  scheduled, {start}" + (f", runs {window['start']}–{window['end']} daily"
-                                                                    if window.get("end") else "")
+        print(f"{run['id']}  {run['suite']}  scheduled, {start}"
+              + (f", only {window['start']}–{window['end']}, continuing the next night if unfinished"
+                 if window.get("end") else "")
               + (" (paused, continues where it stopped)" if flags.get("paused") else ""))
 
 
