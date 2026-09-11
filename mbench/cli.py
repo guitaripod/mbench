@@ -331,44 +331,98 @@ def cmd_worker(args):
     execute(args.run_id)
 
 
-def parser():
-    root = argparse.ArgumentParser(prog="mbench", description="Benchmark llama-swap models and rank them on one leaderboard.")
-    root.add_argument("--version", action="version", version=f"mbench {__version__}")
-    commands = root.add_subparsers(dest="command", required=True)
+ROOT_EPILOG = """\
+examples:
+  mbench run qwen38-nvfp4                 full suite at medium effort (1–4 h, runs in the background)
+  mbench run qwen38-nvfp4 --quick         30–60 min, ranked as provisional
+  mbench run qwen38-nvfp4 --smoke         ~5 min pipeline check, never ranked
+  mbench status                           what is running and how far along it is
+  mbench ls                               ranked table in the terminal
+  mbench board --open                     the leaderboard page
 
-    run = commands.add_parser("run", help="benchmark a llama-swap model")
-    run.add_argument("model", help="llama-swap model id or alias")
+A model is any llama-swap id (see `mbench profile <id>`). Only one run at a time; a run
+swaps its model into the GPU and unloads whatever llama-swap had loaded.
+Run `mbench run -h` for everything a run does and its options.
+"""
+
+RUN_DESCRIPTION = """\
+Benchmark one llama-swap model and rank it on the leaderboard.
+
+A run: waits for the GPU to be idle, loads the model through llama-swap, measures speed
+(greedy: 1-request decode on 3 prompts, 1/2/4 requests at once, first-token wait from 1k
+to 250k-token prompts, board power), then quality at the chosen effort (needle retrieval,
+MMLU-Pro, AIME 2025 ×4, tool calls, LiveCodeBench graded in a sandbox), and rebuilds the
+leaderboard. Answers are saved as they arrive, so `mbench resume` continues a stopped run.
+It stops itself and unloads the model if free RAM drops under 4 GB.
+"""
+
+RUN_EPILOG = """\
+suites:
+  (default)  full: ~1.5 h for a gpt-oss-sized model, up to ~4 h for a verbose 27B
+  --quick    30–60 min, smaller samples, shown as provisional
+  --smoke    a few items per task, checks the pipeline, never shown on the board
+
+effort:
+  The leaderboard ranks medium-effort runs only, so every model is compared the same way.
+  low/high runs are kept in the model's history. Qwen templates get "xhigh" for high.
+
+tasks (for --only/--skip): speed, niah, mmlupro, aime, tools, lcb
+  The quality index needs niah, mmlupro, aime, tools and lcb all present.
+
+examples:
+  mbench run sglang-gptoss120b                    full suite; Ctrl-C detaches, the run continues
+  mbench run qwen38-nvfp4 --quick --detach        start and return immediately
+  mbench run qwen38-nvfp4 --effort high           same suite at high effort (history only)
+  mbench run sglang-27b --only speed              just the speed tests
+  mbench run sglang-27b --skip lcb                everything except LiveCodeBench
+  mbench run sglang-gptoss120b --submit           also submit to localmaxxing (needs hf_id and
+                                                  quantization in ~/.config/mbench/models.toml)
+"""
+
+
+def parser():
+    formatter = argparse.RawDescriptionHelpFormatter
+    root = argparse.ArgumentParser(prog="mbench", description="Benchmark llama-swap models and rank them on one leaderboard.",
+                                   epilog=ROOT_EPILOG, formatter_class=formatter)
+    root.add_argument("--version", action="version", version=f"mbench {__version__}")
+    commands = root.add_subparsers(dest="command", required=True, title="commands",
+                                   metavar="{run,status,logs,cancel,resume,ls,board,profile,import-legacy}")
+
+    run = commands.add_parser("run", help="benchmark a llama-swap model", description=RUN_DESCRIPTION,
+                              epilog=RUN_EPILOG, formatter_class=formatter)
+    run.add_argument("model", help="llama-swap model id or alias, e.g. qwen38-nvfp4")
     size = run.add_mutually_exclusive_group()
-    size.add_argument("--quick", action="store_true", help="smaller samples, ranked as provisional")
-    size.add_argument("--smoke", action="store_true", help="a few items per task to check the pipeline; never ranked")
-    run.add_argument("--effort", default="medium", choices=("low", "medium", "high"), help="reasoning effort (default medium)")
-    run.add_argument("--only", help="comma-separated tasks: speed,niah,mmlupro,aime,tools,lcb")
-    run.add_argument("--skip", help="comma-separated tasks to leave out")
+    size.add_argument("--quick", action="store_true", help="smaller samples (30–60 min), ranked as provisional")
+    size.add_argument("--smoke", action="store_true", help="a few items per task (~5 min) to check the pipeline; never ranked")
+    run.add_argument("--effort", default="medium", choices=("low", "medium", "high"),
+                     help="reasoning effort (default medium; only medium is ranked)")
+    run.add_argument("--only", metavar="TASKS", help="comma-separated tasks to run, e.g. speed or niah,mmlupro")
+    run.add_argument("--skip", metavar="TASKS", help="comma-separated tasks to leave out, e.g. lcb")
     run.add_argument("--submit", action="store_true", help="also submit localmaxxing speed runs and GSM8K/HellaSwag shards")
     run.add_argument("--note", help="free text stored with the run")
-    run.add_argument("--detach", action="store_true", help="start and return immediately")
-    run.add_argument("--foreground", action="store_true", help="run in this process instead of a systemd unit")
+    run.add_argument("--detach", action="store_true", help="start and return immediately instead of following progress")
+    run.add_argument("--foreground", action="store_true", help="run in this process instead of a systemd unit (debugging)")
     run.set_defaults(handler=cmd_run)
 
-    commands.add_parser("status", help="show the run in progress").set_defaults(handler=cmd_status)
-    logs = commands.add_parser("logs", help="print a run's log")
-    logs.add_argument("run", nargs="?")
-    logs.add_argument("-f", "--follow", action="store_true")
+    commands.add_parser("status", help="show the run in progress and how far along it is").set_defaults(handler=cmd_status)
+    logs = commands.add_parser("logs", help="print a run's log (latest run by default)")
+    logs.add_argument("run", nargs="?", help="run id; defaults to the latest")
+    logs.add_argument("-f", "--follow", action="store_true", help="keep printing until the run ends")
     logs.set_defaults(handler=cmd_logs)
-    cancel = commands.add_parser("cancel", help="stop a run; resume picks it up later")
-    cancel.add_argument("run", nargs="?")
+    cancel = commands.add_parser("cancel", help="stop a run; `mbench resume` picks it up later")
+    cancel.add_argument("run", nargs="?", help="run id; defaults to the latest")
     cancel.set_defaults(handler=cmd_cancel)
-    resume = commands.add_parser("resume", help="continue a failed or cancelled run")
-    resume.add_argument("run", nargs="?")
-    resume.add_argument("--detach", action="store_true")
-    resume.add_argument("--foreground", action="store_true")
+    resume = commands.add_parser("resume", help="continue a failed or cancelled run where it stopped")
+    resume.add_argument("run", nargs="?", help="run id; defaults to the latest")
+    resume.add_argument("--detach", action="store_true", help="start and return immediately")
+    resume.add_argument("--foreground", action="store_true", help="run in this process instead of a systemd unit")
     resume.set_defaults(handler=cmd_resume)
-    commands.add_parser("ls", help="ranked table in the terminal").set_defaults(handler=cmd_ls)
-    board_parser = commands.add_parser("board", help="rebuild the leaderboard page")
-    board_parser.add_argument("--open", action="store_true")
+    commands.add_parser("ls", help="ranked table of every model in the terminal").set_defaults(handler=cmd_ls)
+    board_parser = commands.add_parser("board", help="rebuild the leaderboard page and print its path")
+    board_parser.add_argument("--open", action="store_true", help="also open it in the browser")
     board_parser.set_defaults(handler=cmd_board)
-    profile = commands.add_parser("profile", help="what mbench knows about a model")
-    profile.add_argument("model")
+    profile = commands.add_parser("profile", help="what mbench knows about a model and where each fact came from")
+    profile.add_argument("model", help="llama-swap model id or alias")
     profile.set_defaults(handler=cmd_profile)
     commands.add_parser("import-legacy", help="import the 11 Sep 2026 gpt-oss vs Qwen results").set_defaults(handler=cmd_import_legacy)
     worker = commands.add_parser("worker")
