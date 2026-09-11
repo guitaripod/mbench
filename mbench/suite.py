@@ -4,6 +4,7 @@ from .paths import ASSETS
 
 VERSION = "1"
 CONCURRENCY = 4
+MAX_CONCURRENCY = 32
 QUALITY_TASKS = ("supergpqa", "math", "tools", "mrcr", "graphwalks", "lcb")
 INDEX_TASKS = ("supergpqa", "math", "lcb", "mrcr", "graphwalks", "tools")
 INDEX_GROUPS = {
@@ -52,7 +53,7 @@ PROSE_PROMPT = (
 
 SUITES = {
     "full": {
-        "speed": {"reps": 3, "max_tokens": 1024, "concurrency": (1, 2, 4), "rounds": 2,
+        "speed": {"reps": 3, "max_tokens": 1024, "concurrency": (1, 2, 4, 8, 16, 32), "rounds": 2,
                   "depths": (1000, 8000, 32000, 64000, 120000, 250000), "depth_reps": 2, "depth_max_tokens": 512},
         "supergpqa": {"questions": 520, "max_tokens": 32768},
         "math": {"samples": 2, "max_tokens": 65536},
@@ -62,7 +63,7 @@ SUITES = {
         "tools": {"repeats": 3, "max_tokens": 8192, "max_steps": 10},
     },
     "quick": {
-        "speed": {"reps": 1, "max_tokens": 1024, "concurrency": (1, 4), "rounds": 1,
+        "speed": {"reps": 1, "max_tokens": 1024, "concurrency": (1, 4, 16), "rounds": 1,
                   "depths": (1000, 32000, 120000), "depth_reps": 1, "depth_max_tokens": 512},
         "supergpqa": {"questions": 156, "max_tokens": 32768},
         "math": {"samples": 1, "max_tokens": 65536},

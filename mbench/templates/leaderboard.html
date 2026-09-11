@@ -179,7 +179,7 @@ const SUITES = DATA.suites || { [DATA.current || "1"]: { indexTasks: DATA.indexT
 const CURRENT = DATA.current || Object.keys(SUITES)[0];
 const WITH_RUNS = Object.keys(SUITES).filter(name => SUITES[name].efforts.length).sort((a, b) => Number(b) - Number(a));
 const state = { sortKey: "index", sortDir: "desc", selected: null, effort: "medium", suite: SUITES[CURRENT].efforts.length ? CURRENT : (WITH_RUNS[0] || CURRENT) };
-const EFFORT_LABELS = { medium: "Medium effort", max: "Max effort", min: "Min effort" };
+const EFFORT_LABELS = { medium: "Medium effort", max: "Max effort", min: "Min effort", none: "No thinking" };
 const COUNT_NOUNS = { math: "problems", aime: "problems", lcb: "problems", tools: "episodes", mrcr: "conversations", graphwalks: "graphs", niah: "prompts" };
 
 function view() {
@@ -242,10 +242,14 @@ function avgTokens(model) {
 function columns() {
   return [
     { key: "index", label: "Quality", get: m => m.index && m.index.value, better: "high", render: m => pctCell(m.index) },
-    ...tasks().map(task => ({ key: task, label: label(task).replace(" v6", "").replace(" 2025", "").replace(" 2026", ""), get: m => m.tasks[task] && m.tasks[task].value,
+    ...tasks().map(task => ({ key: task, label: label(task).replace(" v6", "").replace(" 2025", "").replace(" 2026", "") + (health()[task] ? " ⚠" : ""),
+      note: health()[task] ? `Not separating these models: ${health()[task]}` : null, get: m => m.tasks[task] && m.tasks[task].value,
       better: "high", render: m => pctCell(m.tasks[task], true) })),
     { key: "decode", label: "Decode tok/s", get: m => m.speed.decode && m.speed.decode.value, better: "high", render: m => numCell(m.speed.decode && m.speed.decode.value, fmt.int) },
-    { key: "conc4", label: "4 at once", get: m => m.speed["conc.4"] && m.speed["conc.4"].value, better: "high", render: m => numCell(m.speed["conc.4"] && m.speed["conc.4"].value, fmt.int) },
+    { key: "peak", label: "Peak tok/s", note: "Most tokens per second across all requests, at the best number of requests at once", get: m => m.speed.peak && m.speed.peak.value, better: "high",
+      render: m => numCell(m.speed.peak && m.speed.peak.value, fmt.int, m.speed.peak_at ? `${m.speed.peak_at.value} requests at once` : null) },
+    { key: "energy", label: "Wh/correct", note: "Board energy over the quality tasks per correct answer, idle draw included", get: m => m.energy && m.energy.perCorrect && m.energy.perCorrect.value, better: "low",
+      render: m => numCell(m.energy && m.energy.perCorrect && m.energy.perCorrect.value, value => value == null ? "–" : value.toFixed(2)) },
     { key: "ttft", label: "First token 32k", get: m => m.speed["ttft.32000"] && m.speed["ttft.32000"].value, better: "low", render: m => numCell(m.speed["ttft.32000"] && m.speed["ttft.32000"].value, fmt.secs) },
     { key: "tokens", label: "Tokens/answer", get: avgTokens, better: "low", render: m => numCell(avgTokens(m), fmt.int) },
   ];
@@ -261,8 +265,12 @@ function pctCell(entry, meter) {
   ]);
 }
 
-function numCell(value, format) {
-  return h("td", { className: "num", text: format(value) });
+function numCell(value, format, title) {
+  return h("td", { className: "num", text: format(value), title: title || null });
+}
+
+function health() {
+  return (view().health || {})[state.effort] || {};
 }
 
 function sortedModels() {
@@ -284,6 +292,7 @@ function modelMeta(model) {
   if (model.run.kind !== "full") chips.push(h("span", { className: "chip", text: "quick run", title: model.run.notes || "Smaller sample; ranked as provisional." }));
   if (model.run.contended && model.run.contended.length) chips.push(h("span", { className: "chip", text: "GPU was shared", title: "Other GPU work during the run: " + model.run.contended.join(", ") }));
   if (model.run.failedItems) chips.push(h("span", { className: "chip", text: `${model.run.failedItems} requests failed` }));
+  if (model.warnings && model.warnings.length) chips.push(h("span", { className: "chip", text: "context-capped", title: model.warnings.join(" ") }));
   return h("span", { className: "model-meta" }, [...parts.map(part => h("span", { text: part })), ...chips]);
 }
 
@@ -295,7 +304,7 @@ function renderTable(host) {
   headRow.appendChild(h("th", { scope: "col", className: "model", text: "Model" }));
   for (const column of cols) {
     const sort = state.sortKey === column.key ? (state.sortDir === "asc" ? "ascending" : "descending") : null;
-    headRow.appendChild(h("th", { scope: "col", "aria-sort": sort }, [h("button", {
+    headRow.appendChild(h("th", { scope: "col", "aria-sort": sort, title: column.note || null }, [h("button", {
       type: "button", text: column.label,
       onclick: () => {
         if (state.sortKey === column.key) state.sortDir = state.sortDir === "asc" ? "desc" : "asc";
@@ -448,6 +457,7 @@ function strip(task, model) {
     svgNode,
     h("span", { className: "strip-note", text: notes.join(" · ") }),
     partText ? h("span", { className: "strip-note", text: (numeric ? "By length: " : "By part: ") + partText }) : null,
+    health()[task] ? h("span", { className: "strip-note", text: `Not separating these models: ${health()[task]}.` }) : null,
     note ? h("span", { className: "strip-note", text: note }) : null,
   ]);
 }
@@ -532,6 +542,7 @@ function renderDetail(host) {
     ]),
     model.run.notes ? h("p", { className: "lede", text: model.run.notes }) : null,
     model.run.reused ? h("p", { className: "strip-note", text: `Answers for ${model.run.reused.tasks.join(", ")} carried over from ${model.run.reused.run}.` }) : null,
+    ...(model.warnings || []).map(text => h("p", { className: "strip-note", text })),
   ]));
   panel.appendChild(h("div", { className: "strips" }, tasks().map(task => strip(task, model))));
   panel.appendChild(h("div", { className: "ladders" }, [
@@ -545,7 +556,15 @@ function renderDetail(host) {
     ["Decode, prose prompt", speed["decode.prose-v1"] && fmt.int(speed["decode.prose-v1"].value) + " tok/s"],
     ["Drafter acceptance, code", speed["accept.code-v1"] && speed["accept.code-v1"].value.toFixed(2) + " tokens/step"],
     ["First token, short prompt", speed["ttft.short"] && Math.round(speed["ttft.short"].value) + " ms"],
-    ["1 / 2 / 4 at once", ["conc.1", "conc.2", "conc.4"].map(key => speed[key] ? fmt.int(speed[key].value) : "–").join(" / ") + " tok/s"],
+    ...(() => {
+      const levels = Object.keys(speed).filter(key => key.startsWith("conc.")).map(key => Number(key.slice(5))).sort((a, b) => a - b);
+      return levels.length ? [[`${levels.join(" / ")} at once`, levels.map(level => fmt.int(speed["conc." + level].value)).join(" / ") + " tok/s"]] : [];
+    })(),
+    ["Requests the server takes at once", model.capacity && model.capacity.slots],
+    ["Tokens per request", model.capacity && model.capacity.context && fmt.int(model.capacity.context)],
+    ["Context shared by all requests", model.capacity && model.capacity.pool && fmt.int(model.capacity.pool)],
+    ["Energy, quality tasks", model.energy && model.energy.quality && model.energy.quality.value.toFixed(0) + " Wh"],
+    ["Energy per correct answer", model.energy && model.energy.perCorrect && model.energy.perCorrect.value.toFixed(2) + " Wh"],
     ["Board power, code prompt", speed.power && Math.round(speed.power.value) + " W"],
     ["Energy per token", speed.energy && speed.energy.value.toFixed(2) + " J"],
     ["GSM8K (localmaxxing)", model.lmx.gsm8k && fmt.pct(model.lmx.gsm8k.value) + "%"],

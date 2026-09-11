@@ -2,18 +2,22 @@ import statistics
 import subprocess
 import threading
 import time
+from collections import defaultdict
 from pathlib import Path
 
-SERVER_PROCESS_NAMES = ("sglang", "llama-server", "vllm")
+SERVER_PROCESS_NAMES = ("sglang", "llama-server", "llama-swap", "vllm")
+BUSY_SM_PERCENT = 25
+HEAVY_MIB = 4096
 
 
 class Sampler:
-    """Samples board power, VRAM and utilisation every 250 ms so each measurement can report its own window."""
+    """Samples board power, VRAM and utilisation on an interval so each measurement can report its own window."""
 
-    def __init__(self):
+    def __init__(self, interval_ms=250):
         self.samples = []
         self.process = subprocess.Popen(
-            ["nvidia-smi", "--query-gpu=power.draw,memory.used,utilization.gpu", "--format=csv,noheader,nounits", "-lms", "250"],
+            ["nvidia-smi", "--query-gpu=power.draw,memory.used,utilization.gpu", "--format=csv,noheader,nounits",
+             "-lms", str(interval_ms)],
             stdout=subprocess.PIPE,
             text=True,
         )
@@ -35,6 +39,14 @@ class Sampler:
         busy = [sample for sample in inside if sample[3] >= 30] or inside
         return {"power_w": round(statistics.mean(sample[1] for sample in busy), 1),
                 "vram_mib": max(sample[2] for sample in inside)}
+
+    def energy_wh(self, start, end):
+        """Board energy between two moments from the power samples, idle draw included; None without enough samples."""
+        points = [(sample[0], sample[1]) for sample in self.samples if start <= sample[0] <= end]
+        if len(points) < 2:
+            return None
+        joules = sum((later[0] - earlier[0]) * (earlier[1] + later[1]) / 2 for earlier, later in zip(points, points[1:]))
+        return joules / 3600
 
     def close(self):
         self.process.kill()
@@ -58,28 +70,85 @@ def compute_apps():
 
 
 def short_name(process_name):
-    return Path(process_name.split()[0]).name if process_name else "?"
+    """The executable's name, from a Linux path or a Windows one (games under Proton report S:\\...\\Game.exe)."""
+    first = (process_name or "").split(" --")[0].strip()
+    return first.replace("\\", "/").rsplit("/", 1)[-1] or "?"
 
 
-def heavy_apps(min_mib=4096):
-    """Non-server GPU processes holding a lot of VRAM (ComfyUI, games); browsers and the compositor stay well under 4 GB."""
-    return [{**app, "name": short_name(app["name"])} for app in compute_apps()
-            if app["mib"] >= min_mib and not any(name in app["name"] for name in SERVER_PROCESS_NAMES)]
+def number(text):
+    try:
+        return float(text)
+    except ValueError:
+        return 0.0
 
 
-def utilization(seconds=5.0):
-    """Average GPU utilisation over a few seconds; idle desktops sit near zero even with a browser open."""
-    samples = []
-    deadline = time.time() + seconds
-    while time.time() < deadline:
-        completed = subprocess.run(["nvidia-smi", "--query-gpu=utilization.gpu", "--format=csv,noheader,nounits"],
-                                   capture_output=True, text=True)
-        try:
-            samples.append(float(completed.stdout.splitlines()[0]))
-        except (ValueError, IndexError):
-            pass
-        time.sleep(0.5)
-    return statistics.mean(samples) if samples else 0.0
+def pmon_rows(text):
+    """nvidia-smi pmon's table as dicts keyed by its own header, so older drivers with fewer columns still parse."""
+    columns, rows = None, []
+    for line in text.splitlines():
+        if line.startswith("#"):
+            columns = columns or line.lstrip("#").split()
+            continue
+        parts = line.split()
+        if columns and len(parts) >= len(columns):
+            head = len(columns) - 1
+            rows.append({**dict(zip(columns[:head], parts[:head])), columns[-1]: " ".join(parts[head:])})
+    return rows
+
+
+def cmdline(pid):
+    try:
+        return Path(f"/proc/{pid}/cmdline").read_bytes().replace(b"\0", b" ").decode(errors="replace").strip()
+    except OSError:
+        return ""
+
+
+def parent_of(pid):
+    try:
+        return int(Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()[1])
+    except (OSError, IndexError, ValueError):
+        return None
+
+
+def is_server(pid):
+    """A model server or anything llama-swap started: the benchmark's own GPU work, never contention."""
+    for _ in range(64):
+        if not pid or pid <= 1:
+            return False
+        if any(name in cmdline(pid) for name in SERVER_PROCESS_NAMES):
+            return True
+        pid = parent_of(pid)
+    return False
+
+
+def processes(samples=3):
+    """Every GPU process with its SM use averaged over one-second samples and the VRAM it holds."""
+    completed = subprocess.run(["nvidia-smi", "pmon", "-c", str(samples), "-s", "um"],
+                               capture_output=True, text=True, timeout=30 + 2 * samples)
+    sm, mib, names = defaultdict(list), defaultdict(float), {}
+    for row in pmon_rows(completed.stdout):
+        if not row.get("pid", "").isdigit():
+            continue
+        pid = int(row["pid"])
+        sm[pid].append(number(row.get("sm", "-")))
+        mib[pid] = max(mib[pid], number(row.get("fb", "-")))
+        names[pid] = row.get("command", "")
+    if not names:
+        for app in compute_apps():
+            sm[app["pid"]], mib[app["pid"]], names[app["pid"]] = [0.0], float(app["mib"]), app["name"]
+    return [{"pid": pid, "name": short_name(cmdline(pid) or names[pid]), "sm": statistics.mean(sm[pid]),
+             "mib": int(mib[pid]), "server": is_server(pid)} for pid in names]
+
+
+def contention(samples=3):
+    """Other GPU work big enough to matter: a process outside the model servers using a quarter of the GPU or holding
+    4 GB, like a game or ComfyUI. A browser tab or the compositor stays under both."""
+    return [process for process in processes(samples) if not process["server"]
+            and (process["sm"] >= BUSY_SM_PERCENT or process["mib"] >= HEAVY_MIB)]
+
+
+def describe_contention(found):
+    return ", ".join(f"{process['name']} ({process['sm']:.0f}% GPU, {process['mib'] / 1024:.1f} GB)" for process in found)
 
 
 def describe():

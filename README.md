@@ -17,7 +17,7 @@ One command per model. It loads the model through llama-swap, measures speed and
 
 | Task | Full suite | Scored by |
 |---|---|---|
-| Speed | 3 prompts × 3 repeats at 1,024 tokens; 1, 2 and 4 requests at once; first-token wait and decode speed from 1k to 250k-token prompts (capped by the context window); GPU power | greedy decoding, streamed timings, `nvidia-smi` |
+| Speed | 3 prompts × 3 repeats at 1,024 tokens; 1 up to 32 requests at once, as many as the server takes; first-token wait and decode speed from 1k to 250k-token prompts (capped by the context per request); GPU power | greedy decoding, streamed timings, `nvidia-smi` |
 | SuperGPQA | 521 graduate-level questions, ten options, spread over its 13 disciplines like the full set | final `Answer: X` line |
 | AIME + HMMT 2026 | AIME 2026 and HMMT February 2026, 63 problems × 2 samples, 64k-token budget | last `\boxed{}`, compared symbolically with [Math-Verify](https://github.com/huggingface/Math-Verify) |
 | LiveCodeBench v6 | 101 problems (Jan–Apr 2025), 64k-token budget | hidden tests, run in a network-less Docker container |
@@ -25,11 +25,13 @@ One command per model. It loads the model through llama-swap, measures speed and
 | Graphwalks | 48 graphs, BFS and parent queries at 8k, 16k, 32k and 64k tokens | F1 of the node set on the last line |
 | Tool use | 38 episodes × 3 against a simulated workspace: single, parallel and chained calls, error recovery, clarifying questions, irrelevant tools, look-alike tools, refund policy, conditionals and follow-ups | the workspace's end state and the reply, not the exact calls |
 
-The quality index averages five groups equally: knowledge (SuperGPQA), math (AIME + HMMT), code (LiveCodeBench), long context (MRCR and Graphwalks) and tool use. It only exists once every task has run, and its 95% interval bootstraps the questions of every task. Every reasoning effort has its own ranking, so a model's max-effort run sits next to its everyday medium one. `--quick` (45–90 minutes, ranked as provisional) and `--smoke` (a pipeline check, never ranked) run smaller samples.
+Every run also records board energy over the quality tasks and divides it by the correct answers, so the table can show watt-hours per correct answer next to speed. The quality index averages five groups equally: knowledge (SuperGPQA), math (AIME + HMMT), code (LiveCodeBench), long context (MRCR and Graphwalks) and tool use. It only exists once every task has run, and its 95% interval bootstraps the questions of every task. Every reasoning effort has its own ranking, so a model's max-effort run sits next to its everyday medium one, and `--effort none` ranks a Qwen-style model with thinking switched off. `--quick` (45–90 minutes, ranked as provisional) and `--smoke` (a pipeline check, never ranked) run smaller samples.
 
 ### Why these tasks
 
 MMLU-Pro, AIME 2025, plain needle-in-a-haystack and single-turn tool calls are the usual picks. Current open models score within a few points of each other on MMLU-Pro and near 100% on the needle and tool tests, so those stopped separating models; AIME 2025 has had a year and a half to leak into training data. SuperGPQA is harder and much larger, the 2026 competitions postdate most of today's models, MRCR and Graphwalks are the long-context tests model makers report against, and the tool episodes follow the [2026 validity audit of tool-calling benchmarks](https://arxiv.org/abs/2607.02577): deterministic checks of what the model did to the world, so a different valid route to the same result still passes.
+
+`mbench sources` checks Hugging Face for newer LiveCodeBench releases and MathArena competitions, and for pinned files that changed upstream. With several models ranked, the board marks a task that isn't separating them (all near the ceiling, all near the floor, or apart by less than the noise).
 
 LiveCodeBench has published nothing newer than April 2025, so models trained after mid-2025 may have seen its problems. It stays because nothing public replaces it for executed code, but read its column as an upper bound.
 
@@ -89,17 +91,37 @@ mbench logs -f                        follow the worker log
 mbench cancel / mbench resume         stop a run; continue it later
 mbench ls [--effort max] [--suite 1]  ranked table in the terminal
 mbench compare <id> <id>              paired differences, task by task, with 95% intervals
+mbench doctor <id>                    check a model's server before spending a night on it
+mbench sources                        newer question sets, or pinned files that moved upstream
 mbench board --open                   the leaderboard page
 mbench profile <id>                   what mbench knows about a model
 ```
 
 `mbench -h` and `mbench run -h` cover every option, with examples. One run happens at a time; more models, or a run started while another is going, wait their turn. A run swaps its model in through llama-swap, which unloads whatever else was loaded.
 
+### Every run starts with a check
+
+Before measuring anything, a run asks the server what it can hold and runs the checks `mbench doctor` runs: tokens per request (a server that splits its context into small slots gets a warning, because longer prompts would score zero), that reasoning comes back apart from the answer, that tool calls come back structured, that the server accepts a conversation carrying a tool result, and that a 16k-token conversation goes through. A misconfigured server fails the run in the first minute with the reason, instead of producing a night of zeros.
+
+### How many requests at once
+
+mbench reads how many requests the server takes at once and how much context they share (SGLang's `max_running_requests` and token pool, llama.cpp's slots), then sends as many as fit: many short questions side by side, one 128k-token conversation at a time on a server whose pool holds only one. Scores don't depend on it; only the time a run takes does. To let a small model finish faster, raise the server's limit (SGLang `--max-running-requests`, llama.cpp `--parallel`). vLLM doesn't report its limit, so mbench sends 4 there.
+
 ### Scheduling
 
 `--at 03:00` (or `--at "2026-09-12 03:00"`) starts the runs then instead of now. Add `--until 08:00` and it becomes a daily window: whatever is still running at 08:00 stops, llama-swap unloads the model so the GPU is yours again, and the run continues from its last saved answer at 03:00 the next night, until everything is done. `mbench status` lists what is scheduled and `mbench cancel <run>` takes a run off the schedule; `mbench resume <run> --at 03:00 --until 08:00` puts a stopped one back on.
 
+A scheduled run gives way to other GPU work: when a game or ComfyUI has held the GPU for a minute, the run stops, llama-swap unloads the model and the run tries again every ten minutes. Near the end of its window a run stops taking questions that couldn't finish in time, so little work is thrown away when the window closes.
+
 A user timer, `mbench-tick.timer`, checks every five minutes, starts the next due run when nothing is running, and switches itself off once nothing is scheduled. It keeps working after a reboot or logout if lingering is on (`loginctl enable-linger`).
+
+### Notifications
+
+A run that finishes, fails, pauses or gives way sends a desktop notification. To get it on a phone, put a command in `~/.config/mbench/config.toml` (or `MBENCH_NOTIFY`); it gets the text as `MBENCH_TITLE` and `MBENCH_MESSAGE`, plus `MBENCH_RUN` and `MBENCH_STATUS`:
+
+```toml
+notify = 'curl -s -H "Title: $MBENCH_TITLE" -d "$MBENCH_MESSAGE" https://ntfy.sh/your-topic'
+```
 
 ### Comparing two models
 
@@ -134,6 +156,7 @@ A run waits up to 30 minutes for other GPU work to finish before measuring speed
 - `~/.local/share/mbench/runs/<run>/`: every answer as JSONL (tool episodes with their calls and results), speed samples, server settings, the worker log
 - `~/.local/share/mbench/leaderboard.html`: rebuilt after every run
 - `~/.config/mbench/models.toml`: model facts; `hardware.json` next to it is created by `lmx hardware` on the first `--submit`
+- `~/.config/mbench/config.toml`: `notify`, the command that forwards notifications
 - `~/.cache/mbench/`: pinned datasets, their token counts and the LiveCodeBench harness
 
 Environment overrides: `MBENCH_HOME`, `MBENCH_SWAP_URL` (default `http://127.0.0.1:8081`), `MBENCH_SWAP_CONFIG`, `MBENCH_OMP_MODELS`, `XDG_CONFIG_HOME`, `XDG_CACHE_HOME`.
@@ -147,6 +170,7 @@ Questions come from [SuperGPQA](https://huggingface.co/datasets/m-a-p/SuperGPQA)
 ```
 uv run --group dev pytest
 uv tool install --editable .
+scripts/screenshots.sh        # docs/leaderboard*.png from your own leaderboard
 ```
 
 Licensed under GPL-3.0-or-later.

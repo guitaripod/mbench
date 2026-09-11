@@ -9,6 +9,7 @@ DB = DATA / "bench.db"
 RUNS = DATA / "runs"
 BOARD = DATA / "leaderboard.html"
 PROFILES = CONFIG / "models.toml"
+SETTINGS = CONFIG / "config.toml"
 HARDWARE = CONFIG / "hardware.json"
 LLAMA_SWAP_CONFIG = Path(os.environ.get("MBENCH_SWAP_CONFIG", HOME / ".config/llama-swap/config.yaml"))
 OMP_MODELS = Path(os.environ.get("MBENCH_OMP_MODELS", HOME / ".omp/agent/models.yml"))

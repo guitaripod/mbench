@@ -169,6 +169,41 @@ def paired_index(tasks_a, tasks_b, groups=None):
             "lo": 100 * float(np.percentile(draws, 2.5)), "hi": 100 * float(np.percentile(draws, 97.5))}
 
 
+def energy_metrics(run_dir):
+    """Board energy over the quality tasks (idle draw included) and per correct answer, partial credit counting in part."""
+    path = run_dir / "energy.json"
+    if not path.exists():
+        return {}
+    energy = json.loads(path.read_text())
+    graded = graded_of(run_dir)
+    correct = sum(sum(item_scores(task, load(run_dir, task), graded if task == "lcb" else None).values()) for task in energy)
+    total = sum(energy.values())
+    out = {f"{task}.energy": {"value": wh, "unit": "Wh", "n": 1} for task, wh in energy.items()}
+    out["energy.quality"] = {"value": total, "unit": "Wh", "n": len(energy)}
+    if correct:
+        out["energy.per_correct"] = {"value": total / correct, "unit": "Wh", "n": round(correct)}
+    return out
+
+
+def task_health(models, tasks, minimum=3):
+    """Tasks that don't separate the ranked models: all near the ceiling, all near the floor, or spread inside the noise."""
+    health = {}
+    for task in tasks:
+        entries = [model["tasks"][task] for model in models if model["tasks"].get(task)]
+        if len(entries) < minimum:
+            continue
+        values = [entry["value"] for entry in entries]
+        halves = [(entry["hi"] - entry["lo"]) / 2 for entry in entries
+                  if entry.get("lo") is not None and entry.get("hi") is not None]
+        if min(values) >= 90:
+            health[task] = "near the ceiling for every model"
+        elif max(values) <= 10:
+            health[task] = "near the floor for every model"
+        elif halves and max(values) - min(values) < statistics.mean(halves):
+            health[task] = "models differ by less than the noise"
+    return health
+
+
 def power_of(row):
     return row.get("power_w", row.get("power_w_mean"))
 
@@ -208,6 +243,10 @@ def speed_metrics(result):
             concurrency[row["concurrency"]].append(row["aggregate_tps"])
     for level, values in concurrency.items():
         out[f"speed.conc.{level}"] = spread(values, "tok/s")
+    if concurrency:
+        best = max(concurrency, key=lambda level: statistics.median(concurrency[level]))
+        out["speed.peak"] = spread(concurrency[best], "tok/s")
+        out["speed.peak_at"] = {"value": best, "unit": "requests", "n": len(concurrency[best])}
     depth = defaultdict(list)
     for row in result.get("depth", []):
         if row.get("ttft_s"):

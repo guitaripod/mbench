@@ -111,3 +111,31 @@ def test_speed_metrics_energy_and_depth():
     assert out["speed.decode"]["value"] == 195.0
     assert out["speed.ttft.32000"]["value"] == 1.7
     assert out["speed.conc.4"]["value"] == 400.0
+
+
+def test_energy_per_correct_answer(tmp_path):
+    write(tmp_path, "supergpqa", [record("supergpqa-1", 1.0), record("supergpqa-2", 0.0)])
+    write(tmp_path, "mrcr", [record("mrcr-1", 0.5)])
+    (tmp_path / "energy.json").write_text(json.dumps({"supergpqa": 3.0, "mrcr": 1.5}))
+    out = metrics.energy_metrics(tmp_path)
+    assert out["energy.quality"]["value"] == 4.5 and out["supergpqa.energy"]["value"] == 3.0
+    assert out["energy.per_correct"]["value"] == 3.0
+    assert metrics.energy_metrics(tmp_path / "missing") == {}
+
+
+def test_health_flags_tasks_that_do_not_separate_models():
+    def model(**scores):
+        return {"tasks": {task: {"value": value, "lo": value - 5, "hi": value + 5} for task, value in scores.items()}}
+
+    models = [model(a=95, b=50, c=5, d=40), model(a=97, b=80, c=2, d=42), model(a=99, b=20, c=8, d=41)]
+    assert metrics.task_health(models, ["a", "b", "c", "d"]) == {
+        "a": "near the ceiling for every model", "c": "near the floor for every model",
+        "d": "models differ by less than the noise"}
+    assert metrics.task_health(models[:2], ["a"]) == {}
+
+
+def test_peak_throughput_is_the_best_level():
+    result = {"concurrency": [{"concurrency": 1, "aggregate_tps": 200.0}, {"concurrency": 8, "aggregate_tps": 900.0},
+                              {"concurrency": 16, "aggregate_tps": 850.0}]}
+    out = metrics.speed_metrics(result)
+    assert out["speed.peak"]["value"] == 900.0 and out["speed.peak_at"]["value"] == 8

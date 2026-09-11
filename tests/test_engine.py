@@ -67,7 +67,7 @@ def call(call_id, name, arguments):
 
 
 def runner(tmp_path, script, seen):
-    instance = QualityRunner(profile(), tmp_path, "medium", 2, lambda *args: None, threading.Event())
+    instance = QualityRunner(profile(), tmp_path, "medium", lambda *args: None, threading.Event(), slots=2)
     turns = iter(script)
 
     async def fake_call(item, messages=None, seed_key=None):

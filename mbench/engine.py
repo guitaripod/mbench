@@ -3,25 +3,36 @@ import hashlib
 import json
 import re
 import time
+from collections import deque
 
 import openai
 from openai import AsyncOpenAI
 
-from . import paths, scoring, tool_cases
+from . import paths, scoring, suite, tool_cases
 
 CONTEXT_ERROR_WORDS = ("context", "too long", "maximum", "exceeds", "max_tokens")
 MIN_ANSWER_TOKENS = 2048
+ANSWER_RESERVE = 16384
+POOL_HEADROOM = 0.9
+FALLBACK_TOKENS_PER_SECOND = 40
+EFFORT_OFF = "none"
 
 
 def resolve_effort(profile, requested):
-    """Turns "max"/"min" into the model's own top or bottom level from its declared effort list; a named level must be one it declares."""
+    """Turns "max"/"min" into the model's own top or bottom level from its declared effort list; a named level must be one
+    it declares, and "none" needs a template that can switch thinking off."""
     levels = profile.efforts
+    if requested == EFFORT_OFF:
+        if EFFORT_OFF in levels or profile.thinking in ("qwen", "none"):
+            return EFFORT_OFF
+        raise ValueError(f"{profile.id} can't switch thinking off; its levels are {', '.join(levels) or 'undeclared'}, "
+                         "and --effort min is its lowest")
     if requested in ("max", "min"):
         if not levels:
             raise ValueError(f"{profile.id} declares no effort levels; add efforts = [...] to its entry in models.toml")
         return levels[-1] if requested == "max" else levels[0]
     if levels and requested not in levels:
-        raise ValueError(f"{profile.id} has no '{requested}' effort; it takes {', '.join(levels)} (or max/min)")
+        raise ValueError(f"{profile.id} has no '{requested}' effort; it takes {', '.join(levels)} (or max/min/none)")
     return requested
 
 
@@ -40,7 +51,8 @@ def request_kwargs(profile, effort, *, greedy=False, seed=None):
     if profile.thinking == "openai":
         kwargs["reasoning_effort"] = effort
     elif profile.thinking == "qwen":
-        extra["chat_template_kwargs"] = {"enable_thinking": True, "reasoning_effort": effort}
+        extra["chat_template_kwargs"] = ({"enable_thinking": False} if effort == EFFORT_OFF
+                                         else {"enable_thinking": True, "reasoning_effort": effort})
     if greedy:
         kwargs["temperature"] = 0
     if seed is not None and supports_seed(profile):
@@ -120,24 +132,97 @@ def parse_arguments(raw):
     return arguments if isinstance(arguments, dict) else None
 
 
-class QualityRunner:
-    """Runs one task's items with a fixed number in flight, appending each answer so an interrupted run resumes where it stopped."""
+def prompt_tokens(item):
+    """The prompt's size: counted for long-context items, estimated from characters for the rest."""
+    counted = item["meta"].get("tokens")
+    if counted:
+        return counted
+    return sum(len(str(message.get("content") or "")) for message in item["messages"]) // 3 + 512
 
-    def __init__(self, profile, run_dir, effort, concurrency, report, abort):
+
+def weight(item):
+    """Context an item may hold on the server while it runs: its prompt plus room for a typical answer."""
+    return prompt_tokens(item) + min(item["max_tokens"], ANSWER_RESERVE)
+
+
+class Gate:
+    """Starts an item once a request slot is free and its context fits the server's shared pool. Waiters start in order,
+    so a long prompt is never starved by a stream of short ones; one too big for the pool runs alone."""
+
+    def __init__(self, slots, pool=None):
+        self.slots, self.pool = slots, pool
+        self.running = self.used = 0
+        self.waiters = deque()
+
+    def fits(self, size):
+        return self.running < self.slots and (self.pool is None or self.running == 0 or self.used + size <= self.pool)
+
+    def take(self, size):
+        self.running += 1
+        self.used += size
+
+    async def acquire(self, size):
+        if not self.waiters and self.fits(size):
+            self.take(size)
+            return
+        future = asyncio.get_running_loop().create_future()
+        self.waiters.append((size, future))
+        try:
+            await future
+        except asyncio.CancelledError:
+            if future.done() and not future.cancelled():
+                self.release(size)
+            raise
+
+    def release(self, size):
+        self.running -= 1
+        self.used -= size
+        while self.waiters and (self.waiters[0][1].cancelled() or self.fits(self.waiters[0][0])):
+            size, future = self.waiters.popleft()
+            if not future.cancelled():
+                self.take(size)
+                future.set_result(None)
+
+
+def percentile(values, share):
+    ordered = sorted(values)
+    return ordered[min(len(ordered) - 1, int(share * (len(ordered) - 1)))]
+
+
+class QualityRunner:
+    """Runs one task's items as many at a time as the server takes, appending each answer so an interrupted run resumes
+    where it stopped. It stops dispatching when an item couldn't finish before the deadline, and stops outright when
+    told to (low RAM, the GPU needed elsewhere)."""
+
+    def __init__(self, profile, run_dir, effort, report, stop, slots=None, pool=None, deadline=None):
         self.profile = profile
         self.run_dir = run_dir
         self.effort = effort
-        self.concurrency = concurrency
         self.report = report
-        self.abort = abort
+        self.stop = stop
+        self.slots = max(1, min(slots or suite.CONCURRENCY, suite.MAX_CONCURRENCY))
+        self.pool = int(pool * POOL_HEADROOM) if pool else None
+        self.deadline = deadline
+        self.drained = False
+        self.latencies = {}
         self.client = AsyncOpenAI(base_url=paths.SWAP_URL + "/v1", api_key="none", timeout=7200, max_retries=0)
 
-    def done_ids(self, task):
+    def done(self, task):
         path = self.run_dir / f"{task}.jsonl"
         if not path.exists():
-            return set()
+            return []
         with path.open() as handle:
-            return {json.loads(line)["id"] for line in handle if line.strip()}
+            return [json.loads(line) for line in handle if line.strip()]
+
+    def expected_seconds(self, task, item):
+        """How long an item takes: the slow end of this task's answers so far, or its token budget at a modest pace."""
+        seen = self.latencies.get(task) or []
+        if len(seen) >= 3:
+            return percentile(seen, 0.9)
+        return item["max_tokens"] / FALLBACK_TOKENS_PER_SECOND
+
+    def too_late(self, task, item):
+        return self.deadline is not None and time.time() + self.expected_seconds(task, item) > self.deadline
 
     async def call(self, item, messages=None, seed_key=None):
         kwargs = request_kwargs(self.profile, self.effort, seed=seed_for(seed_key or item["id"]))
@@ -152,7 +237,7 @@ class QualityRunner:
         world = tool_cases.World(tool_cases.BY_ID[item["gold"]]["world"])
         messages = list(item["messages"])
         calls, thoughts = [], []
-        prompt_tokens = completion_tokens = malformed = 0
+        prompt_count = completion_count = malformed = 0
         reply, finish, steps = "", "steps", 0
         for step in range(item["meta"]["max_steps"]):
             response = await self.call(item, messages, f"{item['id']}-{step}")
@@ -160,8 +245,8 @@ class QualityRunner:
             choice = response.choices[0]
             message = choice.message
             if response.usage:
-                prompt_tokens += response.usage.prompt_tokens or 0
-                completion_tokens += response.usage.completion_tokens or 0
+                prompt_count += response.usage.prompt_tokens or 0
+                completion_count += response.usage.completion_tokens or 0
             thought = getattr(message, "reasoning_content", None) or ""
             thoughts.append(thought)
             if not message.tool_calls:
@@ -188,7 +273,7 @@ class QualityRunner:
         passed = finish != "steps" and tool_cases.grade(item["gold"], world, calls, reply)
         return {
             **base_record("tools", item, finish, started),
-            "prompt_tokens": prompt_tokens, "completion_tokens": completion_tokens,
+            "prompt_tokens": prompt_count, "completion_tokens": completion_count,
             "content": reply, "reasoning": "\n\n".join(thought for thought in thoughts if thought),
             "prediction": calls, "steps": steps, "malformed": malformed, "score": float(passed),
         }
@@ -209,41 +294,73 @@ class QualityRunner:
                     raise
         return out_of_context(task, item, started)
 
+    async def watch(self, running):
+        while not self.stop.is_set():
+            await asyncio.sleep(1)
+        for task in running:
+            task.cancel()
+
     async def run(self, task, items):
         out = self.run_dir / f"{task}.jsonl"
-        done = self.done_ids(task)
+        existing = self.done(task)
+        done = {record["id"] for record in existing}
+        self.latencies[task] = [record["latency"] for record in existing
+                                if record.get("finish") != "context" and record.get("latency")]
         counter = {"done": len(done)}
         self.report(task, counter["done"], len(items))
-        semaphore = asyncio.Semaphore(self.concurrency)
+        gate = Gate(self.slots, self.pool)
         lock = asyncio.Lock()
         failures = []
 
+        async def write(record):
+            async with lock:
+                with out.open("a") as handle:
+                    handle.write(json.dumps(record) + "\n")
+                counter["done"] += 1
+                self.report(task, counter["done"], len(items))
+
         async def one(item):
-            async with semaphore:
-                if self.abort.is_set():
+            if self.stop.is_set():
+                return
+            if item["meta"].get("unreachable"):
+                await write(out_of_context(task, item, time.time()))
+                return
+            size = weight(item)
+            await gate.acquire(size)
+            try:
+                if self.stop.is_set():
+                    return
+                if self.too_late(task, item):
+                    self.drained = True
                     return
                 started = time.time()
-                if item["meta"].get("unreachable"):
-                    record = out_of_context(task, item, started)
-                else:
-                    try:
-                        record = await self.solve(task, item, started)
-                    except Exception as error:
-                        if not context_error(error):
-                            failures.append({"id": item["id"], "error": repr(error)[:500]})
-                            return
-                        record = await self.retry_fitted(task, item, error, started)
-                async with lock:
-                    with out.open("a") as handle:
-                        handle.write(json.dumps(record) + "\n")
-                    counter["done"] += 1
-                    self.report(task, counter["done"], len(items))
+                try:
+                    record = await self.solve(task, item, started)
+                except Exception as error:
+                    if not context_error(error):
+                        failures.append({"id": item["id"], "error": repr(error)[:500]})
+                        return
+                    record = await self.retry_fitted(task, item, error, started)
+                if record["finish"] != "context":
+                    self.latencies[task].append(record["latency"])
+                await write(record)
+            finally:
+                gate.release(size)
+
+        async def wave(batch):
+            running = [asyncio.create_task(one(item)) for item in batch]
+            watcher = asyncio.create_task(self.watch(running))
+            results = await asyncio.gather(*running, return_exceptions=True)
+            watcher.cancel()
+            errors = [result for result in results if isinstance(result, Exception)]
+            if errors:
+                raise errors[0]
 
         pending = [item for item in items if item["id"] not in done]
-        await asyncio.gather(*(one(item) for item in pending))
-        if failures and not self.abort.is_set():
+        await wave(pending)
+        if failures and not self.stop.is_set() and not self.drained:
             retry_ids = {failure["id"] for failure in failures}
             failures.clear()
             await asyncio.sleep(15)
-            await asyncio.gather(*(one(item) for item in pending if item["id"] in retry_ids))
+            await wave([item for item in pending if item["id"] in retry_ids])
         return failures

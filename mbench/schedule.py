@@ -5,7 +5,7 @@ import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from . import paths, store, swap, units
+from . import gpu, notify, paths, store, swap, units
 
 TIMER = "mbench-tick"
 UNIT_DIR = Path(os.environ.get("XDG_CONFIG_HOME", paths.HOME / ".config")) / "systemd" / "user"
@@ -49,6 +49,13 @@ def next_start(moment, clock):
     hours, minutes = map(int, clock.split(":"))
     candidate = moment.replace(hour=hours, minute=minutes, second=0, microsecond=0)
     return candidate if candidate >= moment else candidate + timedelta(days=1)
+
+
+def window_deadline(window, moment):
+    """When the window that is open now closes; None for a window without an end, or when it isn't open."""
+    if not window or not window.get("end") or not in_window(moment, window):
+        return None
+    return next_start(moment, window["end"]).timestamp()
 
 
 def first_start(moment, window, at=None):
@@ -101,15 +108,26 @@ def note(run_id, message):
         handle.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {message}\n")
 
 
+def park(db, run_id, not_before, reason, counter):
+    """Puts a run back on the schedule to continue from its saved answers; counter is "paused" for a closing window and
+    "yielded" for giving the GPU away. Returns how many times that has happened to the run."""
+    flags = (store.get_run(db, run_id) or {}).get("flags") or {}
+    count = flags.get(counter, 0) + 1
+    store.update_run(db, run_id, status="scheduled",
+                     flags={**flags, "not_before": not_before, counter: count, "parked": reason})
+    note(run_id, f"paused: {reason}; continues {describe(not_before)} at the earliest")
+    return count
+
+
 def pause(db, run, moment):
     """Stops a run whose window closed and frees the GPU; its saved answers carry it on when the window next opens."""
-    flags = run.get("flags") or {}
+    window = (run.get("flags") or {})["window"]
     units.stop(run["id"])
     swap.unload()
-    resumes = next_start(moment, flags["window"]["start"]).timestamp()
-    store.update_run(db, run["id"], status="scheduled", flags={**flags, "not_before": resumes,
-                                                               "paused": flags.get("paused", 0) + 1})
-    note(run["id"], f"paused: window closed at {flags['window']['end']}; continues {describe(resumes)}")
+    resumes = next_start(moment, window["start"]).timestamp()
+    if park(db, run["id"], resumes, f"the window closed at {window['end']}", "paused") == 1:
+        notify.send("mbench paused", f"{run['model']}: the window closed at {window['end']}; continues {describe(resumes)}",
+                    run=run["id"], status="paused")
 
 
 def due(run, moment):
@@ -128,12 +146,17 @@ def tick(db, moment=None):
     if not any(run["status"] in units.ACTIVE for run in runs):
         waiting = sorted((run for run in runs if run["status"] == "scheduled" and due(run, moment)),
                          key=lambda run: ((run.get("flags") or {}).get("not_before") or 0, run.get("created") or 0))
+        contended = None
         for run in waiting:
             flags = run.get("flags") or {}
             if not in_window(moment, flags.get("window")):
                 later = next_start(moment, flags["window"]["start"]).timestamp()
                 store.update_run(db, run["id"], flags={**flags, "not_before": later})
                 continue
+            if flags.get("yield"):
+                contended = gpu.contention() if contended is None else contended
+                if contended:
+                    continue
             store.update_run(db, run["id"], status="queued", error=None)
             units.spawn(run["id"], False)
             started = run["id"]

@@ -1,10 +1,11 @@
 import json
 import time
 
+from . import metrics as scores
 from . import paths, store, suite
 
 KINDS = ("full", "quick")
-EFFORT_ORDER = ("medium", "max", "high", "xhigh", "low", "min", "minimal")
+EFFORT_ORDER = ("medium", "max", "high", "xhigh", "low", "min", "minimal", "none")
 DEFAULT_EFFORT = "medium"
 TEMPLATE = paths.PACKAGE / "templates" / "leaderboard.html"
 PART_PREFIXES = (".bin.", ".part.")
@@ -42,6 +43,17 @@ def task_entry(metrics, task):
             "parts": parts}
 
 
+def warnings_for(tasks, capacity, labels):
+    """Server settings that cap scores, said out loud so a low long-context score isn't read as the model's own."""
+    out_of_reach = {task: entry["unreachable"] for task, entry in tasks.items() if entry.get("unreachable")}
+    if not out_of_reach:
+        return []
+    limit = capacity.get("context")
+    reach = f"{limit // 1024}k tokens per request" if limit else "the server's context window"
+    return [f"Capped at {reach}: " + ", ".join(f"{labels.get(task, task)} {share:.0f}% out of reach"
+                                              for task, share in out_of_reach.items())]
+
+
 def model_entry(db, run, history, definition):
     metrics = store.metrics_of(db, run["id"])
     profile = run.get("profile") or {}
@@ -58,6 +70,8 @@ def model_entry(db, run, history, definition):
                 detail = json.loads(entry["detail"]) if entry.get("detail") else {}
                 submissions.append({"kind": entry["kind"], "id": entry["remote_id"], "value": entry["value"],
                                     "run": candidate["id"], "verified": detail.get("verified")})
+    tasks = {task: entry for task in definition["index_tasks"] if (entry := task_entry(metrics, task))}
+    capacity = (run.get("server") or {}).get("capacity") or {}
     return {
         "id": run["model"],
         "name": run.get("name") or run["model"],
@@ -73,7 +87,10 @@ def model_entry(db, run, history, definition):
             "reused": flags.get("reused"),
         },
         "index": metrics.get("index.quality"),
-        "tasks": {task: entry for task in definition["index_tasks"] if (entry := task_entry(metrics, task))},
+        "tasks": tasks,
+        "capacity": capacity,
+        "warnings": warnings_for(tasks, capacity, definition["labels"]),
+        "energy": {"perCorrect": metrics.get("energy.per_correct"), "quality": metrics.get("energy.quality")},
         "speed": {key.removeprefix("speed."): entry for key, entry in metrics.items() if key.startswith("speed.")},
         "lmx": lmx_scores,
         "submissions": submissions,
@@ -108,6 +125,7 @@ def suite_view(db, runs, version):
         "groups": {name: list(tasks) for name, tasks in definition["groups"].items()},
         "efforts": list(rankings),
         "rankings": rankings,
+        "health": {effort: scores.task_health(models, definition["index_tasks"]) for effort, models in rankings.items()},
     }
 
 

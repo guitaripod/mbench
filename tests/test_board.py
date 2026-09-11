@@ -47,3 +47,10 @@ def test_task_entries_carry_their_breakdown():
     entry = board.task_entry(metrics, "mrcr")
     assert entry["parts"] == {"16384": 90.0, "131072": 20.0}
     assert entry["unreachable"] == 5.0
+
+
+def test_warnings_say_what_a_context_cap_cost():
+    tasks = {"mrcr": {"unreachable": 25.0}, "graphwalks": {"unreachable": 0.0}, "math": {}}
+    warnings = board.warnings_for(tasks, {"context": 65536}, {"mrcr": "MRCR 8-needle", "graphwalks": "Graphwalks"})
+    assert warnings == ["Capped at 64k tokens per request: MRCR 8-needle 25% out of reach"]
+    assert board.warnings_for({"math": {}}, {}, {}) == []

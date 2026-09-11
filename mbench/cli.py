@@ -1,4 +1,5 @@
 import argparse
+import asyncio
 import json
 import shutil
 import subprocess
@@ -9,7 +10,7 @@ from importlib import metadata
 from pathlib import Path
 from typing import NoReturn
 
-from . import __version__, board, gpu, lmx, metrics, paths, profiles, schedule, store, suite, swap
+from . import __version__, board, doctor, gpu, lmx, metrics, paths, profiles, schedule, sources, store, suite, swap
 from .engine import resolve_effort
 from .units import ACTIVE, reconcile, spawn, unit_active, unit_name
 
@@ -133,7 +134,8 @@ def summary(db, run_id):
     for task in definition["index_tasks"]:
         show(f"{task}.score", definition["labels"][task], "%")
     show("speed.decode", "Decode, one request", "tok/s")
-    show("speed.conc.4", "Throughput, 4 at once", "tok/s")
+    show("speed.peak", "Peak throughput", "tok/s")
+    show("energy.per_correct", "Energy per correct answer", "Wh")
     show("speed.ttft.32000", "First token, 32k prompt", "s")
 
 
@@ -275,7 +277,7 @@ def cmd_run(args):
             flags["reused"] = {"run": source["id"], "tasks": carried}
         starts_now = window is None and not active and position == 0
         if not starts_now:
-            flags.update(not_before=begins, window=window)
+            flags.update(not_before=begins, window=window, **({"yield": True} if window else {}))
         store.insert_run(db, {
             "id": run_id, "model": profile.id, "name": profile.name, "suite": suite.label(suite_name),
             "effort": args.effort, "status": "queued" if starts_now else "scheduled", "harness": harness(),
@@ -327,7 +329,7 @@ def print_schedule(db):
         print(f"{run['id']}  {run['suite']}  scheduled, {start}"
               + (f", only {window['start']}–{window['end']}, continuing the next night if unfinished"
                  if window.get("end") else "")
-              + (" (paused, continues where it stopped)" if flags.get("paused") else ""))
+              + (f" ({flags['parked']}; continues where it stopped)" if flags.get("parked") else ""))
 
 
 def cmd_status(_args):
@@ -436,7 +438,7 @@ def cmd_ls(args):
               + ("" if others or older else " Start one with `mbench run <llama-swap model>`."))
         return
     header = ["Model", "Quality", *[view["taskShort"][task] for task in view["indexTasks"]],
-              "tok/s", "4× tok/s", "TTFT 32k", "Run"]
+              "tok/s", "Peak", "TTFT 32k", "Wh/correct", "Run"]
     rows = []
     ordered = sorted(models, key=lambda model: -((model["index"] or {}).get("value") or -1))
     for model in ordered:
@@ -444,13 +446,16 @@ def cmd_ls(args):
         kind = model["run"]["kind"]
         rows.append([
             model["id"], cell(model["index"]), *[cell(model["tasks"].get(task)) for task in view["indexTasks"]],
-            cell(speed.get("decode"), 0), cell(speed.get("conc.4"), 0), cell(speed.get("ttft.32000")),
+            cell(speed.get("decode"), 0), cell(speed.get("peak"), 0), cell(speed.get("ttft.32000")),
+            cell(model["energy"].get("perCorrect"), 2),
             datetime.fromtimestamp(model["run"]["finished"]).strftime("%d %b") + ("" if kind == "full" else f" {kind}"),
         ])
     widths = [max(len(str(row[index])) for row in [header, *rows]) for index in range(len(header))]
     for row in [header, *rows]:
         print("  ".join(str(value).ljust(width) if index == 0 else str(value).rjust(width)
                         for index, (value, width) in enumerate(zip(row, widths))))
+    for task, why in view["health"].get(args.effort, {}).items():
+        print(f"note: {view['taskLabels'][task]} isn't separating these models ({why})")
 
 
 def comparison_run(db, name, effort):
@@ -501,6 +506,45 @@ def cmd_compare(args):
               f"{index['lo']:+.1f} to {index['hi']:+.1f}{'':<4} {verdict(index)}")
 
 
+def cmd_doctor(args):
+    profile = resolve_profile(args.model)
+    try:
+        level = resolve_effort(profile, args.effort)
+    except ValueError as error:
+        fail(str(error))
+    if not swap.reachable():
+        fail(f"llama-swap is not answering at {paths.SWAP_URL}")
+    db = store.connect()
+    reconcile(db)
+    active = [run for run in store.list_runs(db) if run["status"] in ACTIVE]
+    if active:
+        fail(f"{active[0]['id']} is running; the checks would compete with it")
+    others = [entry["model"] for entry in swap.running() if entry["model"] != profile.id]
+    if others:
+        print(f"llama-swap will unload {', '.join(others)} to make room.")
+    print(f"Loading {profile.id} ({swap.ensure_loaded(profile.id)} s).")
+    capacity = swap.capacity(swap.server_info(profile.id))
+    context = swap.positive(profile.context or capacity["context"], capacity["context"])
+    checks = asyncio.run(doctor.run(profile, level, context, capacity))
+    for check in checks:
+        print(f"  {check['status'].upper():<4}  {check['check']:<12} {check['detail']}")
+    if doctor.failures(checks):
+        sys.exit(1)
+
+
+def cmd_sources(_args):
+    try:
+        found = sources.check()
+    except Exception as error:
+        fail(f"couldn't check Hugging Face: {error!r}")
+    for line in found["changed"]:
+        print(f"changed  {line}")
+    for line in found["newer"]:
+        print(f"newer    {line}")
+    if not found["changed"] and not found["newer"]:
+        print("Every pinned file is current, and nothing newer is out.")
+
+
 def cmd_board(args):
     path = board.build()
     print(path)
@@ -548,6 +592,8 @@ examples:
   mbench status                                 what is running and how far along it is
   mbench ls --effort max                        ranked table for one effort level
   mbench compare qwen3-32b gpt-oss-120b         which differences are real, task by task
+  mbench doctor qwen3-32b                       check a model's server before spending a night on it
+  mbench sources                                newer question sets, or pinned files that moved upstream
   mbench board --open                           the leaderboard page
 
 A model is any llama-swap id (see `mbench profile <id>`). Only one run at a time; a run
@@ -589,6 +635,15 @@ scheduling (--at TIME [--until TIME]):
   five minutes and switches itself off when nothing is scheduled; it keeps working after
   a reboot if lingering is on (loginctl enable-linger). Without --at, several models
   queue behind each other, and a run started while another is going waits its turn.
+  Runs with --at give way to other GPU work: when a game or ComfyUI holds the GPU for a
+  minute, the run stops, llama-swap unloads, and it tries again every ten minutes. Near
+  the end of a window a run stops taking new questions that couldn't finish in time.
+
+every run:
+  starts with the checks `mbench doctor` runs (context per request, reasoning and
+  tool-call parsing, a 16k-token prompt), sends as many requests at once as the server
+  takes and as fit its shared context, and notifies the desktop, plus the `notify`
+  command in ~/.config/mbench/config.toml or MBENCH_NOTIFY, when it finishes or fails.
 
 reuse (--reuse [RUN]):
   Copies the answers of an earlier run of the same model, config, effort and suite size
@@ -628,7 +683,7 @@ def parser():
                                    epilog=ROOT_EPILOG, formatter_class=formatter)
     root.add_argument("--version", action="version", version=f"mbench {__version__}")
     commands = root.add_subparsers(dest="command", required=True, title="commands",
-                                   metavar="{run,status,logs,cancel,resume,ls,compare,board,profile}")
+                                   metavar="{run,status,logs,cancel,resume,ls,compare,doctor,sources,board,profile}")
 
     run = commands.add_parser("run", help="benchmark a llama-swap model", description=RUN_DESCRIPTION,
                               epilog=RUN_EPILOG, formatter_class=formatter)
@@ -637,7 +692,7 @@ def parser():
     size.add_argument("--quick", action="store_true", help="smaller samples (45–90 min), ranked as provisional")
     size.add_argument("--smoke", action="store_true", help="a few items per task (~10 min) to check the pipeline; never ranked")
     run.add_argument("--effort", default="medium", metavar="LEVEL",
-                     help="reasoning effort: max, min, or a level the model declares (default medium); ranked per effort")
+                     help="reasoning effort: max, min, none, or a level the model declares (default medium); ranked per effort")
     run.add_argument("--only", metavar="TASKS", help="comma-separated tasks to run, e.g. speed or math,tools")
     run.add_argument("--skip", metavar="TASKS", help="comma-separated tasks to leave out, e.g. lcb")
     run.add_argument("--reuse", nargs="?", const="latest", metavar="RUN",
@@ -677,6 +732,11 @@ def parser():
     compare.add_argument("b", help="model id or run id")
     compare.add_argument("--effort", default="medium", metavar="LEVEL", help="effort of the headline runs (default medium)")
     compare.set_defaults(handler=cmd_compare)
+    doctor_parser = commands.add_parser("doctor", help="check a model's server: context, parsers, tool calls, a long prompt")
+    doctor_parser.add_argument("model", help="llama-swap model id or alias")
+    doctor_parser.add_argument("--effort", default="medium", metavar="LEVEL", help="effort to check at (default medium)")
+    doctor_parser.set_defaults(handler=cmd_doctor)
+    commands.add_parser("sources", help="newer question sets, or pinned files changed upstream").set_defaults(handler=cmd_sources)
     board_parser = commands.add_parser("board", help="rebuild the leaderboard page and print its path")
     board_parser.add_argument("--open", action="store_true", help="also open it in the browser")
     board_parser.set_defaults(handler=cmd_board)

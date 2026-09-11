@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "$0")/.."
+page="${MBENCH_HOME:-$HOME/.local/share/mbench}/leaderboard.html"
+browser=$(command -v chromium || command -v google-chrome-stable || command -v google-chrome \
+  || ls -d "$HOME"/.cache/ms-playwright/chromium_headless_shell-*/chrome-headless-shell-linux64/chrome-headless-shell 2>/dev/null | tail -1 \
+  || true)
+[[ -n "$browser" && -x "$browser" ]] || { echo "screenshots.sh: no Chromium found" >&2; exit 1; }
+mbench board >/dev/null
+common=(--headless --no-sandbox --disable-gpu --hide-scrollbars --virtual-time-budget=4000 --window-size=1400,2600)
+"$browser" "${common[@]}" --screenshot=docs/leaderboard.png "file://$page" 2>/dev/null
+"$browser" "${common[@]}" --force-dark-mode --blink-settings=preferredColorScheme=0 --screenshot=docs/leaderboard-dark.png "file://$page" 2>/dev/null
+echo "docs/leaderboard.png docs/leaderboard-dark.png"

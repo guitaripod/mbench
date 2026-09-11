@@ -14,6 +14,10 @@ SERVER_INFO_KEYS = (
 )
 
 
+SGLANG_ENDPOINTS = ("/server_info", "/get_server_info")
+INFO_ENDPOINTS = (*SGLANG_ENDPOINTS, "/props", "/v1/models")
+
+
 def get(path, timeout=10):
     with urllib.request.urlopen(paths.SWAP_URL + path, timeout=timeout) as response:
         return response.read()
@@ -57,21 +61,24 @@ def upstream(model, path, timeout=10):
 
 
 def server_info(model):
-    """SGLang answers /get_server_info, llama.cpp answers /props; either tells what the server really runs with."""
-    for path in ("/get_server_info", "/props"):
+    """SGLang answers /server_info (or the older /get_server_info), llama.cpp /props and vLLM only /v1/models; each tells
+    what the server really runs with."""
+    for path in INFO_ENDPOINTS:
         raw = upstream(model, path)
         if not raw:
             continue
         try:
-            return {"endpoint": path, "info": json.loads(raw)}
+            payload = json.loads(raw)
         except json.JSONDecodeError:
             continue
+        if path != "/v1/models" or any("max_model_len" in entry for entry in payload.get("data") or []):
+            return {"endpoint": path, "info": payload}
     return {}
 
 
 def trimmed_info(info):
     payload = info.get("info") or {}
-    if info.get("endpoint") == "/get_server_info":
+    if info.get("endpoint") in SGLANG_ENDPOINTS:
         return {key: payload.get(key) for key in SERVER_INFO_KEYS if payload.get(key) is not None}
     settings = payload.get("default_generation_settings") or {}
     return {
@@ -83,10 +90,31 @@ def trimmed_info(info):
 
 
 def context_from(info):
+    return capacity(info)["context"]
+
+
+def positive(*values):
+    found = [int(value) for value in values if isinstance(value, (int, float)) and value > 0]
+    return min(found) if found else None
+
+
+def capacity(info):
+    """What the server can hold: requests at once, tokens one request may use, and tokens all requests in flight share.
+    llama.cpp's slots draw on one pool the size of a slot's context (a unified cache, or the tighter reading of a split one)."""
     payload = info.get("info") or {}
-    if info.get("endpoint") == "/get_server_info":
-        return payload.get("context_length")
-    return (payload.get("default_generation_settings") or {}).get("n_ctx")
+    endpoint = info.get("endpoint")
+    if endpoint in SGLANG_ENDPOINTS:
+        states = payload.get("internal_states") or [{}]
+        pool = positive(payload.get("max_total_num_tokens"), (states[0] or {}).get("max_total_num_tokens"))
+        return {"slots": positive(payload.get("max_running_requests")),
+                "context": positive(payload.get("context_length"), pool), "pool": pool}
+    if endpoint == "/props":
+        context = positive((payload.get("default_generation_settings") or {}).get("n_ctx"))
+        return {"slots": positive(payload.get("total_slots")), "context": context, "pool": context}
+    if endpoint == "/v1/models":
+        entry = next((entry for entry in payload.get("data") or [] if "max_model_len" in entry), {})
+        return {"slots": None, "context": positive(entry.get("max_model_len")), "pool": None}
+    return {"slots": None, "context": None, "pool": None}
 
 
 def spec_counters(model):

@@ -35,9 +35,11 @@ class Filler:
 class SpeedRun:
     """Greedy decoding throughout, so the same prompt produces the same tokens and drafter acceptance stays comparable between runs."""
 
-    def __init__(self, profile, spec, effort, run_id, report, abort):
+    def __init__(self, profile, spec, effort, run_id, report, abort, levels=None, context=None):
         self.profile = profile
         self.spec = spec
+        self.levels = list(levels or spec["concurrency"])
+        self.context = context or profile.context
         self.effort = effort
         self.run_id = run_id
         self.report = report
@@ -55,9 +57,9 @@ class SpeedRun:
         return swap.spec_counters(self.profile.id) if self.profile.engine == "sglang" else None
 
     def note_contention(self):
-        for app in gpu.heavy_apps():
-            if app["name"] not in [seen["name"] for seen in self.contention]:
-                self.contention.append(app)
+        for process in gpu.contention(samples=1):
+            if process["name"] not in [seen["name"] for seen in self.contention]:
+                self.contention.append(process)
 
     async def stream_once(self, content, max_tokens):
         messages = [{"role": "user", "content": f"{self.tag()}\n\n{content}"}]
@@ -99,14 +101,14 @@ class SpeedRun:
         }
 
     def depths(self):
-        context = self.profile.context
+        context = self.context
         limit = self.spec["depth_max_tokens"] + 1024
         return [depth for depth in self.spec["depths"] if context is None or depth + limit <= context]
 
     async def run(self):
         prompts = suite.canonical_prompts()
         depths = self.depths()
-        total = len(prompts) * self.spec["reps"] + len(self.spec["concurrency"]) * self.spec["rounds"] + len(depths) * self.spec["depth_reps"]
+        total = len(prompts) * self.spec["reps"] + len(self.levels) * self.spec["rounds"] + len(depths) * self.spec["depth_reps"]
         progress = {"done": 0}
         results = {"single": [], "concurrency": [], "depth": [], "depths_skipped": sorted(set(self.spec["depths"]) - set(depths))}
 
@@ -131,7 +133,7 @@ class SpeedRun:
                     results["single"].append(row)
                     step()
             texts = list(prompts.values())
-            for level in self.spec["concurrency"]:
+            for level in self.levels:
                 for round_index in range(self.spec["rounds"]):
                     if self.abort.is_set():
                         return results
