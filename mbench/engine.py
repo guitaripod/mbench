@@ -7,6 +7,8 @@ from openai import AsyncOpenAI
 
 from . import paths, scoring
 
+QWEN_EFFORTS = {"high": "xhigh"}
+
 
 def supports_seed(profile):
     """SGLang's FlashInfer sampler asserts on seeded top-k/top-p requests and would take the server down, so only llama.cpp gets seeds."""
@@ -23,7 +25,7 @@ def request_kwargs(profile, effort, *, greedy=False, seed=None):
     if profile.thinking == "openai":
         kwargs["reasoning_effort"] = effort
     elif profile.thinking == "qwen":
-        extra["chat_template_kwargs"] = {"enable_thinking": True, "reasoning_effort": effort}
+        extra["chat_template_kwargs"] = {"enable_thinking": True, "reasoning_effort": QWEN_EFFORTS.get(effort, effort)}
     if greedy:
         kwargs["temperature"] = 0
     if seed is not None and supports_seed(profile):

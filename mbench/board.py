@@ -4,6 +4,7 @@ import time
 from . import paths, store, suite
 
 KINDS = ("full", "quick", "legacy")
+RANKED_EFFORT = "medium"
 TEMPLATE = paths.PACKAGE / "templates" / "leaderboard.html"
 
 
@@ -12,11 +13,11 @@ def kind_of(run):
 
 
 def headline(runs):
-    """The newest complete full-suite run represents a model; quick or legacy runs stand in, marked provisional, until one exists."""
+    """The newest complete medium-effort full run represents a model; quick or legacy runs stand in until one exists. Other efforts show in history only."""
     best = {}
     for run in runs:
         kind = kind_of(run)
-        if kind not in KINDS:
+        if kind not in KINDS or (run.get("effort") or RANKED_EFFORT) != RANKED_EFFORT:
             continue
         current = best.get(run["model"])
         if current is None or KINDS.index(kind) < KINDS.index(kind_of(current)):
