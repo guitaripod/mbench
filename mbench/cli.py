@@ -1,6 +1,5 @@
 import argparse
 import json
-import re
 import shutil
 import subprocess
 import sys
@@ -10,10 +9,10 @@ from importlib import metadata
 from pathlib import Path
 from typing import NoReturn
 
-from . import __version__, board, gpu, lmx, metrics, paths, profiles, store, suite, swap
+from . import __version__, board, gpu, lmx, metrics, paths, profiles, schedule, store, suite, swap
 from .engine import resolve_effort
+from .units import ACTIVE, reconcile, spawn, unit_active, unit_name
 
-ACTIVE = ("queued", "running")
 DURATIONS = {"full": "2–5 hours", "quick": "45–90 minutes", "smoke": "about 10 minutes"}
 REUSE_FILES = {"speed": ("speed.json",), "lcb": ("lcb.jsonl", "lcb.graded.jsonl")}
 REUSE_STATUSES = ("complete", "failed", "cancelled")
@@ -58,36 +57,6 @@ def resolve_profile(model):
         return profiles.resolve(model)
     except KeyError as error:
         fail(str(error.args[0]))
-
-
-def unit_name(run_id):
-    return "mbench-" + re.sub(r"[^A-Za-z0-9_.-]", "_", run_id)
-
-
-def unit_active(run_id):
-    return subprocess.run(["systemctl", "--user", "is-active", "-q", unit_name(run_id)]).returncode == 0
-
-
-def reconcile(db):
-    """A worker that died without writing its verdict (reboot, kill) leaves a running row; mark it failed so it can be resumed."""
-    for run in store.list_runs(db):
-        if run["status"] in ACTIVE and not unit_active(run["id"]) and time.time() - (run["created"] or 0) > 60:
-            store.update_run(db, run["id"], status="failed", error="the worker stopped without finishing")
-
-
-def spawn(run_id, foreground):
-    """Runs the worker as a transient systemd unit so closing the terminal or ending an agent session can't kill it."""
-    if foreground:
-        from .worker import execute
-
-        execute(run_id)
-        return
-    subprocess.run(["systemctl", "--user", "reset-failed", unit_name(run_id)], capture_output=True)
-    subprocess.run(
-        ["systemd-run", "--user", "--collect", f"--unit={unit_name(run_id)}", "-p", "MemoryMax=8G",
-         f"--working-directory={paths.DATA}", sys.executable, "-m", "mbench.cli", "worker", run_id],
-        check=True, capture_output=True,
-    )
 
 
 def duration(seconds):
@@ -232,7 +201,7 @@ def reuse_source(db, requested, profile, level, suite_name, tasks):
     for run in store.list_runs(db, model=profile.id):
         if reuse_problem(run, profile, level, suite_name) is None and carried_tasks(run, tasks):
             return run
-    fail(f"no earlier {suite_name} run of {profile.id} at effort {level} with the same config has answers to reuse")
+    return None
 
 
 def carry_over(run, run_id, tasks):
@@ -245,52 +214,100 @@ def carry_over(run, run_id, tasks):
     return carried
 
 
-def cmd_run(args):
-    profile = resolve_profile(args.model)
-    if not swap.reachable():
-        fail(f"llama-swap is not answering at {paths.SWAP_URL}")
+def window_of(args):
+    """The --at/--until schedule as (first start or None, daily window), or (None, None) to start now."""
+    if args.until and not args.at:
+        fail("--until needs --at: the window is --at to --until, every day until the runs finish")
+    if not args.at:
+        return None, None
+    try:
+        at, start = schedule.parse_at(args.at)
+        end = schedule.parse_clock(args.until) if args.until else None
+    except ValueError as error:
+        fail(str(error))
+    if end == start:
+        fail("--at and --until are the same time")
+    return at, {"start": start, "end": end}
+
+
+def selected_tasks(args):
     tasks = ["speed", *suite.QUALITY_TASKS]
     chosen = set(args.only.split(",")) if args.only else set(tasks)
     skipped = set(args.skip.split(",")) if args.skip else set()
     unknown = (chosen | skipped) - set(tasks)
     if unknown:
         fail(f"unknown task {', '.join(sorted(unknown))}; tasks are {', '.join(tasks)}")
-    tasks = [task for task in tasks if task in chosen and task not in skipped]
-    try:
-        level = resolve_effort(profile, args.effort)
-    except ValueError as error:
-        fail(str(error))
-    if args.submit and lmx.missing_fields(profile):
-        fail(f"--submit needs {', '.join(lmx.missing_fields(profile))} for {profile.id} in {paths.PROFILES}")
+    return [task for task in tasks if task in chosen and task not in skipped]
+
+
+def cmd_run(args):
+    models = list(dict.fromkeys(args.model))
+    if len(models) > 1 and args.reuse not in (None, "latest"):
+        fail("--reuse with a run id works for one model; with several, --reuse picks each model's newest run")
+    at, window = window_of(args)
+    chosen = [resolve_profile(model) for model in models]
+    if not swap.reachable():
+        fail(f"llama-swap is not answering at {paths.SWAP_URL}")
+    tasks = selected_tasks(args)
+    levels = {}
+    for profile in chosen:
+        try:
+            levels[profile.id] = resolve_effort(profile, args.effort)
+        except ValueError as error:
+            fail(str(error))
+        if args.submit and lmx.missing_fields(profile):
+            fail(f"--submit needs {', '.join(lmx.missing_fields(profile))} for {profile.id} in {paths.PROFILES}")
     db = store.connect()
     reconcile(db)
     active = [run for run in store.list_runs(db) if run["status"] in ACTIVE]
-    if active:
-        fail(f"{active[0]['id']} is still running; follow it with `mbench status` or stop it with `mbench cancel`")
     suite_name = "smoke" if args.smoke else "quick" if args.quick else "full"
-    source = reuse_source(db, args.reuse, profile, level, suite_name, tasks) if args.reuse else None
-    run_id = f"{datetime.now():%Y%m%d-%H%M%S}-{profile.id}"
-    (paths.RUNS / run_id).mkdir(parents=True, exist_ok=True)
-    carried = carry_over(source, run_id, tasks) if source else []
-    flags = {"tasks": tasks, "submit": args.submit, "effort_level": level}
-    if carried:
-        flags["reused"] = {"run": source["id"], "tasks": carried}
-    store.insert_run(db, {
-        "id": run_id, "model": profile.id, "name": profile.name, "suite": suite.label(suite_name),
-        "effort": args.effort, "status": "queued", "harness": harness(), "fingerprint": profile.fingerprint,
-        "profile": profile.to_dict(), "hardware": gpu.describe(), "flags": flags, "note": args.note,
-    })
-    others = [entry["model"] for entry in swap.running() if entry["model"] != profile.id]
-    print(f"{run_id}: {suite.label(suite_name)} on {profile.name} at effort {args.effort}"
-          + (f" ({level})" if level != args.effort else "") + f", usually {DURATIONS[suite_name]}.")
-    if source:
-        print(f"Carrying over {', '.join(carried)} from {source['id']}." if carried
-              else f"{source['id']} has nothing that still applies; measuring everything.")
+    now = datetime.now()
+    begins = schedule.first_start(now, window, at).timestamp() if window else now.timestamp()
+    immediate = None
+    for position, profile in enumerate(chosen):
+        level = levels[profile.id]
+        source = reuse_source(db, args.reuse, profile, level, suite_name, tasks) if args.reuse else None
+        run_id = f"{datetime.now():%Y%m%d-%H%M%S}-{profile.id}"
+        (paths.RUNS / run_id).mkdir(parents=True, exist_ok=True)
+        carried = carry_over(source, run_id, tasks) if source else []
+        flags = {"tasks": tasks, "submit": args.submit, "effort_level": level}
+        if carried:
+            flags["reused"] = {"run": source["id"], "tasks": carried}
+        starts_now = window is None and not active and position == 0
+        if not starts_now:
+            flags.update(not_before=begins, window=window)
+        store.insert_run(db, {
+            "id": run_id, "model": profile.id, "name": profile.name, "suite": suite.label(suite_name),
+            "effort": args.effort, "status": "queued" if starts_now else "scheduled", "harness": harness(),
+            "fingerprint": profile.fingerprint, "profile": profile.to_dict(), "hardware": gpu.describe(), "flags": flags,
+            "note": args.note,
+        })
+        if position:
+            when = "after the one before it"
+        elif window:
+            when = f"at {schedule.describe(begins)}"
+        else:
+            when = f"after {active[0]['id']}" if active else "now"
+        print(f"{run_id}: {suite.label(suite_name)} on {profile.name} at effort {args.effort}"
+              + (f" ({level})" if level != args.effort else "") + f", usually {DURATIONS[suite_name]}, starts {when}.")
+        if args.reuse:
+            print(f"  Carrying over {', '.join(carried)} from {source['id']}." if carried
+                  else "  Nothing earlier still applies; measuring everything.")
+        immediate = immediate or (run_id if starts_now else None)
+    if window and window["end"]:
+        print(f"Runs only between {window['start']} and {window['end']}; whatever is unfinished at {window['end']} "
+              f"stops, frees the GPU and continues at {window['start']} the next day.")
+    if len(chosen) > 1 or not immediate:
+        schedule.install_timer()
+    if not immediate:
+        print("`mbench status` lists the schedule; `mbench cancel <run>` takes a run off it.")
+        return
+    others = [entry["model"] for entry in swap.running() if entry["model"] != chosen[0].id]
     if others:
         print(f"llama-swap will unload {', '.join(others)} to make room.")
-    spawn(run_id, args.foreground)
-    if not args.foreground and not args.detach:
-        follow(run_id)
+    spawn(immediate, args.foreground)
+    if not args.foreground and not args.detach and len(chosen) == 1:
+        follow(immediate)
 
 
 def latest_run(db, run_id=None):
@@ -300,22 +317,36 @@ def latest_run(db, run_id=None):
     return runs[0] if runs else fail("no runs yet; start one with `mbench run <llama-swap model>`")
 
 
+def print_schedule(db):
+    waiting = sorted((run for run in store.list_runs(db) if run["status"] == "scheduled"),
+                     key=lambda run: ((run.get("flags") or {}).get("not_before") or 0, run.get("created") or 0))
+    for run in waiting:
+        flags = run.get("flags") or {}
+        window = flags.get("window") or {}
+        start = f"starts {schedule.describe(flags['not_before'])}" if flags.get("not_before", 0) > time.time() else "due next"
+        print(f"{run['id']}  {run['suite']}  scheduled, {start}" + (f", runs {window['start']}–{window['end']} daily"
+                                                                    if window.get("end") else "")
+              + (" (paused, continues where it stopped)" if flags.get("paused") else ""))
+
+
 def cmd_status(_args):
     db = store.connect()
     reconcile(db)
     active = [run for run in store.list_runs(db) if run["status"] in ACTIVE]
     if not active:
         print("No run in progress.")
-        runs = store.list_runs(db)
+        runs = [run for run in store.list_runs(db) if run["status"] != "scheduled"]
         if runs:
             last = runs[0]
             print(f"Last: {last['id']} {last['status']}" + (f" ({last['error']})" if last.get("error") else ""))
+        print_schedule(db)
         return
     for run in active:
         events = paths.RUNS / run["id"] / "events.jsonl"
         last = json.loads(events.read_text().splitlines()[-1]) if events.exists() and events.read_text().strip() else {}
         detail = f"{last.get('phase', 'queued')} {last.get('done', '')}/{last.get('total', '')}".rstrip("/ ")
         print(f"{run['id']}  {run['suite']}  {detail}  running for {duration(time.time() - (run['started'] or run['created']))}")
+    print_schedule(db)
 
 
 def cmd_logs(args):
@@ -348,6 +379,11 @@ def cmd_cancel(args):
     subprocess.run(["systemctl", "--user", "stop", unit_name(run["id"])], capture_output=True)
     store.update_run(db, run["id"], status="cancelled", finished=time.time())
     print(f"{run['id']}: cancelled. `mbench resume {run['id']}` picks it up where it stopped.")
+    waiting = [other for other in store.list_runs(db) if other["status"] == "scheduled"]
+    if waiting:
+        print(f"{len(waiting)} more scheduled; `mbench status` lists them and `mbench cancel <run>` removes one.")
+    else:
+        schedule.remove_timer()
 
 
 def cmd_resume(args):
@@ -356,11 +392,21 @@ def cmd_resume(args):
     run = latest_run(db, args.run)
     if run["status"] in ACTIVE:
         fail(f"{run['id']} is already running")
+    if any(other["status"] in ACTIVE for other in store.list_runs(db)) and not args.at:
+        fail("another run is in progress; add --at to schedule this one")
     if run["status"] == "complete":
         fail(f"{run['id']} already finished")
     if suite.version_of(run["suite"]) != suite.VERSION:
         fail(f"{run['id']} was measured under suite v{suite.version_of(run['suite'])} and this mbench runs v{suite.VERSION}; "
              f"`mbench run {run['model']} --reuse {run['id']}` starts a v{suite.VERSION} run that keeps what still applies")
+    at, window = window_of(args)
+    if window:
+        begins = schedule.first_start(datetime.now(), window, at).timestamp()
+        store.update_run(db, run["id"], status="scheduled", error=None,
+                         flags={**(run.get("flags") or {}), "not_before": begins, "window": window})
+        schedule.install_timer()
+        print(f"{run['id']}: continues {schedule.describe(begins)}.")
+        return
     store.update_run(db, run["id"], status="queued", error=None)
     spawn(run["id"], args.foreground)
     if not args.foreground and not args.detach:
@@ -478,6 +524,12 @@ def cmd_profile(args):
         print(f"\n--submit needs {', '.join(missing)} under [{profile.id}] in {paths.PROFILES}")
 
 
+def cmd_tick(_args):
+    started = schedule.tick(store.connect())
+    if started:
+        print(f"started {started}")
+
+
 def cmd_worker(args):
     from .worker import execute
 
@@ -490,6 +542,8 @@ examples:
   mbench run qwen3-32b --effort max --submit
                                                 the model at its maximum effort, recorded and submitted
   mbench run qwen3-32b --quick                  45–90 min, ranked as provisional
+  mbench run qwen3-32b gpt-oss-120b --at 03:00 --until 08:00
+                                                both models, one after the other, only at night
   mbench status                                 what is running and how far along it is
   mbench ls --effort max                        ranked table for one effort level
   mbench compare qwen3-32b gpt-oss-120b         which differences are real, task by task
@@ -526,6 +580,15 @@ effort (--effort LEVEL, default medium):
   `mbench ls --effort`, so a max run sits next to the everyday medium one. Higher effort
   means more tokens per answer; a full max run of a verbose dense model can take 8 h+.
 
+scheduling (--at TIME [--until TIME]):
+  --at 03:00 (or --at "2026-09-12 03:00") starts the runs then instead of now; several
+  models run one after another. --until 08:00 makes it a daily window: whatever is still
+  running at 08:00 stops, llama-swap unloads the model, and the run continues from its
+  last saved answer at 03:00 the next day. A user timer (mbench-tick.timer) checks every
+  five minutes and switches itself off when nothing is scheduled; it keeps working after
+  a reboot if lingering is on (loginctl enable-linger). Without --at, several models
+  queue behind each other, and a run started while another is going waits its turn.
+
 reuse (--reuse [RUN]):
   Copies the answers of an earlier run of the same model, config, effort and suite size
   for every task whose questions and scoring haven't changed since (speed and
@@ -550,6 +613,8 @@ examples:
   mbench run gpt-oss-120b --effort max --submit  maximum effort, full suite, everything submitted
   mbench run qwen3-32b --quick --effort max      a quick look at maximum effort
   mbench run gpt-oss-120b --reuse                keep speed and LiveCodeBench from the last run
+  mbench run qwen3-32b gpt-oss-120b --at 01:00 --until 07:30
+                                                 both at night, paused by day until done
   mbench run qwen3-32b --only speed --submit speed
                                                  speed only, submitted as verified runs
   mbench run qwen3-32b --skip lcb --detach       everything except LiveCodeBench, return at once
@@ -567,7 +632,7 @@ def parser():
 
     run = commands.add_parser("run", help="benchmark a llama-swap model", description=RUN_DESCRIPTION,
                               epilog=RUN_EPILOG, formatter_class=formatter)
-    run.add_argument("model", help="llama-swap model id or alias, e.g. qwen3-32b")
+    run.add_argument("model", nargs="+", help="llama-swap model ids or aliases, run one after another")
     size = run.add_mutually_exclusive_group()
     size.add_argument("--quick", action="store_true", help="smaller samples (45–90 min), ranked as provisional")
     size.add_argument("--smoke", action="store_true", help="a few items per task (~10 min) to check the pipeline; never ranked")
@@ -579,6 +644,8 @@ def parser():
                      help="carry over answers that still apply from an earlier run (default: the newest that qualifies)")
     run.add_argument("--submit", nargs="?", const="all", choices=lmx.SUBMIT_CHOICES, metavar="{all,speed,evals}",
                      help="also submit to localmaxxing: all (default), speed or evals")
+    run.add_argument("--at", metavar="TIME", help="start at this time (03:00, or '2026-09-12 03:00') instead of now")
+    run.add_argument("--until", metavar="TIME", help="with --at: stop at this time each day and continue at --at the next")
     run.add_argument("--note", help="free text stored with the run")
     run.add_argument("--detach", action="store_true", help="start and return immediately instead of following progress")
     run.add_argument("--foreground", action="store_true", help="run in this process instead of a systemd unit (debugging)")
@@ -596,6 +663,8 @@ def parser():
     resume.add_argument("run", nargs="?", help="run id; defaults to the latest")
     resume.add_argument("--detach", action="store_true", help="start and return immediately")
     resume.add_argument("--foreground", action="store_true", help="run in this process instead of a systemd unit")
+    resume.add_argument("--at", metavar="TIME", help="continue at this time instead of now")
+    resume.add_argument("--until", metavar="TIME", help="with --at: stop at this time each day and continue the next")
     resume.set_defaults(handler=cmd_resume)
     ls = commands.add_parser("ls", help="ranked table of every model in the terminal")
     ls.add_argument("--effort", default="medium", metavar="LEVEL", help="which effort's ranking, e.g. medium or max (default medium)")
@@ -614,6 +683,7 @@ def parser():
     profile = commands.add_parser("profile", help="what mbench knows about a model and where each fact came from")
     profile.add_argument("model", help="llama-swap model id or alias")
     profile.set_defaults(handler=cmd_profile)
+    commands.add_parser("tick").set_defaults(handler=cmd_tick)
     worker = commands.add_parser("worker")
     worker.add_argument("run_id")
     worker.set_defaults(handler=cmd_worker)

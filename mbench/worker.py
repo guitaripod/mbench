@@ -5,7 +5,7 @@ import threading
 import time
 import traceback
 
-from . import board, datasets, engine, gpu, grader, lmx, metrics, paths, speed, store, suite, swap
+from . import board, datasets, engine, gpu, grader, lmx, metrics, paths, schedule, speed, store, suite, swap
 from .profiles import Profile
 
 RAM_FLOOR_GB = 4.0
@@ -181,3 +181,7 @@ def execute(run_id):
             board.build()
         except Exception as error:
             events.log(f"leaderboard rebuild failed: {error!r}")
+        try:
+            schedule.tick(db)
+        except Exception as error:
+            events.log(f"starting the next scheduled run failed: {error!r}")

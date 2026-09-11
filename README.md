@@ -81,6 +81,8 @@ mbench run <id> --effort max          the model's highest declared effort, ranke
 mbench run <id> --quick --detach      smaller samples; start and return at once
 mbench run <id> --only speed          one task; --skip leaves tasks out
 mbench run <id> --reuse               carry over answers that still apply from the last run
+mbench run <id> <id> --at 03:00 --until 08:00
+                                      several models, one after another, only at night
 mbench run <id> --submit              also submit to localmaxxing (all, speed or evals)
 mbench status                         the run in progress
 mbench logs -f                        follow the worker log
@@ -91,7 +93,13 @@ mbench board --open                   the leaderboard page
 mbench profile <id>                   what mbench knows about a model
 ```
 
-`mbench -h` and `mbench run -h` cover every option, with examples. One run happens at a time. A run swaps its model in through llama-swap, which unloads whatever else was loaded.
+`mbench -h` and `mbench run -h` cover every option, with examples. One run happens at a time; more models, or a run started while another is going, wait their turn. A run swaps its model in through llama-swap, which unloads whatever else was loaded.
+
+### Scheduling
+
+`--at 03:00` (or `--at "2026-09-12 03:00"`) starts the runs then instead of now. Add `--until 08:00` and it becomes a daily window: whatever is still running at 08:00 stops, llama-swap unloads the model so the GPU is yours again, and the run continues from its last saved answer at 03:00 the next night, until everything is done. `mbench status` lists what is scheduled and `mbench cancel <run>` takes a run off the schedule; `mbench resume <run> --at 03:00 --until 08:00` puts a stopped one back on.
+
+A user timer, `mbench-tick.timer`, checks every five minutes, starts the next due run when nothing is running, and switches itself off once nothing is scheduled. It keeps working after a reboot or logout if lingering is on (`loginctl enable-linger`).
 
 ### Comparing two models
 
