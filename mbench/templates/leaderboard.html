@@ -1,0 +1,558 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mbench leaderboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100..125,600..800&family=Atkinson+Hyperlegible+Mono:wght@400;600&family=Atkinson+Hyperlegible+Next:ital,wght@0,400;0,600;1,400&display=swap">
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7;
+  --surface: #fcfcfb;
+  --ink: #0b0b0b;
+  --ink-2: #52514e;
+  --muted: #898781;
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
+  --series: #2a78d6;
+  --series-wash: rgba(42, 120, 214, 0.10);
+  --deemph: #c3c2b7;
+  --border: rgba(11, 11, 11, 0.10);
+  --select: rgba(42, 120, 214, 0.08);
+  --ui: "Atkinson Hyperlegible Next", "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "Atkinson Hyperlegible Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --display: "Archivo", "Arial Narrow", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --page: #0d0d0d;
+    --surface: #1a1a19;
+    --ink: #ffffff;
+    --ink-2: #c3c2b7;
+    --muted: #898781;
+    --grid: #2c2c2a;
+    --axis: #383835;
+    --series: #3987e5;
+    --series-wash: rgba(57, 135, 229, 0.14);
+    --deemph: #52514e;
+    --border: rgba(255, 255, 255, 0.10);
+    --select: rgba(57, 135, 229, 0.12);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d;
+  --surface: #1a1a19;
+  --ink: #ffffff;
+  --ink-2: #c3c2b7;
+  --muted: #898781;
+  --grid: #2c2c2a;
+  --axis: #383835;
+  --series: #3987e5;
+  --series-wash: rgba(57, 135, 229, 0.14);
+  --deemph: #52514e;
+  --border: rgba(255, 255, 255, 0.10);
+  --select: rgba(57, 135, 229, 0.12);
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--ink); font: 400 15px/1.55 var(--ui); }
+main { max-width: 78rem; margin: 0 auto; padding: clamp(1.25rem, 3vw, 2.75rem) clamp(1rem, 3vw, 2.25rem) 3.5rem; display: grid; gap: 2.25rem; }
+h1, h2, h3 { margin: 0; text-wrap: balance; }
+h1 { font-family: var(--display); font-stretch: 118%; font-weight: 780; font-size: clamp(1.8rem, 1.2rem + 2vw, 2.6rem); line-height: 1.05; letter-spacing: -0.01em; }
+h2 { font-family: var(--display); font-stretch: 112%; font-weight: 700; font-size: 1.25rem; }
+h3 { font-size: 1rem; font-weight: 600; }
+p { margin: 0; max-width: 68ch; }
+code, pre, .mono { font-family: var(--mono); }
+.eyebrow { font-family: var(--mono); font-size: 0.78rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.masthead { display: grid; gap: 0.7rem; }
+.lede { color: var(--ink-2); }
+.panel { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
+.frontier { padding: 1rem 1.1rem 0.6rem; display: grid; gap: 0.5rem; }
+.frontier-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.3rem 1.5rem; align-items: baseline; }
+.frontier-head span { color: var(--muted); font-size: 0.84rem; }
+svg { display: block; width: 100%; height: auto; overflow: visible; }
+svg text { font-family: var(--mono); font-size: 11px; }
+.grid { stroke: var(--grid); stroke-width: 1; }
+.axis { stroke: var(--axis); stroke-width: 1; }
+.tick { fill: var(--muted); }
+.axis-title { fill: var(--muted); font-family: var(--ui); font-size: 11.5px; }
+.pt { fill: var(--deemph); stroke: var(--surface); stroke-width: 2; }
+.pt.selected { fill: var(--series); }
+.pt-label { fill: var(--ink-2); font-family: var(--ui); font-size: 12px; }
+.pt-label.selected { fill: var(--ink); font-weight: 600; }
+.frontier-line { fill: none; stroke: var(--axis); stroke-width: 1.5; }
+.hit { fill: transparent; cursor: pointer; }
+.hit:focus-visible { outline: none; stroke: var(--series); stroke-width: 2; }
+.table-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; min-width: 64rem; font-variant-numeric: tabular-nums; }
+th, td { padding: 0.55rem 0.7rem; border-bottom: 1px solid var(--grid); text-align: right; vertical-align: middle; white-space: nowrap; }
+th:first-child, td:first-child, th.model, td.model { text-align: left; }
+thead th { font-size: 0.74rem; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+thead th button { all: unset; cursor: pointer; display: inline-flex; gap: 0.3rem; align-items: center; }
+thead th button:focus-visible { outline: 2px solid var(--series); outline-offset: 2px; border-radius: 3px; }
+thead th[aria-sort="ascending"] button::after { content: "▲"; font-size: 0.6rem; }
+thead th[aria-sort="descending"] button::after { content: "▼"; font-size: 0.6rem; }
+tbody tr { cursor: pointer; }
+tbody tr:hover { background: var(--select); }
+tbody tr.selected { background: var(--select); box-shadow: inset 3px 0 0 var(--series); }
+tbody tr:focus-visible { outline: 2px solid var(--series); outline-offset: -2px; }
+tbody tr:last-child td { border-bottom: 0; }
+td.rank { color: var(--muted); font-family: var(--mono); width: 2.5rem; }
+td.model { white-space: normal; min-width: 17rem; }
+.model-name { font-weight: 600; display: block; }
+.model-meta { color: var(--muted); font-size: 0.8rem; font-family: var(--mono); display: flex; flex-wrap: wrap; gap: 0.25rem 0.6rem; }
+.chip { display: inline-block; border: 1px solid var(--axis); color: var(--ink-2); border-radius: 999px; padding: 0 0.45rem; font-size: 0.72rem; font-family: var(--ui); letter-spacing: 0.02em; }
+.num { font-family: var(--mono); }
+.ci { color: var(--muted); font-size: 0.78rem; margin-left: 0.25rem; }
+.meter { display: block; height: 3px; margin-top: 4px; background: var(--grid); border-radius: 2px; overflow: hidden; }
+.meter i { display: block; height: 100%; background: var(--series); border-radius: 0 2px 2px 0; }
+.empty { padding: 2rem 1.25rem; display: grid; gap: 0.6rem; }
+.detail { padding: 1.2rem 1.25rem 1.3rem; display: grid; gap: 1.4rem; }
+.detail-head { display: grid; gap: 0.35rem; }
+.detail-head .model-meta { font-size: 0.82rem; }
+.strips { display: grid; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); gap: 0.9rem 1.6rem; }
+.strip { display: grid; gap: 0.15rem; }
+.strip-head { display: flex; justify-content: space-between; gap: 1rem; align-items: baseline; }
+.strip-head b { font-family: var(--mono); font-weight: 600; }
+.strip-note { color: var(--muted); font-size: 0.8rem; }
+.dot-other { fill: var(--deemph); }
+.ci-bar { stroke: var(--series); stroke-width: 3; stroke-linecap: round; }
+.dot-me { fill: var(--series); stroke: var(--surface); stroke-width: 2; }
+.ladders { display: grid; grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr)); gap: 1rem 1.6rem; }
+.ladder { display: grid; gap: 0.35rem; }
+.ladder-head { display: grid; gap: 0.1rem; }
+.ladder-head span { color: var(--muted); font-size: 0.8rem; }
+.line-other { fill: none; stroke: var(--deemph); stroke-width: 1.2; }
+.line-me { fill: none; stroke: var(--series); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.guide { stroke: var(--axis); stroke-width: 1; }
+.val { fill: var(--ink); }
+details { border-top: 1px solid var(--grid); padding-top: 0.8rem; }
+summary { cursor: pointer; color: var(--ink-2); font-weight: 600; }
+summary:focus-visible { outline: 2px solid var(--series); outline-offset: 2px; }
+.kv { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 0.2rem 1.6rem; margin-top: 0.7rem; font-size: 0.86rem; }
+.kv div { display: flex; justify-content: space-between; gap: 1rem; border-bottom: 1px dotted var(--grid); padding: 0.15rem 0; }
+.kv span:first-child { color: var(--ink-2); }
+.kv span:last-child { font-family: var(--mono); text-align: right; }
+.howto { display: grid; gap: 0.6rem; }
+pre { margin: 0; padding: 0.9rem 1rem; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow-x: auto; font-size: 0.85rem; line-height: 1.6; }
+.tooltip { position: fixed; z-index: 10; pointer-events: none; background: var(--surface); color: var(--ink); border: 1px solid var(--border); border-radius: 6px; padding: 0.45rem 0.6rem; font-size: 0.8rem; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12); max-width: 20rem; }
+.tooltip b { font-family: var(--mono); font-weight: 600; }
+.tooltip .row { display: flex; align-items: center; gap: 0.45rem; }
+.tooltip .key { display: inline-block; width: 0.8rem; height: 2px; background: var(--deemph); }
+.tooltip .key.me { background: var(--series); }
+footer { color: var(--muted); font-size: 0.8rem; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<main>
+  <header class="masthead">
+    <p class="eyebrow" id="meta"></p>
+    <h1>Model leaderboard</h1>
+    <p class="lede">Every model llama-swap serves, measured the same way on this GPU. The quality index is the mean of MMLU-Pro, AIME 2025, LiveCodeBench v6, needle retrieval and tool calls at medium reasoning effort. Speed is one request at a time unless a column says otherwise.</p>
+  </header>
+  <div id="content"></div>
+  <section class="howto" aria-labelledby="howto-title">
+    <h2 id="howto-title">Benchmark another model</h2>
+    <pre>mbench run &lt;llama-swap id&gt;          full suite, 1–4 hours, runs in the background
+mbench run &lt;id&gt; --quick             30–60 minutes, ranked as provisional
+mbench run &lt;id&gt; --submit            also submit to localmaxxing
+mbench status · mbench logs -f · mbench ls · mbench board --open</pre>
+  </section>
+  <footer id="footer"></footer>
+</main>
+<div class="tooltip" id="tooltip" role="tooltip" hidden></div>
+<script>
+const DATA = /*__DATA__*/null;
+const NS = "http://www.w3.org/2000/svg";
+const TASKS = DATA.indexTasks;
+const LABELS = DATA.taskLabels;
+const state = { sortKey: "index", sortDir: "desc", selected: null };
+
+function h(tag, attrs, children) {
+  const node = document.createElement(tag);
+  for (const [key, value] of Object.entries(attrs || {})) {
+    if (value === null || value === undefined || value === false) continue;
+    if (key === "text") node.textContent = value;
+    else if (key === "className") node.className = value;
+    else if (key.startsWith("on")) node.addEventListener(key.slice(2), value);
+    else node.setAttribute(key, value === true ? "" : value);
+  }
+  for (const child of [].concat(children || [])) {
+    if (child === null || child === undefined || child === false) continue;
+    node.appendChild(typeof child === "string" ? document.createTextNode(child) : child);
+  }
+  return node;
+}
+
+function s(tag, attrs, parent, text) {
+  const node = document.createElementNS(NS, tag);
+  for (const [key, value] of Object.entries(attrs || {})) node.setAttribute(key, value);
+  if (text !== undefined) node.textContent = text;
+  if (parent) parent.appendChild(node);
+  return node;
+}
+
+const fmt = {
+  pct: value => value == null ? "–" : value.toFixed(1),
+  int: value => value == null ? "–" : Math.round(value).toLocaleString("en-US"),
+  secs: value => value == null ? "–" : (value < 10 ? value.toFixed(1) : Math.round(value).toString()) + " s",
+  ctx: value => value == null ? "–" : (value >= 1000 ? Math.round(value / 1024) + "k" : String(value)),
+  date: stamp => stamp ? new Date(stamp * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "–",
+};
+
+function shortName(model) {
+  return (model.name || model.id).split(" · ")[0];
+}
+
+function avgTokens(model) {
+  const values = ["mmlupro", "aime", "lcb"].map(task => model.tasks[task] && model.tasks[task].tokens).filter(value => value != null);
+  return values.length ? values.reduce((a, b) => a + b, 0) / values.length : null;
+}
+
+const COLUMNS = [
+  { key: "index", label: "Quality", get: m => m.index && m.index.value, better: "high", render: m => pctCell(m.index) },
+  ...TASKS.map(task => ({ key: task, label: LABELS[task].replace(" v6", "").replace(" 2025", ""), get: m => m.tasks[task] && m.tasks[task].value,
+    better: "high", render: m => pctCell(m.tasks[task], true) })),
+  { key: "decode", label: "Decode tok/s", get: m => m.speed.decode && m.speed.decode.value, better: "high", render: m => numCell(m.speed.decode && m.speed.decode.value, fmt.int) },
+  { key: "conc4", label: "4 at once", get: m => m.speed["conc.4"] && m.speed["conc.4"].value, better: "high", render: m => numCell(m.speed["conc.4"] && m.speed["conc.4"].value, fmt.int) },
+  { key: "ttft", label: "First token 32k", get: m => m.speed["ttft.32000"] && m.speed["ttft.32000"].value, better: "low", render: m => numCell(m.speed["ttft.32000"] && m.speed["ttft.32000"].value, fmt.secs) },
+  { key: "tokens", label: "Tokens/answer", get: avgTokens, better: "low", render: m => numCell(avgTokens(m), fmt.int) },
+];
+
+function pctCell(entry, meter) {
+  if (!entry || entry.value == null) return h("td", { className: "num", text: "–" });
+  const half = entry.lo != null && entry.hi != null ? (entry.hi - entry.lo) / 2 : null;
+  return h("td", { className: "num" }, [
+    fmt.pct(entry.value),
+    half != null ? h("span", { className: "ci", text: "±" + half.toFixed(1) }) : null,
+    meter ? h("span", { className: "meter", "aria-hidden": "true" }, [h("i", { style: `width:${Math.max(0, Math.min(100, entry.value))}%` })]) : null,
+  ]);
+}
+
+function numCell(value, format) {
+  return h("td", { className: "num", text: format(value) });
+}
+
+function sortedModels() {
+  const column = COLUMNS.find(item => item.key === state.sortKey) || COLUMNS[0];
+  const direction = state.sortDir === "asc" ? 1 : -1;
+  return [...DATA.models].sort((a, b) => {
+    const va = column.get(a), vb = column.get(b);
+    if (va == null && vb == null) return shortName(a).localeCompare(shortName(b));
+    if (va == null) return 1;
+    if (vb == null) return -1;
+    return (va - vb) * direction;
+  });
+}
+
+function modelMeta(model) {
+  const parts = [model.engine, model.quantization, model.spec, model.context ? fmt.ctx(model.context) + " context" : null].filter(Boolean);
+  const chips = [];
+  if (model.run.kind !== "full") chips.push(h("span", { className: "chip", text: model.run.kind === "quick" ? "quick run" : "legacy run", title: model.run.notes || "Smaller sample; ranked as provisional." }));
+  if (model.run.contended && model.run.contended.length) chips.push(h("span", { className: "chip", text: "GPU was shared", title: "Other GPU work during the run: " + model.run.contended.join(", ") }));
+  if (model.run.failedItems) chips.push(h("span", { className: "chip", text: `${model.run.failedItems} requests failed` }));
+  return h("span", { className: "model-meta" }, [...parts.map(part => h("span", { text: part })), ...chips]);
+}
+
+function renderTable(host) {
+  const table = h("table", { "aria-label": "Models ranked" });
+  const headRow = h("tr");
+  headRow.appendChild(h("th", { scope: "col", text: "#" }));
+  headRow.appendChild(h("th", { scope: "col", className: "model", text: "Model" }));
+  for (const column of COLUMNS) {
+    const sort = state.sortKey === column.key ? (state.sortDir === "asc" ? "ascending" : "descending") : null;
+    headRow.appendChild(h("th", { scope: "col", "aria-sort": sort }, [h("button", {
+      type: "button", text: column.label,
+      onclick: () => {
+        if (state.sortKey === column.key) state.sortDir = state.sortDir === "asc" ? "desc" : "asc";
+        else { state.sortKey = column.key; state.sortDir = column.better === "low" ? "asc" : "desc"; }
+        render();
+      },
+    })]));
+  }
+  headRow.appendChild(h("th", { scope: "col", text: "Run" }));
+  table.appendChild(h("thead", {}, [headRow]));
+  const body = h("tbody");
+  sortedModels().forEach((model, index) => {
+    const row = h("tr", {
+      tabindex: "0", className: model.id === state.selected ? "selected" : null, "aria-selected": model.id === state.selected ? "true" : "false",
+      onclick: () => select(model.id),
+      onkeydown: event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); select(model.id); } },
+    });
+    row.appendChild(h("td", { className: "rank", text: String(index + 1) }));
+    row.appendChild(h("td", { className: "model" }, [h("span", { className: "model-name", text: model.name }), modelMeta(model)]));
+    for (const column of COLUMNS) row.appendChild(column.render(model));
+    row.appendChild(h("td", { className: "num", text: fmt.date(model.run.finished) }));
+    body.appendChild(row);
+  });
+  table.appendChild(body);
+  host.appendChild(h("div", { className: "panel table-wrap" }, [table]));
+}
+
+const tooltip = document.getElementById("tooltip");
+
+function showTooltip(event, rows) {
+  tooltip.replaceChildren(...rows);
+  tooltip.hidden = false;
+  const x = event.clientX + 14, y = event.clientY + 14;
+  const box = tooltip.getBoundingClientRect();
+  tooltip.style.left = Math.min(x, window.innerWidth - box.width - 8) + "px";
+  tooltip.style.top = Math.min(y, window.innerHeight - box.height - 8) + "px";
+}
+
+function hideTooltip() {
+  tooltip.hidden = true;
+}
+
+function niceCeil(value, step) {
+  return Math.ceil(value / step) * step;
+}
+
+function renderFrontier(host) {
+  const points = DATA.models.filter(m => m.index && m.index.value != null && m.speed.decode && m.speed.decode.value != null);
+  const missing = DATA.models.length - points.length;
+  const figure = h("figure", { className: "panel frontier" });
+  figure.style.margin = "0";
+  figure.appendChild(h("div", { className: "frontier-head" }, [
+    h("h2", { text: "Quality against speed" }),
+    h("span", { text: "Up and to the right is better. The line joins models nothing else beats on both." + (missing ? ` ${missing} without a full quality index aren't plotted.` : "") }),
+  ]));
+  if (!points.length) {
+    figure.appendChild(h("p", { className: "lede", text: "No model has a complete quality index yet." }));
+    host.appendChild(figure);
+    return;
+  }
+  const width = 760, height = 300, left = 52, right = 150, top = 14, bottom = 38;
+  const maxX = niceCeil(Math.max(...points.map(p => p.speed.decode.value)) * 1.12, 50);
+  const ys = points.map(p => p.index.value);
+  const minY = Math.max(0, Math.floor((Math.min(...ys) - 6) / 5) * 5);
+  const maxY = Math.min(100, Math.ceil((Math.max(...ys) + 4) / 5) * 5);
+  const x = value => left + (width - left - right) * value / maxX;
+  const y = value => top + (height - top - bottom) * (maxY - value) / (maxY - minY);
+  const svgNode = s("svg", { viewBox: `0 0 ${width} ${height}`, role: "img", "aria-label": "Quality index against single-request decode speed" });
+  const stepY = (maxY - minY) > 30 ? 10 : 5;
+  for (let t = minY; t <= maxY; t += stepY) {
+    s("line", { x1: left, x2: width - right, y1: y(t), y2: y(t), class: "grid" }, svgNode);
+    s("text", { x: left - 8, y: y(t) + 4, "text-anchor": "end", class: "tick" }, svgNode, t + "%");
+  }
+  const stepX = maxX > 300 ? 100 : 50;
+  for (let t = 0; t <= maxX; t += stepX) {
+    s("line", { x1: x(t), x2: x(t), y1: height - bottom, y2: height - bottom + 4, class: "axis" }, svgNode);
+    s("text", { x: x(t), y: height - bottom + 17, "text-anchor": "middle", class: "tick" }, svgNode, t);
+  }
+  s("line", { x1: left, x2: width - right, y1: height - bottom, y2: height - bottom, class: "axis" }, svgNode);
+  s("text", { x: (left + width - right) / 2, y: height - 4, "text-anchor": "middle", class: "axis-title" }, svgNode, "Decode, one request (tok/s)");
+  const frontier = [];
+  let best = -Infinity;
+  [...points].sort((a, b) => b.speed.decode.value - a.speed.decode.value).forEach(point => {
+    if (point.index.value > best) { frontier.push(point); best = point.index.value; }
+  });
+  if (frontier.length > 1) {
+    const path = frontier.sort((a, b) => a.speed.decode.value - b.speed.decode.value)
+      .map((point, index) => `${index ? "L" : "M"}${x(point.speed.decode.value).toFixed(1)},${y(point.index.value).toFixed(1)}`).join("");
+    s("path", { d: path, class: "frontier-line" }, svgNode);
+  }
+  const labelAll = points.length <= 10;
+  for (const point of points) {
+    const px = x(point.speed.decode.value), py = y(point.index.value);
+    const selected = point.id === state.selected;
+    s("circle", { cx: px, cy: py, r: selected ? 6 : 5, class: "pt" + (selected ? " selected" : "") }, svgNode);
+    if (labelAll || selected) {
+      s("text", { x: px + 10, y: py + 4, class: "pt-label" + (selected ? " selected" : "") }, svgNode, shortName(point));
+    }
+    const hit = s("circle", { cx: px, cy: py, r: 14, class: "hit", tabindex: "0", role: "button",
+      "aria-label": `${shortName(point)}: quality ${fmt.pct(point.index.value)}%, ${fmt.int(point.speed.decode.value)} tok/s` }, svgNode);
+    const rows = () => [
+      h("div", {}, [h("b", { text: shortName(point) })]),
+      h("div", { className: "row" }, [h("b", { text: fmt.pct(point.index.value) + "%" }), " quality index"]),
+      h("div", { className: "row" }, [h("b", { text: fmt.int(point.speed.decode.value) }), " tok/s, one request"]),
+    ];
+    hit.addEventListener("pointermove", event => showTooltip(event, rows()));
+    hit.addEventListener("pointerleave", hideTooltip);
+    hit.addEventListener("click", () => select(point.id));
+    hit.addEventListener("keydown", event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); select(point.id); } });
+  }
+  figure.appendChild(svgNode);
+  host.appendChild(figure);
+}
+
+function strip(task, model) {
+  const entry = model.tasks[task];
+  const width = 320, height = 26, pad = 6;
+  const x = value => pad + (width - 2 * pad) * value / 100;
+  const svgNode = s("svg", { viewBox: `0 0 ${width} ${height}`, role: "img", "aria-label": `${LABELS[task]} scores across models` });
+  s("line", { x1: pad, x2: width - pad, y1: 13, y2: 13, class: "grid" }, svgNode);
+  for (const t of [0, 25, 50, 75, 100]) s("line", { x1: x(t), x2: x(t), y1: 9, y2: 17, class: "grid" }, svgNode);
+  for (const other of DATA.models) {
+    const value = other.tasks[task] && other.tasks[task].value;
+    if (other.id === model.id || value == null) continue;
+    s("circle", { cx: x(value), cy: 13, r: 3.5, class: "dot-other" }, svgNode);
+  }
+  if (entry && entry.value != null) {
+    if (entry.lo != null && entry.hi != null) s("line", { x1: x(entry.lo), x2: x(entry.hi), y1: 13, y2: 13, class: "ci-bar" }, svgNode);
+    s("circle", { cx: x(entry.value), cy: 13, r: 5, class: "dot-me" }, svgNode);
+  }
+  const notes = [];
+  if (entry) {
+    notes.push(`${entry.n} ${task === "aime" ? "problems" : "questions"}`);
+    if (entry.tokens != null) notes.push(`${fmt.int(entry.tokens)} tokens per answer`);
+    if (entry.latency != null) notes.push(`median ${fmt.secs(entry.latency)}`);
+    if (entry.truncated) notes.push(`${entry.truncated.toFixed(0)}% hit the token limit`);
+  }
+  return h("div", { className: "strip" }, [
+    h("div", { className: "strip-head" }, [
+      h("h3", { text: LABELS[task] }),
+      h("b", { text: entry ? `${fmt.pct(entry.value)}%` + (entry.lo != null ? `  (${entry.lo.toFixed(1)}–${entry.hi.toFixed(1)})` : "") : "not run" }),
+    ]),
+    svgNode,
+    h("span", { className: "strip-note", text: notes.join(" · ") }),
+  ]);
+}
+
+function depthsIn(prefix) {
+  const set = new Set();
+  for (const model of DATA.models) for (const key of Object.keys(model.speed)) if (key.startsWith(prefix)) set.add(Number(key.slice(prefix.length)));
+  return [...set].filter(Number.isFinite).sort((a, b) => a - b);
+}
+
+function ladder(model, prefix, options) {
+  const depths = depthsIn(prefix);
+  const box = h("div", { className: "ladder" }, [h("div", { className: "ladder-head" }, [h("h3", { text: options.title }), h("span", { text: options.caption })])]);
+  if (!depths.length) { box.appendChild(h("span", { className: "strip-note", text: "No long-prompt measurements yet." })); return box; }
+  const series = DATA.models.map(item => ({ model: item, values: depths.map(depth => item.speed[prefix + depth] ? item.speed[prefix + depth].value : null) }));
+  const all = series.flatMap(item => item.values).filter(value => value != null && value > 0);
+  const width = 420, height = 220, left = 46, right = 54, top = 10, bottom = 26;
+  const x = index => left + (width - left - right) * (depths.length === 1 ? 0.5 : index / (depths.length - 1));
+  let y, ticks;
+  if (options.log) {
+    const lo = Math.pow(10, Math.floor(Math.log10(Math.min(...all)))), hi = Math.pow(10, Math.ceil(Math.log10(Math.max(...all))));
+    y = value => top + (height - top - bottom) * (Math.log10(hi) - Math.log10(value)) / (Math.log10(hi) - Math.log10(lo));
+    ticks = []; for (let t = lo; t <= hi * 1.001; t *= 10) ticks.push(t);
+  } else {
+    const hi = niceCeil(Math.max(...all) * 1.1, 50);
+    y = value => top + (height - top - bottom) * (hi - value) / hi;
+    ticks = []; for (let t = 0; t <= hi; t += hi > 200 ? 100 : 50) ticks.push(t);
+  }
+  const svgNode = s("svg", { viewBox: `0 0 ${width} ${height}`, role: "img", "aria-label": options.title });
+  for (const t of ticks) {
+    s("line", { x1: left, x2: width - right, y1: y(t), y2: y(t), class: "grid" }, svgNode);
+    s("text", { x: left - 7, y: y(t) + 4, "text-anchor": "end", class: "tick" }, svgNode, options.tick(t));
+  }
+  depths.forEach((depth, index) => s("text", { x: x(index), y: height - 7, "text-anchor": "middle", class: "tick" }, svgNode, fmt.ctx(depth)));
+  const pathOf = values => values.reduce((acc, value, index) => {
+    if (value == null || value <= 0) return { d: acc.d, pen: false };
+    return { d: acc.d + `${acc.pen ? "L" : "M"}${x(index).toFixed(1)},${y(value).toFixed(1)}`, pen: true };
+  }, { d: "", pen: false }).d;
+  for (const item of series) if (item.model.id !== model.id) s("path", { d: pathOf(item.values), class: "line-other" }, svgNode);
+  const mine = series.find(item => item.model.id === model.id);
+  if (mine) {
+    s("path", { d: pathOf(mine.values), class: "line-me" }, svgNode);
+    let lastIndex = -1;
+    mine.values.forEach((value, index) => {
+      if (value == null || value <= 0) return;
+      s("circle", { cx: x(index), cy: y(value), r: 4, class: "dot-me" }, svgNode);
+      lastIndex = index;
+    });
+    if (lastIndex >= 0) s("text", { x: x(lastIndex) + 8, y: y(mine.values[lastIndex]) + 4, class: "val" }, svgNode, options.value(mine.values[lastIndex]));
+  }
+  const guide = s("line", { x1: 0, x2: 0, y1: top, y2: height - bottom, class: "guide", visibility: "hidden" }, svgNode);
+  const overlay = s("rect", { x: left, y: top, width: width - left - right, height: height - top - bottom, fill: "transparent" }, svgNode);
+  overlay.addEventListener("pointermove", event => {
+    const bounds = svgNode.getBoundingClientRect();
+    const px = (event.clientX - bounds.left) * width / bounds.width;
+    let nearest = 0;
+    depths.forEach((_, index) => { if (Math.abs(x(index) - px) < Math.abs(x(nearest) - px)) nearest = index; });
+    guide.setAttribute("x1", x(nearest)); guide.setAttribute("x2", x(nearest)); guide.setAttribute("visibility", "visible");
+    const rows = series.filter(item => item.values[nearest] != null)
+      .sort((a, b) => options.log ? a.values[nearest] - b.values[nearest] : b.values[nearest] - a.values[nearest])
+      .map(item => h("div", { className: "row" }, [h("span", { className: "key" + (item.model.id === model.id ? " me" : "") }), h("b", { text: options.value(item.values[nearest]) }), " " + shortName(item.model)]));
+    showTooltip(event, [h("div", { text: fmt.ctx(depths[nearest]) + "-token prompt" }), ...rows]);
+  });
+  overlay.addEventListener("pointerleave", () => { guide.setAttribute("visibility", "hidden"); hideTooltip(); });
+  box.appendChild(svgNode);
+  return box;
+}
+
+function kv(pairs) {
+  return h("div", { className: "kv" }, pairs.filter(pair => pair[1] != null && pair[1] !== "").map(([key, value]) => h("div", {}, [h("span", { text: key }), h("span", { text: String(value) })])));
+}
+
+function renderDetail(host) {
+  const model = DATA.models.find(item => item.id === state.selected);
+  if (!model) return;
+  const panel = h("section", { className: "panel detail", "aria-labelledby": "detail-title" });
+  panel.appendChild(h("div", { className: "detail-head" }, [
+    h("h2", { id: "detail-title", text: model.name }),
+    h("span", { className: "model-meta" }, [
+      h("span", { text: `llama-swap ${model.id}` }), h("span", { text: `run ${model.run.id}` }), h("span", { text: model.run.suite }),
+      h("span", { text: `effort ${model.run.effort || "–"}` }), h("span", { text: `config ${model.fingerprint || "–"}` }),
+    ]),
+    model.run.notes ? h("p", { className: "lede", text: model.run.notes }) : null,
+  ]));
+  panel.appendChild(h("div", { className: "strips" }, TASKS.map(task => strip(task, model))));
+  panel.appendChild(h("div", { className: "ladders" }, [
+    ladder(model, "ttft.", { title: "Wait for the first token", caption: "Seconds by prompt length, log scale. Others in grey.", log: true, tick: t => (t < 1 ? t.toString() : Math.round(t)) + " s", value: fmt.secs }),
+    ladder(model, "decode_at.", { title: "Decode speed as the prompt grows", caption: "tok/s while answering after a long prompt.", log: false, tick: t => String(t), value: value => fmt.int(value) }),
+  ]));
+  const speed = model.speed;
+  const pairs = [
+    ["Decode, reasoning prompt", speed["decode.reasoning-v1"] && fmt.int(speed["decode.reasoning-v1"].value) + " tok/s"],
+    ["Decode, code prompt", speed["decode.code-v1"] && fmt.int(speed["decode.code-v1"].value) + " tok/s"],
+    ["Decode, prose prompt", speed["decode.prose-v1"] && fmt.int(speed["decode.prose-v1"].value) + " tok/s"],
+    ["Drafter acceptance, code", speed["accept.code-v1"] && speed["accept.code-v1"].value.toFixed(2) + " tokens/step"],
+    ["First token, short prompt", speed["ttft.short"] && Math.round(speed["ttft.short"].value) + " ms"],
+    ["1 / 2 / 4 at once", ["conc.1", "conc.2", "conc.4"].map(key => speed[key] ? fmt.int(speed[key].value) : "–").join(" / ") + " tok/s"],
+    ["Board power, code prompt", speed.power && Math.round(speed.power.value) + " W"],
+    ["Energy per token", speed.energy && speed.energy.value.toFixed(2) + " J"],
+    ["GSM8K (localmaxxing)", model.lmx.gsm8k && fmt.pct(model.lmx.gsm8k.value) + "%"],
+    ["HellaSwag (localmaxxing)", model.lmx.hellaswag && fmt.pct(model.lmx.hellaswag.value) + "%"],
+    ...Object.entries(model.server || {}).map(([key, value]) => [key.replaceAll("_", " "), typeof value === "object" ? JSON.stringify(value) : value]),
+    ...model.submissions.map(entry => [`localmaxxing ${entry.kind.replace("speed.", "")}`, `${fmt.int(entry.value)} tok/s · ${entry.id || "–"}`]),
+    ["Harness", model.run.harness],
+  ];
+  panel.appendChild(h("details", {}, [h("summary", { text: "All numbers for this model" }), kv(pairs)]));
+  if (model.history.length > 1) {
+    panel.appendChild(h("details", {}, [h("summary", { text: `Run history (${model.history.length})` }),
+      kv(model.history.map(entry => [`${fmt.date(entry.finished)} · ${entry.suite}`, `quality ${fmt.pct(entry.index)} · ${fmt.int(entry.decode)} tok/s`]))]));
+  }
+  host.appendChild(panel);
+}
+
+function select(id) {
+  state.selected = id;
+  render();
+  const detail = document.getElementById("detail-title");
+  if (detail) detail.scrollIntoView({ block: "nearest", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+}
+
+function render() {
+  const host = document.getElementById("content");
+  host.replaceChildren();
+  host.style.display = "grid";
+  host.style.gap = "1.5rem";
+  if (!DATA.models.length) {
+    host.appendChild(h("div", { className: "panel empty" }, [
+      h("h2", { text: "No finished runs yet" }),
+      h("p", { text: "Pick a model from llama-swap and run the suite; this page rebuilds itself when the run ends." }),
+      h("pre", { text: "mbench run <llama-swap id>" }),
+    ]));
+    return;
+  }
+  if (!state.selected) state.selected = sortedModels()[0].id;
+  renderFrontier(host);
+  renderTable(host);
+  renderDetail(host);
+}
+
+const hw = DATA.hardware || {};
+document.getElementById("meta").textContent = [hw.gpu, hw.vram_mib ? Math.round(hw.vram_mib / 1024) + " GB" : null, hw.driver ? "driver " + hw.driver : null, "suite " + DATA.suite, "built " + new Date(DATA.generated * 1000).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })].filter(Boolean).join(" · ");
+document.getElementById("footer").textContent = `Data: ${DATA.database}. Rebuilt after every run, or with mbench board.`;
+render();
+</script>
+</body>
+</html>

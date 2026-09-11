@@ -1,0 +1,145 @@
+import hashlib
+import shlex
+import tomllib
+from dataclasses import asdict, dataclass, field
+from pathlib import Path
+
+import yaml
+
+from . import paths
+
+
+@dataclass
+class Profile:
+    id: str
+    name: str
+    engine: str
+    thinking: str
+    context: int | None
+    hf_id: str | None = None
+    quantization: str | None = None
+    spec: dict = field(default_factory=dict)
+    engine_meta: dict = field(default_factory=dict)
+    cmd: str = ""
+    fingerprint: str = ""
+    sources: dict = field(default_factory=dict)
+
+    def to_dict(self):
+        return asdict(self)
+
+
+def swap_config():
+    return yaml.safe_load(paths.LLAMA_SWAP_CONFIG.read_text()) or {}
+
+
+def expand(cmd, macros):
+    for key, value in macros.items():
+        cmd = cmd.replace("${" + key + "}", " ".join(str(value).split()))
+    return " ".join(cmd.split())
+
+
+def omp_overrides():
+    """llama-swap model overrides from Oh My Pi's models.yml; they already say how each model takes a thinking level."""
+    try:
+        data = yaml.safe_load(paths.OMP_MODELS.read_text()) or {}
+    except OSError:
+        return {}
+    found = {}
+
+    def walk(node):
+        if isinstance(node, dict):
+            for key, value in node.items():
+                if key == "modelOverrides" and isinstance(value, dict):
+                    found.update(value)
+                else:
+                    walk(value)
+        elif isinstance(node, list):
+            for value in node:
+                walk(value)
+
+    walk(data)
+    return found
+
+
+def user_profiles():
+    try:
+        return tomllib.loads(paths.PROFILES.read_text())
+    except OSError:
+        return {}
+
+
+def thinking_style(format_name):
+    if not format_name:
+        return "none"
+    if format_name == "openai":
+        return "openai"
+    if format_name.startswith("qwen"):
+        return "qwen"
+    return "none"
+
+
+def launcher_scripts(cmd):
+    """Small files the command runs (launcher scripts), skipping system binaries and multi-GB model files."""
+    try:
+        tokens = shlex.split(cmd)
+    except ValueError:
+        tokens = cmd.split()
+    found = []
+    for token in tokens:
+        path = Path(token)
+        if path.is_absolute() and not token.startswith(("/usr/", "/bin/")) and path.is_file() and path.stat().st_size < 1_000_000:
+            found.append(path)
+    return found
+
+
+def fingerprint(cmd):
+    """Hashes the launch command plus the scripts it runs, so editing a launcher counts as a new configuration."""
+    digest = hashlib.sha256(cmd.encode())
+    for path in launcher_scripts(cmd):
+        digest.update(path.read_bytes())
+    return digest.hexdigest()[:16]
+
+
+def engine_of(cmd):
+    """Reads the engine off the command, or off the launcher script when the command only runs a wrapper."""
+    haystacks = [cmd] + [path.read_text(errors="replace") for path in launcher_scripts(cmd)]
+    for needle, engine in (("llama-server", "llama.cpp"), ("sglang", "sglang"), ("vllm", "vllm")):
+        if any(needle in haystack for haystack in haystacks):
+            return engine
+    return "other"
+
+
+def resolve(model_id):
+    config = swap_config()
+    models = config.get("models") or {}
+    entry = models.get(model_id)
+    if entry is None:
+        owner = next((key for key, value in models.items() if model_id in (value.get("aliases") or [])), None)
+        if owner is None:
+            known = ", ".join(sorted(models))
+            raise KeyError(f"{model_id} is not a llama-swap model. Known: {known}")
+        model_id, entry = owner, models[owner]
+    cmd = expand(str(entry.get("cmd", "")), config.get("macros") or {})
+    omp = omp_overrides().get(model_id, {})
+    user = user_profiles().get(model_id, {})
+    omp_format = (omp.get("compat") or {}).get("thinkingFormat")
+    sources = {
+        "name": "models.toml" if user.get("name") else "llama-swap",
+        "thinking": "models.toml" if user.get("thinking") else (f"omp thinkingFormat={omp_format}" if omp_format else "default"),
+        "context": "models.toml" if user.get("context") else ("omp contextWindow" if omp.get("contextWindow") else "server"),
+        "hf_id": "models.toml" if user.get("hf_id") else "missing",
+    }
+    return Profile(
+        id=model_id,
+        name=user.get("name") or entry.get("name") or model_id,
+        engine=user.get("engine_kind") or engine_of(cmd),
+        thinking=user.get("thinking") or thinking_style(omp_format),
+        context=user.get("context") or omp.get("contextWindow"),
+        hf_id=user.get("hf_id"),
+        quantization=user.get("quantization"),
+        spec=user.get("spec") or {},
+        engine_meta=user.get("engine") or {},
+        cmd=cmd,
+        fingerprint=fingerprint(cmd),
+        sources=sources,
+    )

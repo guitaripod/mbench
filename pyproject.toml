@@ -1,0 +1,29 @@
+[project]
+name = "mbench"
+version = "0.1.0"
+description = "Benchmark the local LLMs behind llama-swap and rank them on one leaderboard."
+readme = "README.md"
+license = "GPL-3.0-or-later"
+requires-python = ">=3.12"
+dependencies = [
+  "openai>=1.40",
+  "pandas>=2.2",
+  "pyarrow>=16",
+  "numpy>=1.26",
+  "tokenizers>=0.19",
+  "huggingface_hub>=0.24",
+  "pyyaml>=6",
+]
+
+[project.scripts]
+mbench = "mbench.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["mbench"]
