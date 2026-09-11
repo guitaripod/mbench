@@ -3,7 +3,7 @@ import time
 
 from . import paths, store, suite
 
-KINDS = ("full", "quick", "legacy")
+KINDS = ("full", "quick")
 EFFORT_ORDER = ("medium", "max", "high", "xhigh", "low", "min", "minimal")
 DEFAULT_EFFORT = "medium"
 TEMPLATE = paths.PACKAGE / "templates" / "leaderboard.html"
@@ -19,7 +19,7 @@ def effort_of(run):
 
 
 def headline(runs, effort=DEFAULT_EFFORT):
-    """For one effort, the newest complete full run represents a model; quick or legacy runs stand in, marked provisional, until one exists."""
+    """For one effort, the newest complete full run represents a model; a quick run stands in, marked provisional, until one exists."""
     best = {}
     for run in runs:
         kind = kind_of(run)

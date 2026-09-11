@@ -591,9 +591,8 @@ scheduling (--at TIME [--until TIME]):
 
 reuse (--reuse [RUN]):
   Copies the answers of an earlier run of the same model, config, effort and suite size
-  for every task whose questions and scoring haven't changed since (speed and
-  LiveCodeBench carry over from suite v1), and measures only the rest. Without a run id
-  it takes the newest run that qualifies.
+  for every task whose questions and scoring haven't changed since, and measures only
+  the rest. Without a run id it takes the newest run that qualifies.
 
 localmaxxing (--submit [all|speed|evals], needs hf_id and quantization in
 ~/.config/mbench/models.toml):
@@ -612,7 +611,7 @@ examples:
   mbench run gpt-oss-120b                        full suite; Ctrl-C detaches, the run continues
   mbench run gpt-oss-120b --effort max --submit  maximum effort, full suite, everything submitted
   mbench run qwen3-32b --quick --effort max      a quick look at maximum effort
-  mbench run gpt-oss-120b --reuse                keep speed and LiveCodeBench from the last run
+  mbench run gpt-oss-120b --reuse                keep what still applies from the last run
   mbench run qwen3-32b gpt-oss-120b --at 01:00 --until 07:30
                                                  both at night, paused by day until done
   mbench run qwen3-32b --only speed --submit speed

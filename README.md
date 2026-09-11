@@ -29,7 +29,7 @@ The quality index averages five groups equally: knowledge (SuperGPQA), math (AIM
 
 ### Why these tasks
 
-MMLU-Pro, AIME 2025, plain needle-in-a-haystack and single-turn tool calls were the suite until v2. Current open models score within a few points of each other on MMLU-Pro and near 100% on the needle and tool tests, so those stopped separating models; AIME 2025 has had a year and a half to leak into training data. SuperGPQA is harder and much larger, the 2026 competitions postdate most of today's models, MRCR and Graphwalks are the long-context tests model makers report against, and the tool episodes follow the [2026 validity audit of tool-calling benchmarks](https://arxiv.org/abs/2607.02577): deterministic checks of what the model did to the world, so a different valid route to the same result still passes.
+MMLU-Pro, AIME 2025, plain needle-in-a-haystack and single-turn tool calls are the usual picks. Current open models score within a few points of each other on MMLU-Pro and near 100% on the needle and tool tests, so those stopped separating models; AIME 2025 has had a year and a half to leak into training data. SuperGPQA is harder and much larger, the 2026 competitions postdate most of today's models, MRCR and Graphwalks are the long-context tests model makers report against, and the tool episodes follow the [2026 validity audit of tool-calling benchmarks](https://arxiv.org/abs/2607.02577): deterministic checks of what the model did to the world, so a different valid route to the same result still passes.
 
 LiveCodeBench has published nothing newer than April 2025, so models trained after mid-2025 may have seen its problems. It stays because nothing public replaces it for executed code, but read its column as an upper bound.
 
@@ -112,7 +112,7 @@ Two scores whose intervals overlap can still differ reliably, because both model
 
 ### Suite versions and --reuse
 
-The questions a run asks are the suite version (`full/v2`). Versions measure different tasks, so the leaderboard ranks each on its own tab and never mixes their indexes, and a run started under an older version can't be resumed by a newer mbench. `--reuse [RUN]` starts a fresh run that copies the answers of an earlier run of the same model, config, effort and suite size for every task whose questions and scoring didn't change (from v1 that is speed and LiveCodeBench), and measures only the rest.
+The questions a run asks are the suite version (`full/v1`). Versions measure different tasks, so the leaderboard ranks each on its own tab and never mixes their indexes, and a run started under an older version can't be resumed by a newer mbench. `--reuse [RUN]` starts a fresh run that copies the answers of an earlier run of the same model, config, effort and suite size for every task whose questions and scoring didn't change, and measures only the rest.
 
 ## How comparable the numbers are
 

@@ -29,11 +29,16 @@ def test_a_directory_outside_any_checkout_has_no_checkout_commit(tmp_path):
     assert cli.checkout_commit(tmp_path) is None
 
 
-def test_only_unchanged_tasks_carry_over_between_suite_versions():
-    assert suite.reusable("speed", "1") and suite.reusable("lcb", "1")
-    assert not suite.reusable("tools", "1") and not suite.reusable("supergpqa", "1")
+OLDER = {"0": {"task_versions": {"speed": 1, "lcb": 1, "tools": 0}}}
+
+
+def test_only_unchanged_tasks_carry_over_between_suite_versions(monkeypatch):
+    monkeypatch.setattr(suite, "DEFINITIONS", {**suite.DEFINITIONS, **OLDER})
+    assert suite.reusable("speed", "0") and suite.reusable("lcb", "0")
+    assert not suite.reusable("tools", "0") and not suite.reusable("supergpqa", "0")
     assert all(suite.reusable(task, suite.VERSION) for task in ("speed", *suite.QUALITY_TASKS))
-    assert suite.version_of("legacy/v0") == "1" and suite.version_of("full/v2") == "2"
+    assert not suite.reusable("speed", "9")
+    assert suite.version_of("full/v1") == "1"
 
 
 def profile():
@@ -56,11 +61,12 @@ def test_reuse_needs_the_same_model_config_effort_and_suite_size():
 
 
 def test_carry_over_copies_only_files_that_still_apply(monkeypatch, tmp_path):
+    monkeypatch.setattr(suite, "DEFINITIONS", {**suite.DEFINITIONS, **OLDER})
     monkeypatch.setattr(paths, "RUNS", tmp_path)
     (tmp_path / "r1").mkdir()
     (tmp_path / "r2").mkdir()
     for name in ("speed.json", "lcb.jsonl", "lcb.graded.jsonl", "tools.jsonl", "aime.jsonl"):
         (tmp_path / "r1" / name).write_text("{}\n")
-    carried = cli.carry_over(earlier(), "r2", ["speed", "supergpqa", "tools", "lcb"])
+    carried = cli.carry_over(earlier(suite="full/v0"), "r2", ["speed", "supergpqa", "tools", "lcb"])
     assert carried == ["speed", "lcb"]
     assert sorted(path.name for path in (tmp_path / "r2").iterdir()) == ["lcb.graded.jsonl", "lcb.jsonl", "speed.json"]

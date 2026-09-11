@@ -2,7 +2,7 @@ import json
 
 from .paths import ASSETS
 
-VERSION = "2"
+VERSION = "1"
 CONCURRENCY = 4
 QUALITY_TASKS = ("supergpqa", "math", "tools", "mrcr", "graphwalks", "lcb")
 INDEX_TASKS = ("supergpqa", "math", "lcb", "mrcr", "graphwalks", "tools")
@@ -33,18 +33,8 @@ TASK_NOTES = {
     "graphwalks": "OpenAI's multi-hop graph test: BFS and parent queries over edge lists of 8k to 64k tokens.",
     "tools": "Multi-step episodes against a simulated workspace, graded by the end state rather than the exact calls.",
 }
-TASK_VERSIONS = {"speed": 1, "supergpqa": 1, "math": 1, "lcb": 1, "mrcr": 1, "graphwalks": 1, "tools": 2}
+TASK_VERSIONS = {"speed": 1, "supergpqa": 1, "math": 1, "lcb": 1, "mrcr": 1, "graphwalks": 1, "tools": 1}
 DEFINITIONS = {
-    "1": {
-        "index_tasks": ("mmlupro", "aime", "lcb", "niah", "tools"),
-        "groups": {"MMLU-Pro": ("mmlupro",), "AIME 2025": ("aime",), "LiveCodeBench": ("lcb",),
-                   "Needle retrieval": ("niah",), "Tool calls": ("tools",)},
-        "labels": {"mmlupro": "MMLU-Pro", "aime": "AIME 2025", "lcb": "LiveCodeBench v6", "niah": "Needle retrieval",
-                   "tools": "Tool calls"},
-        "short": {"mmlupro": "MMLU-Pro", "aime": "AIME", "lcb": "LCB", "niah": "Needle", "tools": "Tools"},
-        "notes": {},
-        "task_versions": {"speed": 1, "mmlupro": 1, "aime": 1, "lcb": 1, "niah": 1, "tools": 1},
-    },
     VERSION: {
         "index_tasks": INDEX_TASKS,
         "groups": INDEX_GROUPS,
@@ -107,9 +97,8 @@ def label(suite):
 
 
 def version_of(label_text):
-    """The suite definition a run was measured under; the v0 runs imported from the old harness used v1's tasks."""
-    version = (label_text or "").rsplit("/v", 1)[-1]
-    return "1" if version in ("0", "") else version
+    """The suite definition a run was measured under."""
+    return (label_text or "").rsplit("/v", 1)[-1]
 
 
 def kind_of(label_text):

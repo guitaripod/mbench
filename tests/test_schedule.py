@@ -46,7 +46,7 @@ def world(monkeypatch, tmp_path):
 
 
 def add(db, run_id, status, not_before, window=NIGHT, created=1.0):
-    store.insert_run(db, {"id": run_id, "model": run_id, "suite": "full/v2", "effort": "medium", "status": status,
+    store.insert_run(db, {"id": run_id, "model": run_id, "suite": "full/v1", "effort": "medium", "status": status,
                           "created": created, "flags": {"not_before": not_before.timestamp(), "window": window}})
 
 

@@ -281,7 +281,7 @@ function sortedModels() {
 function modelMeta(model) {
   const parts = [model.engine, model.quantization, model.spec, model.context ? fmt.ctx(model.context) + " context" : null].filter(Boolean);
   const chips = [];
-  if (model.run.kind !== "full") chips.push(h("span", { className: "chip", text: model.run.kind === "quick" ? "quick run" : "legacy run", title: model.run.notes || "Smaller sample; ranked as provisional." }));
+  if (model.run.kind !== "full") chips.push(h("span", { className: "chip", text: "quick run", title: model.run.notes || "Smaller sample; ranked as provisional." }));
   if (model.run.contended && model.run.contended.length) chips.push(h("span", { className: "chip", text: "GPU was shared", title: "Other GPU work during the run: " + model.run.contended.join(", ") }));
   if (model.run.failedItems) chips.push(h("span", { className: "chip", text: `${model.run.failedItems} requests failed` }));
   return h("span", { className: "model-meta" }, [...parts.map(part => h("span", { text: part })), ...chips]);
