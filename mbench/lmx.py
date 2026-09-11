@@ -36,11 +36,7 @@ def hardware_file():
     if paths.HARDWARE.exists():
         return paths.HARDWARE
     paths.CONFIG.mkdir(parents=True, exist_ok=True)
-    reviewed = paths.HOME / ".omp-bridge/workdir/hardware.json"
-    if reviewed.exists():
-        shutil.copyfile(reviewed, paths.HARDWARE)
-    else:
-        subprocess.run([LMX, "hardware", "--out", str(paths.HARDWARE)], check=True, capture_output=True)
+    subprocess.run([LMX, "hardware", "--out", str(paths.HARDWARE)], check=True, capture_output=True)
     return paths.HARDWARE
 
 

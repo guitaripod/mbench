@@ -1,10 +1,19 @@
 [project]
 name = "mbench"
-version = "0.1.0"
+version = "0.2.0"
 description = "Benchmark the local LLMs behind llama-swap and rank them on one leaderboard."
 readme = "README.md"
 license = "GPL-3.0-or-later"
 requires-python = ">=3.12"
+authors = [{ name = "guitaripod" }]
+keywords = ["llm", "benchmark", "leaderboard", "llama-swap", "llama.cpp", "sglang", "local-llm"]
+classifiers = [
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
 dependencies = [
   "openai>=1.40",
   "pandas>=2.2",
@@ -14,6 +23,10 @@ dependencies = [
   "huggingface_hub>=0.24",
   "pyyaml>=6",
 ]
+
+[project.urls]
+Homepage = "https://github.com/guitaripod/mbench"
+Issues = "https://github.com/guitaripod/mbench/issues"
 
 [project.scripts]
 mbench = "mbench.cli:main"

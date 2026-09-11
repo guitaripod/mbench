@@ -4,11 +4,7 @@ from mbench import datasets, suite
 
 
 def cached(name):
-    try:
-        datasets.fetch(name)
-        return True
-    except Exception:
-        return False
+    return datasets.cached_path(name).exists()
 
 
 needs_data = pytest.mark.skipif(not (cached("mmlupro") and cached("lcb") and cached("aime") and cached("tokenizer")),

@@ -21,8 +21,8 @@ def resolve_effort(profile, requested):
 
 
 def supports_seed(profile):
-    """SGLang's FlashInfer sampler asserts on seeded top-k/top-p requests and would take the server down, so only llama.cpp gets seeds."""
-    return profile.engine == "llama.cpp"
+    """SGLang's FlashInfer sampler asserts on seeded top-k/top-p requests and would take the server down, so only llama.cpp and vLLM get seeds."""
+    return profile.engine in ("llama.cpp", "vllm")
 
 
 def seed_for(item_id):

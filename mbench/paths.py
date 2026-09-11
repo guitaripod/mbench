@@ -13,6 +13,5 @@ HARDWARE = CONFIG / "hardware.json"
 LLAMA_SWAP_CONFIG = Path(os.environ.get("MBENCH_SWAP_CONFIG", HOME / ".config/llama-swap/config.yaml"))
 OMP_MODELS = Path(os.environ.get("MBENCH_OMP_MODELS", HOME / ".omp/agent/models.yml"))
 SWAP_URL = os.environ.get("MBENCH_SWAP_URL", "http://127.0.0.1:8081").rstrip("/")
-LEGACY_BENCH = Path("/mnt/nvme8tb/sglang/bench")
 PACKAGE = Path(__file__).resolve().parent
 ASSETS = PACKAGE / "assets"

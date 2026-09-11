@@ -27,10 +27,6 @@ def ensure_runner():
     if (target / "lcb_runner").exists() and head(target) == LCB_COMMIT:
         return target
     shutil.rmtree(target, ignore_errors=True)
-    local = paths.LEGACY_BENCH / "lcb"
-    if (local / "lcb_runner").exists() and head(local) == LCB_COMMIT:
-        shutil.copytree(local, target)
-        return target
     subprocess.run(["git", "clone", "--quiet", LCB_REPO, str(target)], check=True, capture_output=True)
     subprocess.run(["git", "-C", str(target), "checkout", "--quiet", LCB_COMMIT], check=True, capture_output=True)
     return target

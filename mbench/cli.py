@@ -5,6 +5,8 @@ import subprocess
 import sys
 import time
 from datetime import datetime
+from importlib import metadata
+from pathlib import Path
 from typing import NoReturn
 
 from . import __version__, board, gpu, lmx, paths, profiles, store, suite, swap
@@ -19,13 +21,40 @@ def fail(message) -> NoReturn:
     sys.exit(1)
 
 
+def checkout_commit(root):
+    """The commit of the source checkout mbench runs from (an editable install), marked -dirty when its package files changed."""
+    def git(*args):
+        return subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True).stdout.strip()
+
+    try:
+        top = git("rev-parse", "--show-toplevel")
+        if not top or Path(top).resolve() != root.resolve():
+            return None
+        return git("rev-parse", "--short", "HEAD") + ("-dirty" if git("status", "--porcelain", "--", "mbench") else "")
+    except FileNotFoundError:
+        return None
+
+
+def installed_commit():
+    """The commit `uv tool install git+…` built from, which uv and pip record in the package's direct_url.json (PEP 610)."""
+    try:
+        record = json.loads(metadata.distribution("mbench").read_text("direct_url.json") or "{}")
+    except metadata.PackageNotFoundError:
+        return None
+    return ((record.get("vcs_info") or {}).get("commit_id") or "")[:7] or None
+
+
 def harness():
-    root = paths.PACKAGE.parent
-    commit = subprocess.run(["git", "-C", str(root), "rev-parse", "--short", "HEAD"],
-                            capture_output=True, text=True).stdout.strip()
-    dirty = subprocess.run(["git", "-C", str(root), "status", "--porcelain", "--", "mbench"],
-                           capture_output=True, text=True).stdout.strip()
-    return f"{__version__}+{commit or 'nogit'}{'-dirty' if dirty else ''}"
+    return f"{__version__}+{checkout_commit(paths.PACKAGE.parent) or installed_commit() or 'nogit'}"
+
+
+def resolve_profile(model):
+    if not paths.LLAMA_SWAP_CONFIG.exists():
+        fail(f"no llama-swap config at {paths.LLAMA_SWAP_CONFIG}; point MBENCH_SWAP_CONFIG at yours")
+    try:
+        return profiles.resolve(model)
+    except KeyError as error:
+        fail(str(error.args[0]))
 
 
 def unit_name(run_id):
@@ -156,10 +185,7 @@ def follow(run_id):
 
 
 def cmd_run(args):
-    try:
-        profile = profiles.resolve(args.model)
-    except KeyError as error:
-        fail(str(error.args[0]))
+    profile = resolve_profile(args.model)
     if not swap.reachable():
         fail(f"llama-swap is not answering at {paths.SWAP_URL}")
     tasks = ["speed", *suite.QUALITY_TASKS]
@@ -312,27 +338,19 @@ def cmd_board(args):
 
 
 def cmd_profile(args):
-    try:
-        profile = profiles.resolve(args.model)
-    except KeyError as error:
-        fail(str(error.args[0]))
+    profile = resolve_profile(args.model)
     for key, value in profile.to_dict().items():
         if key in ("sources", "cmd"):
             continue
         source = profile.sources.get(key)
         print(f"{key:<13} {value if value not in (None, {}, '') else '–'}" + (f"   ({source})" if source else ""))
     print(f"{'cmd':<13} {profile.cmd}")
+    if profile.thinking == "none":
+        print(f"\nNo thinking style is set, so --effort is not passed to this model. Add thinking = \"openai\" or \"qwen\""
+              f" (and efforts = [...]) under [{profile.id}] in {paths.PROFILES}.")
     missing = lmx.missing_fields(profile)
     if missing:
         print(f"\n--submit needs {', '.join(missing)} under [{profile.id}] in {paths.PROFILES}")
-
-
-def cmd_import_legacy(_args):
-    from .legacy import import_all
-
-    imported = import_all(store.connect())
-    print("\n".join(imported) if imported else "Nothing new to import.")
-    print(board.build())
 
 
 def cmd_worker(args):
@@ -343,10 +361,10 @@ def cmd_worker(args):
 
 ROOT_EPILOG = """\
 examples:
-  mbench run qwen38-nvfp4                       full suite at medium effort (1–4 h, in the background)
-  mbench run qwen38-nvfp4 --effort max --submit
+  mbench run qwen3-32b                          full suite at medium effort (1–4 h, in the background)
+  mbench run qwen3-32b --effort max --submit
                                                 the model at its maximum effort, recorded and submitted
-  mbench run qwen38-nvfp4 --quick               30–60 min, ranked as provisional
+  mbench run qwen3-32b --quick                  30–60 min, ranked as provisional
   mbench status                                 what is running and how far along it is
   mbench ls --effort max                        ranked table for one effort level
   mbench board --open                           the leaderboard page
@@ -369,17 +387,17 @@ It stops itself and unloads the model if free RAM drops under 4 GB.
 
 RUN_EPILOG = """\
 suites:
-  (default)  full: ~1.5 h for a gpt-oss-sized model, up to ~4 h for a verbose 27B at medium
+  (default)  full: ~1.5 h for a fast MoE model, up to ~4 h for a verbose dense 27B at medium
   --quick    30–60 min, smaller samples, shown as provisional
   --smoke    a few items per task, checks the pipeline, never shown on the board
 
 effort (--effort LEVEL, default medium):
   How hard the model reasons. max and min pick the top or bottom of the levels the model
-  declares (Oh My Pi's thinking.efforts, or efforts = [...] in models.toml): max is
-  "xhigh" on the Qwen templates and "high" on gpt-oss. Any declared level works by name;
+  declares (efforts = [...] in models.toml, or Oh My Pi's thinking.efforts), so it is
+  "xhigh" on a Qwen3.x template that declares it and "high" on gpt-oss. Named levels work;
   `mbench profile <id>` lists them. Each effort gets its own ranking on the board and in
   `mbench ls --effort`, so a max run sits next to the everyday medium one. Higher effort
-  means more tokens per answer; a full max run of a verbose 27B can take 6 h or more.
+  means more tokens per answer; a full max run of a verbose dense model can take 6 h+.
 
 localmaxxing (--submit [all|speed|evals], needs hf_id and quantization in
 ~/.config/mbench/models.toml):
@@ -393,13 +411,14 @@ tasks (for --only/--skip): speed, niah, mmlupro, aime, tools, lcb
   The quality index needs niah, mmlupro, aime, tools and lcb all present.
 
 examples:
-  mbench run sglang-gptoss120b                        full suite; Ctrl-C detaches, the run continues
-  mbench run sglang-gptoss120b --effort max --submit  maximum effort, full suite, everything submitted
-  mbench run qwen38-nvfp4 --quick --effort max        a quick look at maximum effort
-  mbench run sglang-gptoss120b --effort low           a named level the model declares
-  mbench run qwen38-nvfp4 --only speed --submit speed speed only, submitted as verified runs
-  mbench run sglang-27b --skip lcb --detach           everything except LiveCodeBench, return at once
-  mbench run sglang-27b --submit evals                full suite plus GSM8K/HellaSwag shards
+  mbench run gpt-oss-120b                        full suite; Ctrl-C detaches, the run continues
+  mbench run gpt-oss-120b --effort max --submit  maximum effort, full suite, everything submitted
+  mbench run qwen3-32b --quick --effort max      a quick look at maximum effort
+  mbench run gpt-oss-120b --effort low           a named level the model declares
+  mbench run qwen3-32b --only speed --submit speed
+                                                 speed only, submitted as verified runs
+  mbench run qwen3-32b --skip lcb --detach       everything except LiveCodeBench, return at once
+  mbench run qwen3-32b --submit evals            full suite plus GSM8K/HellaSwag shards
 """
 
 
@@ -409,11 +428,11 @@ def parser():
                                    epilog=ROOT_EPILOG, formatter_class=formatter)
     root.add_argument("--version", action="version", version=f"mbench {__version__}")
     commands = root.add_subparsers(dest="command", required=True, title="commands",
-                                   metavar="{run,status,logs,cancel,resume,ls,board,profile,import-legacy}")
+                                   metavar="{run,status,logs,cancel,resume,ls,board,profile}")
 
     run = commands.add_parser("run", help="benchmark a llama-swap model", description=RUN_DESCRIPTION,
                               epilog=RUN_EPILOG, formatter_class=formatter)
-    run.add_argument("model", help="llama-swap model id or alias, e.g. qwen38-nvfp4")
+    run.add_argument("model", help="llama-swap model id or alias, e.g. qwen3-32b")
     size = run.add_mutually_exclusive_group()
     size.add_argument("--quick", action="store_true", help="smaller samples (30–60 min), ranked as provisional")
     size.add_argument("--smoke", action="store_true", help="a few items per task (~5 min) to check the pipeline; never ranked")
@@ -450,7 +469,6 @@ def parser():
     profile = commands.add_parser("profile", help="what mbench knows about a model and where each fact came from")
     profile.add_argument("model", help="llama-swap model id or alias")
     profile.set_defaults(handler=cmd_profile)
-    commands.add_parser("import-legacy", help="import the 11 Sep 2026 gpt-oss vs Qwen results").set_defaults(handler=cmd_import_legacy)
     worker = commands.add_parser("worker")
     worker.add_argument("run_id")
     worker.set_defaults(handler=cmd_worker)
