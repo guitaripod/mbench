@@ -28,9 +28,7 @@ It measures the model as your server actually runs it — quantization, chat tem
 _2 models on NVIDIA RTX PRO 6000 Blackwell Workstation Edition, suite full/v1, max effort, measured 12 Sep 2026._
 <!--/LEADERBOARD-->
 
-Quality is the index; then one column per task, single-request decode speed, peak throughput across all requests, first-token wait on a 32k prompt, and board watt-hours per correct answer. `mbench board --open` opens the same thing as a page, with 95% intervals, per-length breakdowns and every server setting behind each run.
-
-Those are one GPU's numbers — yours will differ with your hardware, quantization and server settings. The database is the record; everything else is a projection of it: `mbench export --out site` writes that page plus a `board.json` of the same numbers, ready to serve ([mine is here](https://guitaripod.github.io/mbench/)), and `scripts/publish.sh` refreshes the page, the screenshots and the table above in one go.
+Quality is the index; then one column per task, single-request decode speed, peak throughput across all requests, first-token wait on a 32k prompt, and board watt-hours per correct answer. The [live page](https://guitaripod.github.io/mbench/) adds 95% intervals, per-length breakdowns and every server setting behind each run. Those are one GPU's numbers — yours will differ with your hardware, quantization and server settings.
 
 ## What a run measures
 
@@ -38,7 +36,7 @@ Those are one GPU's numbers — yours will differ with your hardware, quantizati
 |---|---|---|
 | Speed | 3 prompts × 3 repeats at 1,024 tokens; 1 up to 32 requests at once, as many as the server takes; first-token wait and decode speed from 1k to 250k-token prompts; GPU power | greedy decoding, streamed timings, `nvidia-smi` |
 | SuperGPQA | 521 graduate-level questions, ten options, spread over its 13 disciplines like the full set | final `Answer: X` line |
-| AIME + HMMT 2026 | 63 problems × 2 samples, 64k-token budget | last `\boxed{}`, compared symbolically with [Math-Verify](https://github.com/huggingface/Math-Verify) |
+| AIME + HMMT 2026 | 63 problems × 2 samples, 64k-token budget | last `\boxed{{}}`, compared symbolically with [Math-Verify](https://github.com/huggingface/Math-Verify) |
 | LiveCodeBench v6 | 101 problems (Jan–Apr 2025), 64k-token budget | hidden tests, run in a network-less Docker container |
 | MRCR, 8 needles | 60 conversations, 15 each at 16k, 32k, 64k and 128k tokens | OpenAI's grade: the requested prefix, then the difflib ratio |
 | Graphwalks | 48 graphs, BFS and parent queries from 8k to 64k tokens | F1 of the node set on the last line |
@@ -61,41 +59,17 @@ LiveCodeBench has published nothing newer than April 2025, so models trained aft
 - **Cost as well as speed.** Board energy is integrated across the quality tasks and divided by correct answers, so a fast-but-wasteful model is visible as watt-hours per correct answer.
 - **Saturation is flagged.** With three or more models ranked, the board marks any task that isn't separating them — all near the ceiling, all near the floor, or apart by less than the noise.
 
-## Runs that fit around you
+## Benchmarking a model
 
-A full run takes hours, so it stays out of the way:
-
-- **`--at 03:00 --until 08:00`** runs models one after another inside a nightly window. Whatever is unfinished at 08:00 stops, llama-swap unloads the model, and the run continues from its saved answers the next night. Near the end of a window a run stops taking questions that couldn't finish in time.
-- **Scheduled runs give way.** When a game or another GPU job holds the card for a minute, the run pauses and retries every ten minutes.
-- **`mbench doctor`** checks a server before you spend a night on it: tokens per request, reasoning kept apart from the answer, structured tool calls, a conversation carrying a tool result, and a 16k-token prompt. Every run starts with the same checks, so a misconfigured server fails in the first minute instead of producing a night of zeros.
-- **The request count matches the server.** mbench reads how many requests it accepts at once and how much context they share, then sends many short questions in parallel and long conversations one at a time.
-- **`--reuse`** starts a fresh run that keeps the answers of an earlier one for every task whose questions and scoring didn't change, and measures only the rest.
-- **Notifications.** Finishing, failing or pausing sends a desktop notification; set `notify` in `~/.config/mbench/config.toml` (or `MBENCH_NOTIFY`) to forward it anywhere, e.g. `notify = 'curl -d "$MBENCH_MESSAGE" https://ntfy.sh/your-topic'`.
-
-## Requirements
-
-- Linux with systemd user units and an NVIDIA GPU (`nvidia-smi`)
-- llama-swap in front of SGLang or llama.cpp (vLLM works through the same OpenAI API but is untested: it doesn't report how many requests it takes at once, so mbench sends 4)
-- Docker, for grading LiveCodeBench
-- Python 3.12 and [uv](https://docs.astral.sh/uv/)
-- About 1 GB of disk for the pinned datasets
-- Optional: [lmx](https://github.com/LottoLottoLotto/localmaxxing-cli), logged in, for `--submit`
-
-## Install
+You need Linux with systemd user units and an NVIDIA GPU, llama-swap in front of SGLang or llama.cpp, Docker for grading LiveCodeBench, Python 3.12 with [uv](https://docs.astral.sh/uv/), and about 1 GB of disk for the pinned datasets. vLLM speaks the same API but is untested: it doesn't report how many requests it takes at once, so mbench sends 4.
 
 ```
 uv tool install git+https://github.com/guitaripod/mbench
 ```
 
-## Describe your models
-
-mbench reads each model's launch command from llama-swap's config. What it can't read goes in `~/.config/mbench/models.toml`, keyed by llama-swap model id:
+**1. Describe the model.** mbench reads its launch command from llama-swap's config; anything that command doesn't say goes in `~/.config/mbench/models.toml`, keyed by llama-swap model id. `mbench profile <id>` shows what was resolved and where each value came from.
 
 ```toml
-[qwen3-32b]
-thinking = "qwen"
-context = 131072
-
 [gpt-oss-120b]
 thinking = "openai"
 efforts = ["low", "medium", "high"]
@@ -109,10 +83,19 @@ spec = { method = "EAGLE3", draft = "lmsys/EAGLE3-gpt-oss-120b-bf16", tokens_per
 - `efforts` lists the levels the chat template accepts, lowest first; `--effort max`/`min` pick the ends.
 - `context` caps the long-prompt tests. Without it, mbench asks the server once the model is loaded.
 - `hf_id`, `quantization`, `spec` and `engine` only matter for `--submit`.
+- [Oh My Pi](https://github.com/can1357/oh-my-pi) users: `compat.thinkingFormat`, `thinking.efforts` and `contextWindow` are read from its `models.yml` too; `models.toml` wins.
 
-[Oh My Pi](https://github.com/can1357/oh-my-pi) users: mbench also reads `compat.thinkingFormat`, `thinking.efforts` and `contextWindow` from its `models.yml`; `models.toml` wins. `mbench profile <id>` shows what was resolved and where each value came from.
+**2. Check the server.** `mbench doctor <id>` loads the model and verifies tokens per request, reasoning kept apart from the answer, structured tool calls, a conversation carrying a tool result, and a 16k-token prompt.
 
-## Use
+**3. Run it.** `mbench run <id> --effort max`, or `mbench run <a> <b> --at 02:00 --until 09:00` for a nightly window. Extra models queue and run one at a time. Answers are written as they arrive, so a pause costs nothing, and the local page rebuilds when the run ends.
+
+**4. Read it.** `mbench ls --effort max` in the terminal, `mbench board --open` for the page, `mbench compare <a> <b>` when two models look close and you want to know whether the gap is real.
+
+**5. Publish it.** `scripts/publish.sh max` exports `site/index.html` and `site/board.json`, re-renders both screenshots, and rewrites the table above between its markers. Commit and push: the `pages` workflow redeploys the site on any change under `site/`. The database is the record; the page, the JSON and that table are all projections of it, so nothing is typed by hand.
+
+A model only joins an existing ranking if it ran at the same effort level, and changing the question set means bumping the suite version so old and new runs are ranked apart rather than mixed.
+
+### Every command
 
 ```
 mbench run <id>                       full suite at medium effort
@@ -126,7 +109,7 @@ mbench run <id> --submit              also submit to localmaxxing (all, speed or
 mbench status                         what is running, and what is scheduled
 mbench logs -f                        follow the worker log
 mbench cancel / mbench resume         stop a run; continue it later
-mbench ls [--effort max]              ranked table in the terminal
+mbench ls [--effort max] [--markdown] ranked table in the terminal
 mbench compare <a> <b>                paired differences, task by task, with 95% intervals
 mbench doctor <id>                    check a model's server before spending a night on it
 mbench sources                        newer question sets, or pinned files that moved
@@ -135,11 +118,22 @@ mbench export --out site              the page plus board.json, ready to publish
 mbench profile <id>                   what mbench knows about a model
 ```
 
-`mbench -h` and `mbench run -h` cover every option. One run happens at a time; extra models, or a run started while another is going, wait their turn.
+`mbench -h` and `mbench run -h` cover every option.
+
+## Runs that fit around you
+
+A full run takes hours, so it stays out of the way:
+
+- **`--at 03:00 --until 08:00`** runs models one after another inside a nightly window. Whatever is unfinished at 08:00 stops, llama-swap unloads the model, and the run continues from its saved answers the next night. Near the end of a window a run stops taking questions that couldn't finish in time.
+- **Scheduled runs give way.** When a game or another GPU job holds the card for a minute, the run pauses and retries every ten minutes.
+- **Every run starts with the doctor checks**, so a misconfigured server fails in the first minute instead of producing a night of zeros.
+- **The request count matches the server.** mbench reads how many requests it accepts at once and how much context they share, then sends many short questions in parallel and long conversations one at a time.
+- **`--reuse`** starts a fresh run that keeps the answers of an earlier one for every task whose questions and scoring didn't change, and measures only the rest.
+- **Notifications.** Finishing, failing or pausing sends a desktop notification; set `notify` in `~/.config/mbench/config.toml` (or `MBENCH_NOTIFY`) to forward it anywhere, e.g. `notify = 'curl -d "$MBENCH_MESSAGE" https://ntfy.sh/your-topic'`.
 
 ## localmaxxing
 
-`--submit speed` has lmx measure its two canonical prompts, then submits the runs through the [localmaxxing](https://www.localmaxxing.com) API with the prompt hash, output sample and timings the lmx client leaves out, so they earn the Verified badge. `--submit evals` answers the GSM8K and HellaSwag shards the site doesn't have yet for that model and quantization. `--submit` alone does both. Needs `hf_id` and `quantization` in `models.toml`.
+`--submit speed` has lmx measure its two canonical prompts, then submits the runs through the [localmaxxing](https://www.localmaxxing.com) API with the prompt hash, output sample and timings the lmx client leaves out, so they earn the Verified badge. `--submit evals` answers the GSM8K and HellaSwag shards the site doesn't have yet for that model and quantization. `--submit` alone does both. Needs `hf_id` and `quantization` in `models.toml`, and [lmx](https://github.com/LottoLottoLotto/localmaxxing-cli) logged in.
 
 ## Files
 
