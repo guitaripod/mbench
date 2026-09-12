@@ -73,3 +73,9 @@ def test_a_server_that_refuses_tool_results_fails(monkeypatch):
     checks, _ = examine(monkeypatch, [reply("144", "r"), reply(tool_calls=weather_call()), RuntimeError("400 bad role"),
                                       reply("abc")])
     assert checks["tool result"]["status"] == "fail"
+
+
+def test_a_changed_stack_is_a_warning_not_a_failure():
+    check = doctor.check_stack(["SGLang aaaa → SGLang bbbb"])
+    assert check["status"] == "warn" and "SGLang aaaa → SGLang bbbb" in check["detail"]
+    assert doctor.failures([check]) == []

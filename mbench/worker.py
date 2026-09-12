@@ -6,7 +6,7 @@ import time
 import traceback
 from datetime import datetime
 
-from . import board, datasets, doctor, engine, gpu, grader, lmx, metrics, notify, paths, schedule, speed, store, suite, swap
+from . import board, datasets, doctor, engine, gpu, grader, lmx, metrics, notify, paths, schedule, speed, stack, store, suite, swap
 from .profiles import Profile
 
 RAM_FLOOR_GB = 4.0
@@ -241,10 +241,16 @@ def execute(run_id):
         capacity = swap.capacity(info)
         profile.context = profile.context or capacity["context"]
         context = swap.positive(profile.context, capacity["context"])
-        store.update_run(db, run_id, server={"load_s": seconds, **swap.trimmed_info(info), "capacity": capacity},
-                         profile=profile.to_dict())
-        events.emit("loaded", seconds=seconds, context=context, slots=capacity["slots"], pool=capacity["pool"])
-        checks = asyncio.run(doctor.run(profile, level, context, capacity))
+        hardware, build = gpu.describe(), stack.build(profile.engine, info)
+        moved = stack.changed(store.last_complete(db, run["model"], run_id), hardware, build)
+        if moved:
+            flags["stack_change"] = moved
+            events.emit("stack", changed="; ".join(moved))
+        store.update_run(db, run_id, hardware=hardware, flags=flags, profile=profile.to_dict(),
+                         server={"load_s": seconds, **swap.trimmed_info(info), "build": build, "capacity": capacity})
+        events.emit("loaded", seconds=seconds, context=context, slots=capacity["slots"], pool=capacity["pool"],
+                    build=stack.build_label(build))
+        checks = asyncio.run(doctor.run(profile, level, context, capacity, moved))
         (run_dir / "doctor.json").write_text(json.dumps(checks, indent=1))
         for check in checks:
             if check["status"] != "ok":

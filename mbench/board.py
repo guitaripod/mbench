@@ -2,7 +2,7 @@ import json
 import time
 
 from . import metrics as scores
-from . import paths, store, suite
+from . import paths, stack, store, suite
 
 KINDS = ("full", "quick")
 EFFORT_ORDER = ("medium", "max", "high", "xhigh", "low", "min", "minimal", "none")
@@ -80,11 +80,12 @@ def model_entry(db, run, history, definition):
         "spec": (profile.get("spec") or {}).get("method"),
         "context": profile.get("context"),
         "fingerprint": run.get("fingerprint"),
+        "stack": stack.of(run),
         "run": {
             "id": run["id"], "suite": run["suite"], "kind": kind_of(run), "finished": run.get("finished"),
             "effort": effort_of(run), "harness": run.get("harness"), "contended": flags.get("contended") or [],
             "failedItems": flags.get("failed_items") or 0, "notes": flags.get("notes"),
-            "reused": flags.get("reused"),
+            "reused": flags.get("reused"), "stackChange": flags.get("stack_change") or [],
         },
         "index": metrics.get("index.quality"),
         "tasks": tasks,
@@ -102,6 +103,16 @@ def model_entry(db, run, history, definition):
             for entry in history
         ],
     }
+
+
+def hosts(models):
+    """Every card and driver a ranking's speed numbers come from, the one with most models first."""
+    counts = {}
+    for model in models:
+        entry = model["stack"]
+        found = counts.setdefault(entry["host"], {"key": entry["host"], "label": entry["hostLabel"], "models": 0})
+        found["models"] += 1
+    return sorted(counts.values(), key=lambda entry: -entry["models"])
 
 
 def effort_key(name):
@@ -126,6 +137,7 @@ def suite_view(db, runs, version):
         "efforts": list(rankings),
         "rankings": rankings,
         "health": {effort: scores.task_health(models, definition["index_tasks"]) for effort, models in rankings.items()},
+        "hosts": {effort: hosts(models) for effort, models in rankings.items()},
     }
 
 

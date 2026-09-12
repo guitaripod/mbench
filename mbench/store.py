@@ -98,6 +98,13 @@ def list_runs(db, model=None, status=None):
     return [decode(row) for row in db.execute(query + " ORDER BY created DESC", args)]
 
 
+def last_complete(db, model, exclude=None):
+    """The model's most recent finished run, the one a new run's stack is compared against."""
+    row = db.execute("SELECT * FROM runs WHERE model = ? AND status = 'complete' AND id != ? ORDER BY created DESC LIMIT 1",
+                     (model, exclude or "")).fetchone()
+    return decode(row)
+
+
 def set_metrics(db, run_id, metrics):
     db.executemany(
         "INSERT OR REPLACE INTO metrics (run_id, key, value, unit, n, lo, hi) VALUES (?, ?, ?, ?, ?, ?, ?)",

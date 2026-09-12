@@ -1,5 +1,5 @@
 {
- "generated": 1789241679.6884115,
+ "generated": 1789242899.0909836,
  "suite": "full/v1",
  "current": "1",
  "hardware": {
@@ -72,6 +72,16 @@
       "spec": "DFlash2",
       "context": 524288,
       "fingerprint": "67618adcd7fce17f",
+      "stack": {
+       "host": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition|610.57.04",
+       "hostLabel": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition \u00b7 driver 610.57.04",
+       "gpu": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+       "driver": "610.57.04",
+       "vramMib": 97887,
+       "engine": null,
+       "build": null,
+       "source": null
+      },
       "run": {
        "id": "20260911-233400-sglang-27b",
        "suite": "full/v1",
@@ -82,7 +92,8 @@
        "contended": [],
        "failedItems": 0,
        "notes": null,
-       "reused": null
+       "reused": null,
+       "stackChange": []
       },
       "index": {
        "value": 80.97172922610396,
@@ -497,6 +508,16 @@
       "spec": "DFlash",
       "context": 131072,
       "fingerprint": "b513c046595246c4",
+      "stack": {
+       "host": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition|610.57.04",
+       "hostLabel": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition \u00b7 driver 610.57.04",
+       "gpu": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+       "driver": "610.57.04",
+       "vramMib": 97887,
+       "engine": null,
+       "build": null,
+       "source": null
+      },
       "run": {
        "id": "20260911-233400-sglang-gptoss120b",
        "suite": "full/v1",
@@ -507,7 +528,8 @@
        "contended": [],
        "failedItems": 0,
        "notes": null,
-       "reused": null
+       "reused": null,
+       "stackChange": []
       },
       "index": {
        "value": 71.22528311586616,
@@ -899,6 +921,15 @@
    },
    "health": {
     "max": {}
+   },
+   "hosts": {
+    "max": [
+     {
+      "key": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition|610.57.04",
+      "label": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition \u00b7 driver 610.57.04",
+      "models": 2
+     }
+    ]
    }
   }
  },
@@ -931,6 +962,16 @@
     "spec": "DFlash2",
     "context": 524288,
     "fingerprint": "67618adcd7fce17f",
+    "stack": {
+     "host": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition|610.57.04",
+     "hostLabel": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition \u00b7 driver 610.57.04",
+     "gpu": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+     "driver": "610.57.04",
+     "vramMib": 97887,
+     "engine": null,
+     "build": null,
+     "source": null
+    },
     "run": {
      "id": "20260911-233400-sglang-27b",
      "suite": "full/v1",
@@ -941,7 +982,8 @@
      "contended": [],
      "failedItems": 0,
      "notes": null,
-     "reused": null
+     "reused": null,
+     "stackChange": []
     },
     "index": {
      "value": 80.97172922610396,
@@ -1356,6 +1398,16 @@
     "spec": "DFlash",
     "context": 131072,
     "fingerprint": "b513c046595246c4",
+    "stack": {
+     "host": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition|610.57.04",
+     "hostLabel": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition \u00b7 driver 610.57.04",
+     "gpu": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+     "driver": "610.57.04",
+     "vramMib": 97887,
+     "engine": null,
+     "build": null,
+     "source": null
+    },
     "run": {
      "id": "20260911-233400-sglang-gptoss120b",
      "suite": "full/v1",
@@ -1366,7 +1418,8 @@
      "contended": [],
      "failedItems": 0,
      "notes": null,
-     "reused": null
+     "reused": null,
+     "stackChange": []
     },
     "index": {
      "value": 71.22528311586616,

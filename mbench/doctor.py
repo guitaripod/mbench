@@ -109,10 +109,17 @@ async def check_long_prompt(client, profile, effort, context):
                                         f"({response.usage.prompt_tokens if response.usage else '?'} prompt tokens)")
 
 
-async def run(profile, effort, context, capacity):
+def check_stack(moved):
+    """Speed, throughput and energy only compare while the card, its driver and the server build hold still."""
+    return outcome("stack", "warn", "changed since this model's last run: " + "; ".join(moved)
+                   + "; its earlier speed and energy numbers no longer compare")
+
+
+async def run(profile, effort, context, capacity, moved=()):
     """The checks that decide whether a run can be worth anything, fast enough to go before every run."""
     client = AsyncOpenAI(base_url=paths.SWAP_URL + "/v1", api_key="none", timeout=900, max_retries=0)
-    checks = [check_capacity(context, capacity), await check_answer(client, profile, effort)]
+    checks = [*([check_stack(moved)] if moved else []),
+              check_capacity(context, capacity), await check_answer(client, profile, effort)]
     tool, message = await check_tool_call(client, profile, effort)
     checks += [tool, await check_tool_result(client, profile, effort, message)]
     checks.append(await check_long_prompt(client, profile, effort, context))

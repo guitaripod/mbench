@@ -29,7 +29,7 @@ It measures the model as your server actually runs it — quantization, chat tem
 | Qwen 3.8 27B · SGLang · DFlash2 · 524K | 81.0 | 61.2 | 81.0 | 76.2 | 78.4 | 94.5 | 100.0 | 157 | 400 | 5.0 | 2.67 | 12 Sep |
 | GPT-OSS 120B · SGLang · MXFP4 · DFlash · 128K | 71.2 | 51.4 | 87.3 | 83.2 | 11.0 | 64.4 | 96.5 | 206 | 432 | 1.8 | 5.99 | 12 Sep |
 
-_2 models on NVIDIA RTX PRO 6000 Blackwell Workstation Edition, suite full/v1, max effort, measured 12 Sep 2026._
+_2 models on NVIDIA RTX PRO 6000 Blackwell Workstation Edition, suite full/v1, max effort, newest run 12 Sep 2026._
 <!--/LEADERBOARD-->
 
 Quality is the index; then one column per task, single-request decode speed, peak throughput across all requests, first-token wait on a 32k prompt, and board watt-hours per correct answer. The [live page](https://guitaripod.github.io/mbench/) adds 95% intervals, per-length breakdowns and every server setting behind each run. Those are one GPU's numbers — yours will differ with your hardware, quantization and server settings.
@@ -58,6 +58,7 @@ LiveCodeBench has published nothing newer than April 2025, so models trained aft
 
 - **Fixed inputs.** Datasets are downloaded once and pinned by sha256, question subsets use fixed seeds, and every run records the harness version, the suite version and a fingerprint of the llama-swap command plus the launcher script it calls — edit a launcher and it counts as a new configuration.
 - **Fixed conditions.** Speed decodes greedily, so the same prompt yields the same tokens and drafter acceptance stays comparable. Quality uses each model's recommended sampling, because reasoning models degrade at temperature 0. A run waits for other GPU work to finish, and says so on the board if it had to go ahead anyway.
+- **One stack per speed number.** Every run records the card, its driver and the build of the server that answered — SGLang's version or the commit of the checkout it runs from, llama.cpp's build string. Quality compares across those; decode, peak and watt-hours only compare within one, so the board says when a ranking spans two setups, and `mbench doctor` says when the stack moved under a model since its last run.
 - **Intervals, not point scores.** Every task carries a 95% interval (Wilson, or the spread of per-question means), and the index bootstraps questions within each task. `mbench compare` pairs two runs question by question and says which differences survive the noise.
 - **Nothing quietly skipped.** A prompt that doesn't fit the model's context scores zero instead of disappearing, and the board says which task that cost. When the server refuses a request for its length, mbench reads the window and prompt size out of the refusal, retries once with a smaller answer budget, then scores zero.
 - **Cost as well as speed.** Board energy is integrated across the quality tasks and divided by correct answers, so a fast-but-wasteful model is visible as watt-hours per correct answer.

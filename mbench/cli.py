@@ -10,7 +10,7 @@ from importlib import metadata
 from pathlib import Path
 from typing import NoReturn
 
-from . import __version__, board, doctor, gpu, lmx, metrics, paths, profiles, schedule, sources, store, suite, swap
+from . import __version__, board, doctor, gpu, lmx, metrics, paths, profiles, schedule, sources, stack, store, suite, swap
 from .engine import resolve_effort
 from .units import ACTIVE, reconcile, spawn, unit_active, unit_name
 
@@ -453,6 +453,12 @@ def print_columns(header, rows):
                         for index, (value, width) in enumerate(zip(row, widths))))
 
 
+def setups_note(setups):
+    """Quality compares across cards; the speed columns only compare within one, so a mixed ranking says which is which."""
+    detail = ", ".join(f"{entry['label']} ({entry['models']})" for entry in setups)
+    return f"tok/s, Peak and Wh/correct come from {len(setups)} setups — {detail} — and only compare within one"
+
+
 def cmd_ls(args):
     data = board.collect(store.connect())
     version = args.suite or suite.VERSION
@@ -467,13 +473,19 @@ def cmd_ls(args):
               + (f" Older suites have runs: `mbench ls --suite {older[0]}`." if older else "")
               + ("" if others or older else " Start one with `mbench run <llama-swap model>`."))
         return
+    models = view["rankings"][args.effort]
     header, rows = ranking_table(view, args.effort)
     (print_markdown if args.markdown else print_columns)(header, rows)
+    setups = view["hosts"].get(args.effort) or []
     if args.markdown:
-        hardware = data.get("hardware") or {}
-        print(f"\n_{len(rows)} models on {hardware.get('gpu', 'this GPU')}, suite {data['suite']}, "
-              f"{args.effort} effort, measured {datetime.now():%d %b %Y}._")
+        newest = max((model["run"]["finished"] or 0) for model in models)
+        where = setups[0]["label"].split(" · ")[0] if len(setups) == 1 else f"{len(setups)} setups"
+        print(f"\n_{len(rows)} models on {where}, suite {data['suite']}, {args.effort} effort, "
+              f"newest run {datetime.fromtimestamp(newest):%d %b %Y}._"
+              + (f"\n\n_{setups_note(setups)}_" if len(setups) > 1 else ""))
         return
+    if len(setups) > 1:
+        print(f"note: {setups_note(setups)}")
     for task, why in view["health"].get(args.effort, {}).items():
         print(f"note: {view['taskLabels'][task]} isn't separating these models ({why})")
 
@@ -547,10 +559,14 @@ def cmd_doctor(args):
     others = [entry["model"] for entry in swap.running() if entry["model"] != profile.id]
     if others:
         print(f"llama-swap will unload {', '.join(others)} to make room.")
-    print(f"Loading {profile.id} ({swap.ensure_loaded(profile.id)} s).")
-    capacity = swap.capacity(swap.server_info(profile.id))
+    seconds = swap.ensure_loaded(profile.id)
+    info = swap.server_info(profile.id)
+    build = stack.build(profile.engine, info)
+    print(f"Loaded {profile.id} in {seconds} s" + (f", served by {stack.build_label(build)}" if stack.build_label(build) else "") + ".")
+    capacity = swap.capacity(info)
     context = swap.positive(profile.context or capacity["context"], capacity["context"])
-    checks = asyncio.run(doctor.run(profile, level, context, capacity))
+    moved = stack.changed(store.last_complete(db, profile.id), gpu.describe(), build)
+    checks = asyncio.run(doctor.run(profile, level, context, capacity, moved))
     for check in checks:
         print(f"  {check['status'].upper():<4}  {check['check']:<12} {check['detail']}")
     if doctor.failures(checks):

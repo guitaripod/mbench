@@ -1,0 +1,137 @@
+import json
+import re
+import subprocess
+from pathlib import Path
+
+from . import gpu
+
+PLACEHOLDER_VERSIONS = ("", "0.0.0", "0.0.0.dev0", "unknown", "dev")
+ENGINE_LABELS = {"sglang": "SGLang", "llama.cpp": "llama.cpp", "vllm": "vLLM"}
+ENGINE_PACKAGES = {"sglang": "sglang", "vllm": "vllm"}
+
+
+def server_pids():
+    return [app["pid"] for app in gpu.compute_apps() if gpu.is_server(app["pid"])]
+
+
+def venv_of(pid):
+    """The virtualenv a running server was started from: its own argv names it, while /proc/<pid>/exe resolves past the
+    virtualenv to the interpreter it links to."""
+    for token in gpu.cmdline(pid).split():
+        path = Path(token)
+        if path.is_absolute() and path.parent.name == "bin" and (path.parent.parent / "pyvenv.cfg").exists():
+            return path.parent.parent
+    return None
+
+
+def dist_infos(venv, package):
+    return sorted(venv.glob(f"lib/python3*/site-packages/{package}-*.dist-info"))
+
+
+def editable_checkout(venv, package):
+    """Where an editable install points: a source build carries no version of its own, so its checkout names it."""
+    for info in dist_infos(venv, package):
+        try:
+            data = json.loads((info / "direct_url.json").read_text())
+        except (OSError, json.JSONDecodeError):
+            continue
+        url = data.get("url") or ""
+        if (data.get("dir_info") or {}).get("editable") and url.startswith("file://"):
+            return Path(url.removeprefix("file://"))
+    return None
+
+
+def installed_version(venv, package):
+    for info in dist_infos(venv, package):
+        match = re.fullmatch(re.escape(package) + r"-(.+)\.dist-info", info.name)
+        if match and match.group(1) not in PLACEHOLDER_VERSIONS:
+            return match.group(1)
+    return None
+
+
+def git_head(directory):
+    completed = subprocess.run(["git", "-C", str(directory), "log", "-1", "--format=%h %cs"],
+                               capture_output=True, text=True)
+    parts = completed.stdout.split()
+    return {"commit": parts[0], "dated": parts[1]} if completed.returncode == 0 and len(parts) == 2 else None
+
+
+def venv_build(engine):
+    """What the server is running from when it reports no version of its own: the checkout of a source install, or
+    the version its virtualenv has on disk."""
+    package = ENGINE_PACKAGES.get(engine)
+    if not package:
+        return {}
+    for pid in server_pids():
+        venv = venv_of(pid)
+        if not venv:
+            continue
+        checkout = editable_checkout(venv, package)
+        head = git_head(checkout) if checkout else None
+        if head:
+            return {**head, "source": str(checkout)}
+        version = installed_version(venv, package)
+        if version:
+            return {"version": version}
+    return {}
+
+
+def reported(info):
+    payload = (info or {}).get("info") or {}
+    version = str(payload.get("version") or "").strip()
+    build = str(payload.get("build_info") or "").strip()
+    found = {}
+    if version and version not in PLACEHOLDER_VERSIONS:
+        found["version"] = version
+    if build:
+        found["build"] = build
+    return found
+
+
+def build(engine, info):
+    """The build of the server that answered: what it reports about itself, or what its virtualenv says it runs."""
+    found = reported(info)
+    return {"engine": engine, **(found or venv_build(engine))}
+
+
+def build_label(found):
+    if not found:
+        return None
+    engine = ENGINE_LABELS.get(found.get("engine"), found.get("engine") or "server")
+    detail = found.get("version") or found.get("build") or found.get("commit")
+    return f"{engine} {detail}" if detail else engine
+
+
+def host_key(hardware):
+    hardware = hardware or {}
+    return f"{hardware.get('gpu') or '?'}|{hardware.get('driver') or '?'}"
+
+
+def host_label(hardware):
+    hardware = hardware or {}
+    parts = [hardware.get("gpu") or "unknown GPU"]
+    if hardware.get("driver"):
+        parts.append(f"driver {hardware['driver']}")
+    return " · ".join(parts)
+
+
+def of(run):
+    """A run's stack: the card and driver that answered, and the build of the server in front of them. Quality compares
+    across stacks; speed, throughput and energy only compare within one."""
+    hardware = (run or {}).get("hardware") or {}
+    found = ((run or {}).get("server") or {}).get("build") or {}
+    return {"host": host_key(hardware), "hostLabel": host_label(hardware), "gpu": hardware.get("gpu"),
+            "driver": hardware.get("driver"), "vramMib": hardware.get("vram_mib"),
+            "engine": found.get("engine"), "build": build_label(found), "source": found.get("source")}
+
+
+def changed(previous, hardware, found):
+    """What moved since a model's last run; a speed number only carries over while these hold still."""
+    moved = []
+    was_hardware = (previous or {}).get("hardware") or {}
+    was_build = ((previous or {}).get("server") or {}).get("build")
+    if was_hardware and host_key(was_hardware) != host_key(hardware):
+        moved.append(f"{host_label(was_hardware)} → {host_label(hardware)}")
+    if was_build and found and build_label(was_build) != build_label(found):
+        moved.append(f"{build_label(was_build)} → {build_label(found)}")
+    return moved

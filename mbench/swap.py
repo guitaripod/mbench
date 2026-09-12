@@ -82,7 +82,6 @@ def trimmed_info(info):
         return {key: payload.get(key) for key in SERVER_INFO_KEYS if payload.get(key) is not None}
     settings = payload.get("default_generation_settings") or {}
     return {
-        "build": payload.get("build_info"),
         "model_path": payload.get("model_path"),
         "n_ctx": settings.get("n_ctx"),
         "total_slots": payload.get("total_slots"),

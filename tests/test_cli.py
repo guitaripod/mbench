@@ -83,3 +83,9 @@ def test_the_markdown_table_is_a_github_table(capsys):
     assert lines[0].startswith("| Model | Quality | Math |")
     assert lines[1] == "|---|--:|--:|--:|--:|--:|--:|--:|"
     assert lines[2] == "| A Model | 81.0 | 76.2 | 157 | 400 | 5.0 | 2.67 | 12 Sep |"
+
+
+def test_a_ranking_measured_on_two_cards_says_the_speed_columns_dont_compare():
+    note = cli.setups_note([{"label": "RTX PRO 6000 · driver 610", "models": 2}, {"label": "RTX 4090 · driver 570", "models": 1}])
+    assert note.startswith("tok/s, Peak and Wh/correct come from 2 setups")
+    assert "RTX PRO 6000 · driver 610 (2), RTX 4090 · driver 570 (1)" in note
