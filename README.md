@@ -1,6 +1,10 @@
 # mbench
 
 [![tests](https://github.com/guitaripod/mbench/actions/workflows/tests.yml/badge.svg)](https://github.com/guitaripod/mbench/actions/workflows/tests.yml)
+[![leaderboard](https://github.com/guitaripod/mbench/actions/workflows/pages.yml/badge.svg)](https://guitaripod.github.io/mbench/)
+[![release](https://img.shields.io/github/v/release/guitaripod/mbench?label=release&color=blue)](https://github.com/guitaripod/mbench/releases/latest)
+[![python](https://img.shields.io/badge/python-3.12%2B-blue)](https://www.python.org/downloads/)
+[![license](https://img.shields.io/github/license/guitaripod/mbench?color=blue)](LICENSE)
 
 Rank the models your own GPU runs. mbench measures every model [llama-swap](https://github.com/mostlygeek/llama-swap) serves — speed and answer quality — the same way each time, and builds one leaderboard page out of the results.
 
