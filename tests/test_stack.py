@@ -70,6 +70,16 @@ def test_a_moved_card_or_build_is_reported_and_an_unrecorded_one_is_not():
     assert stack.changed(None, hardware, build) == []
 
 
+def test_a_build_recorded_before_the_engine_was_still_reads(monkeypatch):
+    previous = {"hardware": {"gpu": "A", "driver": "1"}, "server": {"build": "b50-5266f24"}}
+    assert stack.build_label("b50-5266f24") == "b50-5266f24"
+    assert stack.of(previous)["build"] == "b50-5266f24"
+    same = {"engine": "llama.cpp", "build": "b50-5266f24"}
+    assert stack.changed(previous, {"gpu": "A", "driver": "1"}, same) == []
+    newer = {"engine": "llama.cpp", "build": "b60-aaaaaaa"}
+    assert stack.changed(previous, {"gpu": "A", "driver": "1"}, newer) == ["b50-5266f24 → llama.cpp b60-aaaaaaa"]
+
+
 def test_a_runs_stack_is_its_card_and_its_server():
     entry = stack.of({"hardware": {"gpu": "RTX PRO 6000", "driver": "610.57.04", "vram_mib": 97887},
                       "server": {"build": {"engine": "sglang", "commit": "c0ead58"}}})

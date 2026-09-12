@@ -96,12 +96,23 @@ def build(engine, info):
     return {"engine": engine, **(found or venv_build(engine))}
 
 
+def as_build(found):
+    """Runs from before the engine was recorded as a whole kept llama.cpp's build string on its own."""
+    if isinstance(found, str):
+        return {"build": found} if found else {}
+    return found or {}
+
+
+def build_id(found):
+    """What names the build itself, without the engine in front of it, so an older run's bare string still compares."""
+    found = as_build(found)
+    return found.get("version") or found.get("build") or found.get("commit")
+
+
 def build_label(found):
-    if not found:
-        return None
-    engine = ENGINE_LABELS.get(found.get("engine"), found.get("engine") or "server")
-    detail = found.get("version") or found.get("build") or found.get("commit")
-    return f"{engine} {detail}" if detail else engine
+    found = as_build(found)
+    engine = ENGINE_LABELS.get(found.get("engine"), found.get("engine"))
+    return " ".join(part for part in (engine, build_id(found)) if part) or None
 
 
 def host_key(hardware):
@@ -121,7 +132,7 @@ def of(run):
     """A run's stack: the card and driver that answered, and the build of the server in front of them. Quality compares
     across stacks; speed, throughput and energy only compare within one."""
     hardware = (run or {}).get("hardware") or {}
-    found = ((run or {}).get("server") or {}).get("build") or {}
+    found = as_build(((run or {}).get("server") or {}).get("build"))
     return {"host": host_key(hardware), "hostLabel": host_label(hardware), "gpu": hardware.get("gpu"),
             "driver": hardware.get("driver"), "vramMib": hardware.get("vram_mib"),
             "engine": found.get("engine"), "build": build_label(found), "source": found.get("source")}
@@ -134,7 +145,8 @@ def changed(previous, hardware, found):
     was_build = ((previous or {}).get("server") or {}).get("build")
     if was_hardware and host_key(was_hardware) != host_key(hardware):
         moved.append(f"{host_label(was_hardware)} → {host_label(hardware)}")
-    if was_build and found and build_label(was_build) != build_label(found):
+    was_id, now_id = build_id(was_build), build_id(found)
+    if was_id and now_id and was_id != now_id:
         moved.append(f"{build_label(was_build)} → {build_label(found)}")
     return moved
 
