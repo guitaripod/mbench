@@ -30,7 +30,7 @@ _2 models on NVIDIA RTX PRO 6000 Blackwell Workstation Edition, suite full/v1, m
 
 Quality is the index; then one column per task, single-request decode speed, peak throughput across all requests, first-token wait on a 32k prompt, and board watt-hours per correct answer. `mbench board --open` opens the same thing as a page, with 95% intervals, per-length breakdowns and every server setting behind each run.
 
-Those are one GPU's numbers — yours will differ with your hardware, quantization and server settings. The database is the record; everything else is a projection of it: `mbench export --out site` writes that page plus a `board.json` of the same numbers, ready to serve, and `scripts/publish.sh` refreshes the page, the screenshots and the table above in one go.
+Those are one GPU's numbers — yours will differ with your hardware, quantization and server settings. The database is the record; everything else is a projection of it: `mbench export --out site` writes that page plus a `board.json` of the same numbers, ready to serve ([mine is here](https://guitaripod.github.io/mbench/)), and `scripts/publish.sh` refreshes the page, the screenshots and the table above in one go.
 
 ## What a run measures
 
