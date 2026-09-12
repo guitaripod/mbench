@@ -21,8 +21,8 @@ One command per model. It loads the model through llama-swap, measures speed and
 | SuperGPQA | 521 graduate-level questions, ten options, spread over its 13 disciplines like the full set | final `Answer: X` line |
 | AIME + HMMT 2026 | AIME 2026 and HMMT February 2026, 63 problems × 2 samples, 64k-token budget | last `\boxed{}`, compared symbolically with [Math-Verify](https://github.com/huggingface/Math-Verify) |
 | LiveCodeBench v6 | 101 problems (Jan–Apr 2025), 64k-token budget | hidden tests, run in a network-less Docker container |
-| MRCR, 8 needles | 60 conversations, 15 each at 16k, 32k, 64k and 128k tokens | OpenAI's grade: the requested prefix, then the difflib ratio |
-| Graphwalks | 48 graphs, BFS and parent queries at 8k, 16k, 32k and 64k tokens | F1 of the node set on the last line |
+| MRCR, 8 needles | 60 conversations, 15 each at 16k, 32k, 64k and 128k tokens, 64k-token budget | OpenAI's grade: the requested prefix, then the difflib ratio |
+| Graphwalks | 48 graphs, BFS and parent queries at 8k, 16k, 32k and 64k tokens, 64k-token budget | F1 of the node set on the last line |
 | Tool use | 38 episodes × 3 against a simulated workspace: single, parallel and chained calls, error recovery, clarifying questions, irrelevant tools, look-alike tools, refund policy, conditionals and follow-ups | the workspace's end state and the reply, not the exact calls |
 
 Every run also records board energy over the quality tasks and divides it by the correct answers, so the table can show watt-hours per correct answer next to speed. The quality index averages five groups equally: knowledge (SuperGPQA), math (AIME + HMMT), code (LiveCodeBench), long context (MRCR and Graphwalks) and tool use. It only exists once every task has run, and its 95% interval bootstraps the questions of every task. Every reasoning effort has its own ranking, so a model's max-effort run sits next to its everyday medium one, and `--effort none` ranks a Qwen-style model with thinking switched off. `--quick` (45–90 minutes, ranked as provisional) and `--smoke` (a pipeline check, never ranked) run smaller samples.
