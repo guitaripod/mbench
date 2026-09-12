@@ -19,7 +19,7 @@
   --axis: #c3c2b7;
   --series: #2a78d6;
   --series-wash: rgba(42, 120, 214, 0.10);
-  --deemph: #c3c2b7;
+  --deemph: #898781;
   --border: rgba(11, 11, 11, 0.10);
   --select: rgba(42, 120, 214, 0.08);
   --ui: "Atkinson Hyperlegible Next", "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -38,7 +38,7 @@
     --axis: #383835;
     --series: #3987e5;
     --series-wash: rgba(57, 135, 229, 0.14);
-    --deemph: #52514e;
+    --deemph: #898781;
     --border: rgba(255, 255, 255, 0.10);
     --select: rgba(57, 135, 229, 0.12);
   }
@@ -54,7 +54,7 @@
   --axis: #383835;
   --series: #3987e5;
   --series-wash: rgba(57, 135, 229, 0.14);
-  --deemph: #52514e;
+  --deemph: #898781;
   --border: rgba(255, 255, 255, 0.10);
   --select: rgba(57, 135, 229, 0.12);
 }
@@ -126,11 +126,20 @@ td.model { white-space: normal; min-width: 17rem; }
 .dot-other { fill: var(--deemph); }
 .ci-bar { stroke: var(--series); stroke-width: 3; stroke-linecap: round; }
 .dot-me { fill: var(--series); stroke: var(--surface); stroke-width: 2; }
-.ladders { display: grid; grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr)); gap: 1rem 1.6rem; }
+.ladders, .charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr)); gap: 1.4rem 1.6rem; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr)); gap: 0.8rem 1.6rem; padding: 0.2rem 0 0.4rem; }
+.tile { display: grid; gap: 0.1rem; align-content: start; }
+.tile b { font-family: var(--display); font-stretch: 112%; font-weight: 700; font-size: 1.65rem; line-height: 1.05; font-variant-numeric: tabular-nums; }
+.tile span { color: var(--muted); font-size: 0.78rem; }
+.tile em { font-style: normal; color: var(--ink-2); font-size: 0.76rem; font-family: var(--mono); }
+.legend { display: flex; flex-wrap: wrap; gap: 0.15rem 0.9rem; color: var(--ink-2); font-size: 0.78rem; }
+.legend i { display: inline-block; width: 0.9rem; height: 2px; background: var(--deemph); margin-right: 0.35rem; vertical-align: middle; border-radius: 1px; }
+.legend i.me { background: var(--series); }
+.ci-other { stroke: var(--deemph); stroke-width: 2; stroke-linecap: round; }
 .ladder { display: grid; gap: 0.35rem; }
 .ladder-head { display: grid; gap: 0.1rem; }
 .ladder-head span { color: var(--muted); font-size: 0.8rem; }
-.line-other { fill: none; stroke: var(--deemph); stroke-width: 1.2; }
+.line-other { fill: none; stroke: var(--deemph); stroke-width: 1.5; }
 .line-me { fill: none; stroke: var(--series); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
 .guide { stroke: var(--axis); stroke-width: 1; }
 .val { fill: var(--ink); }
@@ -351,6 +360,37 @@ function niceCeil(value, step) {
   return Math.ceil(value / step) * step;
 }
 
+function legendRow(model) {
+  return h("div", { className: "legend" }, [
+    h("span", {}, [h("i", { className: "me" }), shortName(model)]),
+    h("span", {}, [h("i", {}), "other models"]),
+  ]);
+}
+
+function frontierOf(points) {
+  const frontier = [];
+  let best = -Infinity;
+  [...points].sort((a, b) => b.speed.decode.value - a.speed.decode.value).forEach(point => {
+    if (point.index.value > best) { frontier.push(point); best = point.index.value; }
+  });
+  return frontier.sort((a, b) => a.speed.decode.value - b.speed.decode.value);
+}
+
+function modelRows(point) {
+  const rows = [h("div", {}, [h("b", { text: shortName(point) })])];
+  const line = (value, text) => h("div", { className: "row" }, [h("b", { text: value }), " " + text]);
+  const half = point.index && point.index.lo != null ? (point.index.hi - point.index.lo) / 2 : null;
+  rows.push(line(fmt.pct(point.index.value) + "%" + (half != null ? ` ±${half.toFixed(1)}` : ""), "quality index"));
+  rows.push(line(fmt.int(point.speed.decode.value), "tok/s, one request"));
+  if (point.speed.peak) {
+    rows.push(line(fmt.int(point.speed.peak.value), `tok/s at ${point.speed.peak_at ? point.speed.peak_at.value : "?"} requests`));
+  }
+  if (point.energy && point.energy.perCorrect) {
+    rows.push(line(point.energy.perCorrect.value.toFixed(2) + " Wh", "per correct answer"));
+  }
+  return rows;
+}
+
 function renderFrontier(host) {
   const points = current().filter(m => m.index && m.index.value != null && m.speed.decode && m.speed.decode.value != null);
   const missing = current().length - points.length;
@@ -358,25 +398,25 @@ function renderFrontier(host) {
   figure.style.margin = "0";
   figure.appendChild(h("div", { className: "frontier-head" }, [
     h("h2", { text: "Quality against speed" }),
-    h("span", { text: "Up and to the right is better. The line joins models nothing else beats on both." + (missing ? ` ${missing} without a full quality index aren't plotted.` : "") }),
+    h("span", { text: "Up and to the right is better. The line joins models nothing else beats on both; the bar through each point is its 95% interval." + (missing ? ` ${missing} without a full quality index aren't plotted.` : "") }),
   ]));
   if (!points.length) {
     figure.appendChild(h("p", { className: "lede", text: "No model has a complete quality index yet." }));
     host.appendChild(figure);
     return;
   }
-  const width = 760, height = 300, left = 52, right = 150, top = 14, bottom = 38;
+  const width = 760, height = 320, left = 62, right = 150, top = 16, bottom = 44;
   const maxX = niceCeil(Math.max(...points.map(p => p.speed.decode.value)) * 1.12, 50);
-  const ys = points.map(p => p.index.value);
-  const minY = Math.max(0, Math.floor((Math.min(...ys) - 6) / 5) * 5);
-  const maxY = Math.min(100, Math.ceil((Math.max(...ys) + 4) / 5) * 5);
+  const ys = points.flatMap(p => [p.index.value, p.index.lo, p.index.hi].filter(value => value != null));
+  const minY = Math.max(0, Math.floor((Math.min(...ys) - 4) / 5) * 5);
+  const maxY = Math.min(100, Math.ceil((Math.max(...ys) + 3) / 5) * 5);
   const x = value => left + (width - left - right) * value / maxX;
   const y = value => top + (height - top - bottom) * (maxY - value) / (maxY - minY);
   const svgNode = s("svg", { viewBox: `0 0 ${width} ${height}`, role: "img", "aria-label": "Quality index against single-request decode speed" });
   const stepY = (maxY - minY) > 30 ? 10 : 5;
   for (let t = minY; t <= maxY; t += stepY) {
     s("line", { x1: left, x2: width - right, y1: y(t), y2: y(t), class: "grid" }, svgNode);
-    s("text", { x: left - 8, y: y(t) + 4, "text-anchor": "end", class: "tick" }, svgNode, t + "%");
+    s("text", { x: left - 10, y: y(t) + 4, "text-anchor": "end", class: "tick" }, svgNode, t + "%");
   }
   const stepX = maxX > 300 ? 100 : 50;
   for (let t = 0; t <= maxX; t += stepX) {
@@ -384,56 +424,84 @@ function renderFrontier(host) {
     s("text", { x: x(t), y: height - bottom + 17, "text-anchor": "middle", class: "tick" }, svgNode, t);
   }
   s("line", { x1: left, x2: width - right, y1: height - bottom, y2: height - bottom, class: "axis" }, svgNode);
-  s("text", { x: (left + width - right) / 2, y: height - 4, "text-anchor": "middle", class: "axis-title" }, svgNode, "Decode, one request (tok/s)");
-  const frontier = [];
-  let best = -Infinity;
-  [...points].sort((a, b) => b.speed.decode.value - a.speed.decode.value).forEach(point => {
-    if (point.index.value > best) { frontier.push(point); best = point.index.value; }
-  });
+  s("text", { x: (left + width - right) / 2, y: height - 6, "text-anchor": "middle", class: "axis-title" }, svgNode, "Decode, one request (tok/s)");
+  const yTitle = s("text", { x: 14, y: (top + height - bottom) / 2, "text-anchor": "middle", class: "axis-title",
+    transform: `rotate(-90 14 ${(top + height - bottom) / 2})` }, svgNode, "Quality index");
+  const frontier = frontierOf(points);
   if (frontier.length > 1) {
-    const path = frontier.sort((a, b) => a.speed.decode.value - b.speed.decode.value)
-      .map((point, index) => `${index ? "L" : "M"}${x(point.speed.decode.value).toFixed(1)},${y(point.index.value).toFixed(1)}`).join("");
+    const path = frontier.map((point, index) => `${index ? "L" : "M"}${x(point.speed.decode.value).toFixed(1)},${y(point.index.value).toFixed(1)}`).join("");
     s("path", { d: path, class: "frontier-line" }, svgNode);
   }
+  const overlay = s("rect", { x: left, y: top, width: width - left - right, height: height - top - bottom, fill: "transparent" }, svgNode);
   const labelAll = points.length <= 10;
-  for (const point of points) {
+  const placed = [];
+  const labelY = (px, py) => {
+    let candidate = py + 4;
+    for (let guard = 0; guard < 12; guard++) {
+      const clash = placed.some(seen => Math.abs(seen.y - candidate) < 13 && Math.abs(seen.x - px) < 150);
+      if (!clash) break;
+      candidate += 13;
+    }
+    placed.push({ x: px, y: candidate });
+    return candidate;
+  };
+  for (const point of [...points].sort((a, b) => b.index.value - a.index.value)) {
     const px = x(point.speed.decode.value), py = y(point.index.value);
     const selected = point.id === state.selected;
+    if (point.index.lo != null && point.index.hi != null) {
+      s("line", { x1: px, x2: px, y1: y(point.index.hi), y2: y(point.index.lo), class: selected ? "ci-bar" : "ci-other" }, svgNode);
+    }
     s("circle", { cx: px, cy: py, r: selected ? 6 : 5, class: "pt" + (selected ? " selected" : "") }, svgNode);
     if (labelAll || selected) {
-      s("text", { x: px + 10, y: py + 4, class: "pt-label" + (selected ? " selected" : "") }, svgNode, shortName(point));
+      s("text", { x: px + 11, y: labelY(px, py), class: "pt-label" + (selected ? " selected" : "") }, svgNode, shortName(point));
     }
-    const hit = s("circle", { cx: px, cy: py, r: 14, class: "hit", tabindex: "0", role: "button",
+    const hit = s("circle", { cx: px, cy: py, r: 16, class: "hit", tabindex: "0", role: "button",
       "aria-label": `${shortName(point)}: quality ${fmt.pct(point.index.value)}%, ${fmt.int(point.speed.decode.value)} tok/s` }, svgNode);
-    const rows = () => [
-      h("div", {}, [h("b", { text: shortName(point) })]),
-      h("div", { className: "row" }, [h("b", { text: fmt.pct(point.index.value) + "%" }), " quality index"]),
-      h("div", { className: "row" }, [h("b", { text: fmt.int(point.speed.decode.value) }), " tok/s, one request"]),
-    ];
-    hit.addEventListener("pointermove", event => showTooltip(event, rows()));
+    hit.addEventListener("pointermove", event => showTooltip(event, modelRows(point)));
+    hit.addEventListener("focus", event => showTooltip(event, modelRows(point)));
+    hit.addEventListener("blur", hideTooltip);
     hit.addEventListener("pointerleave", hideTooltip);
     hit.addEventListener("click", () => select(point.id));
     hit.addEventListener("keydown", event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); select(point.id); } });
   }
+  overlay.addEventListener("pointermove", event => {
+    const bounds = svgNode.getBoundingClientRect();
+    const px = (event.clientX - bounds.left) * width / bounds.width;
+    const py = (event.clientY - bounds.top) * height / bounds.height;
+    let nearest = points[0], best = Infinity;
+    for (const point of points) {
+      const distance = Math.hypot(x(point.speed.decode.value) - px, y(point.index.value) - py);
+      if (distance < best) { best = distance; nearest = point; }
+    }
+    showTooltip(event, modelRows(nearest));
+  });
+  overlay.addEventListener("pointerleave", hideTooltip);
   figure.appendChild(svgNode);
   host.appendChild(figure);
 }
 
 function strip(task, model) {
   const entry = model.tasks[task];
-  const width = 320, height = 26, pad = 6;
+  const width = 320, height = 36, pad = 8;
   const x = value => pad + (width - 2 * pad) * value / 100;
   const svgNode = s("svg", { viewBox: `0 0 ${width} ${height}`, role: "img", "aria-label": `${label(task)} scores across models` });
-  s("line", { x1: pad, x2: width - pad, y1: 13, y2: 13, class: "grid" }, svgNode);
-  for (const t of [0, 25, 50, 75, 100]) s("line", { x1: x(t), x2: x(t), y1: 9, y2: 17, class: "grid" }, svgNode);
+  s("line", { x1: pad, x2: width - pad, y1: 14, y2: 14, class: "grid" }, svgNode);
+  for (const t of [0, 50, 100]) {
+    s("line", { x1: x(t), x2: x(t), y1: 9, y2: 19, class: "grid" }, svgNode);
+    s("text", { x: x(t), y: 32, "text-anchor": t === 0 ? "start" : t === 100 ? "end" : "middle", class: "tick" }, svgNode, t + "%");
+  }
   for (const other of current()) {
     const value = other.tasks[task] && other.tasks[task].value;
     if (other.id === model.id || value == null) continue;
-    s("circle", { cx: x(value), cy: 13, r: 3.5, class: "dot-other" }, svgNode);
+    const dot = s("circle", { cx: x(value), cy: 14, r: 4, class: "dot-other" }, svgNode);
+    const hit = s("circle", { cx: x(value), cy: 14, r: 12, class: "hit" }, svgNode);
+    const rows = () => [h("div", {}, [h("b", { text: fmt.pct(value) + "%" }), " " + shortName(other)])];
+    hit.addEventListener("pointermove", event => showTooltip(event, rows()));
+    hit.addEventListener("pointerleave", hideTooltip);
   }
   if (entry && entry.value != null) {
-    if (entry.lo != null && entry.hi != null) s("line", { x1: x(entry.lo), x2: x(entry.hi), y1: 13, y2: 13, class: "ci-bar" }, svgNode);
-    s("circle", { cx: x(entry.value), cy: 13, r: 5, class: "dot-me" }, svgNode);
+    if (entry.lo != null && entry.hi != null) s("line", { x1: x(entry.lo), x2: x(entry.hi), y1: 14, y2: 14, class: "ci-bar" }, svgNode);
+    s("circle", { cx: x(entry.value), cy: 14, r: 5, class: "dot-me" }, svgNode);
   }
   const notes = [];
   if (entry) {
@@ -445,7 +513,7 @@ function strip(task, model) {
     if (entry.malformed) notes.push(`${entry.malformed.toFixed(0)}% with malformed calls`);
   }
   const parts = Object.entries((entry && entry.parts) || {});
-  const numeric = parts.every(([key]) => /^\d+$/.test(key));
+  const numeric = parts.length > 0 && parts.every(([key]) => /^\d+$/.test(key));
   const partText = parts.sort((a, b) => numeric ? Number(a[0]) - Number(b[0]) : a[0].localeCompare(b[0]))
     .map(([key, value]) => `${numeric ? fmt.ctx(Number(key)) : key} ${Math.round(value)}`).join(" · ");
   const note = (view().taskNotes || {})[task];
@@ -462,36 +530,60 @@ function strip(task, model) {
   ]);
 }
 
-function depthsIn(prefix) {
+function speedPoints(prefix) {
   const set = new Set();
   for (const model of current()) for (const key of Object.keys(model.speed)) if (key.startsWith(prefix)) set.add(Number(key.slice(prefix.length)));
-  return [...set].filter(Number.isFinite).sort((a, b) => a - b);
+  return [...set].filter(Number.isFinite).sort((a, b) => a - b)
+    .map(depth => ({ key: depth, label: fmt.ctx(depth), read: model => model.speed[prefix + depth] ? model.speed[prefix + depth].value : null }));
 }
 
-function ladder(model, prefix, options) {
-  const depths = depthsIn(prefix);
-  const box = h("div", { className: "ladder" }, [h("div", { className: "ladder-head" }, [h("h3", { text: options.title }), h("span", { text: options.caption })])]);
-  if (!depths.length) { box.appendChild(h("span", { className: "strip-note", text: "No long-prompt measurements yet." })); return box; }
-  const series = current().map(item => ({ model: item, values: depths.map(depth => item.speed[prefix + depth] ? item.speed[prefix + depth].value : null) }));
+function concurrencyPoints() {
+  const set = new Set();
+  for (const model of current()) for (const key of Object.keys(model.speed)) if (key.startsWith("conc.")) set.add(Number(key.slice(5)));
+  return [...set].filter(Number.isFinite).sort((a, b) => a - b)
+    .map(level => ({ key: level, label: String(level), read: model => model.speed["conc." + level] ? model.speed["conc." + level].value : null }));
+}
+
+function lengthPoints(task) {
+  const set = new Set();
+  for (const model of current()) {
+    const parts = (model.tasks[task] || {}).parts || {};
+    for (const key of Object.keys(parts)) if (/^\d+$/.test(key)) set.add(Number(key));
+  }
+  return [...set].sort((a, b) => a - b)
+    .map(size => ({ key: size, label: fmt.ctx(size), read: model => {
+      const parts = (model.tasks[task] || {}).parts || {};
+      return parts[size] != null ? parts[size] : null;
+    } }));
+}
+
+function lineChart(model, points, options) {
+  const box = h("div", { className: "ladder" }, [h("div", { className: "ladder-head" }, [
+    h("h3", { text: options.title }), h("span", { text: options.caption })])]);
+  const series = current().map(item => ({ model: item, values: points.map(point => point.read(item)) }));
   const all = series.flatMap(item => item.values).filter(value => value != null && value > 0);
-  const width = 420, height = 220, left = 46, right = 54, top = 10, bottom = 26;
-  const x = index => left + (width - left - right) * (depths.length === 1 ? 0.5 : index / (depths.length - 1));
+  if (!points.length || !all.length) {
+    return null;
+  }
+  const width = 420, height = 230, left = 48, right = 58, top = 12, bottom = 40;
+  const x = index => left + (width - left - right) * (points.length === 1 ? 0.5 : index / (points.length - 1));
   let y, ticks;
   if (options.log) {
     const lo = Math.pow(10, Math.floor(Math.log10(Math.min(...all)))), hi = Math.pow(10, Math.ceil(Math.log10(Math.max(...all))));
     y = value => top + (height - top - bottom) * (Math.log10(hi) - Math.log10(value)) / (Math.log10(hi) - Math.log10(lo));
     ticks = []; for (let t = lo; t <= hi * 1.001; t *= 10) ticks.push(t);
   } else {
-    const hi = niceCeil(Math.max(...all) * 1.1, 50);
+    const hi = options.max || niceCeil(Math.max(...all) * 1.1, options.step || 50);
     y = value => top + (height - top - bottom) * (hi - value) / hi;
-    ticks = []; for (let t = 0; t <= hi; t += hi > 200 ? 100 : 50) ticks.push(t);
+    ticks = []; for (let t = 0; t <= hi; t += options.step || (hi > 200 ? 100 : 50)) ticks.push(t);
   }
   const svgNode = s("svg", { viewBox: `0 0 ${width} ${height}`, role: "img", "aria-label": options.title });
   for (const t of ticks) {
     s("line", { x1: left, x2: width - right, y1: y(t), y2: y(t), class: "grid" }, svgNode);
-    s("text", { x: left - 7, y: y(t) + 4, "text-anchor": "end", class: "tick" }, svgNode, options.tick(t));
+    s("text", { x: left - 8, y: y(t) + 4, "text-anchor": "end", class: "tick" }, svgNode, options.tick(t));
   }
-  depths.forEach((depth, index) => s("text", { x: x(index), y: height - 7, "text-anchor": "middle", class: "tick" }, svgNode, fmt.ctx(depth)));
+  points.forEach((point, index) => s("text", { x: x(index), y: height - 20, "text-anchor": "middle", class: "tick" }, svgNode, point.label));
+  s("text", { x: (left + width - right) / 2, y: height - 4, "text-anchor": "middle", class: "axis-title" }, svgNode, options.xTitle);
   const pathOf = values => values.reduce((acc, value, index) => {
     if (value == null || value <= 0) return { d: acc.d, pen: false };
     return { d: acc.d + `${acc.pen ? "L" : "M"}${x(index).toFixed(1)},${y(value).toFixed(1)}`, pen: true };
@@ -506,7 +598,7 @@ function ladder(model, prefix, options) {
       s("circle", { cx: x(index), cy: y(value), r: 4, class: "dot-me" }, svgNode);
       lastIndex = index;
     });
-    if (lastIndex >= 0) s("text", { x: x(lastIndex) + 8, y: y(mine.values[lastIndex]) + 4, class: "val" }, svgNode, options.value(mine.values[lastIndex]));
+    if (lastIndex >= 0) s("text", { x: x(lastIndex) + 9, y: y(mine.values[lastIndex]) + 4, class: "val" }, svgNode, options.value(mine.values[lastIndex]));
   }
   const guide = s("line", { x1: 0, x2: 0, y1: top, y2: height - bottom, class: "guide", visibility: "hidden" }, svgNode);
   const overlay = s("rect", { x: left, y: top, width: width - left - right, height: height - top - bottom, fill: "transparent" }, svgNode);
@@ -514,16 +606,40 @@ function ladder(model, prefix, options) {
     const bounds = svgNode.getBoundingClientRect();
     const px = (event.clientX - bounds.left) * width / bounds.width;
     let nearest = 0;
-    depths.forEach((_, index) => { if (Math.abs(x(index) - px) < Math.abs(x(nearest) - px)) nearest = index; });
+    points.forEach((_, index) => { if (Math.abs(x(index) - px) < Math.abs(x(nearest) - px)) nearest = index; });
     guide.setAttribute("x1", x(nearest)); guide.setAttribute("x2", x(nearest)); guide.setAttribute("visibility", "visible");
     const rows = series.filter(item => item.values[nearest] != null)
       .sort((a, b) => options.log ? a.values[nearest] - b.values[nearest] : b.values[nearest] - a.values[nearest])
-      .map(item => h("div", { className: "row" }, [h("span", { className: "key" + (item.model.id === model.id ? " me" : "") }), h("b", { text: options.value(item.values[nearest]) }), " " + shortName(item.model)]));
-    showTooltip(event, [h("div", { text: fmt.ctx(depths[nearest]) + "-token prompt" }), ...rows]);
+      .map(item => h("div", { className: "row" }, [h("span", { className: "key" + (item.model.id === model.id ? " me" : "") }),
+        h("b", { text: options.value(item.values[nearest]) }), " " + shortName(item.model)]));
+    showTooltip(event, [h("div", { text: options.at(points[nearest]) }), ...rows]);
   });
   overlay.addEventListener("pointerleave", () => { guide.setAttribute("visibility", "hidden"); hideTooltip(); });
   box.appendChild(svgNode);
+  box.appendChild(legendRow(model));
   return box;
+}
+
+function tile(value, caption, note) {
+  return value == null ? null : h("div", { className: "tile" }, [
+    h("b", { text: value }), h("span", { text: caption }), note ? h("em", { text: note }) : null,
+  ]);
+}
+
+function tiles(model) {
+  const speed = model.speed;
+  const index = model.index;
+  const half = index && index.lo != null ? (index.hi - index.lo) / 2 : null;
+  const peakAt = speed.peak_at ? `at ${speed.peak_at.value} requests` : null;
+  return h("div", { className: "tiles" }, [
+    tile(index && index.value != null ? fmt.pct(index.value) : null, "quality index", half != null ? `±${half.toFixed(1)} at 95%` : null),
+    tile(speed.decode ? fmt.int(speed.decode.value) : null, "tok/s, one request", speed["ttft.short"] ? `${Math.round(speed["ttft.short"].value)} ms to first token` : null),
+    tile(speed.peak ? fmt.int(speed.peak.value) : null, "tok/s, peak", peakAt),
+    tile(model.energy && model.energy.perCorrect ? model.energy.perCorrect.value.toFixed(2) : null, "Wh per correct answer",
+      model.energy && model.energy.quality ? `${model.energy.quality.value.toFixed(0)} Wh for the suite` : null),
+    tile(model.capacity && model.capacity.context ? fmt.ctx(model.capacity.context) : null, "tokens per request",
+      model.capacity && model.capacity.slots ? `${model.capacity.slots} requests at once` : null),
+  ]);
 }
 
 function kv(pairs) {
@@ -544,11 +660,28 @@ function renderDetail(host) {
     model.run.reused ? h("p", { className: "strip-note", text: `Answers for ${model.run.reused.tasks.join(", ")} carried over from ${model.run.reused.run}.` }) : null,
     ...(model.warnings || []).map(text => h("p", { className: "strip-note", text })),
   ]));
+  panel.appendChild(tiles(model));
   panel.appendChild(h("div", { className: "strips" }, tasks().map(task => strip(task, model))));
-  panel.appendChild(h("div", { className: "ladders" }, [
-    ladder(model, "ttft.", { title: "Wait for the first token", caption: "Seconds by prompt length, log scale. Others in grey.", log: true, tick: t => (t < 1 ? t.toString() : Math.round(t)) + " s", value: fmt.secs }),
-    ladder(model, "decode_at.", { title: "Decode speed as the prompt grows", caption: "tok/s while answering after a long prompt.", log: false, tick: t => String(t), value: value => fmt.int(value) }),
-  ]));
+  const charts = [
+    lineChart(model, concurrencyPoints(), { title: "Throughput as requests pile up", caption: "Tokens per second across all requests in flight.",
+      log: false, tick: t => String(t), value: value => fmt.int(value) + " tok/s", xTitle: "requests at once",
+      at: point => `${point.label} request${point.key === 1 ? "" : "s"} at once`, empty: "Only one request at a time was measured." }),
+    lineChart(model, speedPoints("ttft."), { title: "Wait for the first token", caption: "Seconds by prompt length, log scale.",
+      log: true, tick: t => (t < 1 ? t.toString() : Math.round(t)) + " s", value: fmt.secs, xTitle: "prompt length",
+      at: point => `${point.label}-token prompt` }),
+    lineChart(model, speedPoints("decode_at."), { title: "Decode speed as the prompt grows", caption: "tok/s while answering after a long prompt.",
+      log: false, tick: t => String(t), value: value => fmt.int(value) + " tok/s", xTitle: "prompt length",
+      at: point => `${point.label}-token prompt` }),
+  ];
+  for (const task of tasks()) {
+    const points = lengthPoints(task);
+    if (points.length > 1) {
+      charts.push(lineChart(model, points, { title: `${label(task)} by prompt length`, caption: "Score at each length the task uses.",
+        log: false, max: 100, step: 25, tick: t => t + "%", value: value => fmt.pct(value) + "%", xTitle: "prompt length",
+        at: point => `${point.label}-token prompts` }));
+    }
+  }
+  panel.appendChild(h("div", { className: "charts" }, charts.filter(Boolean)));
   const speed = model.speed;
   const pairs = [
     ["Decode, reasoning prompt", speed["decode.reasoning-v1"] && fmt.int(speed["decode.reasoning-v1"].value) + " tok/s"],
@@ -560,6 +693,10 @@ function renderDetail(host) {
       const levels = Object.keys(speed).filter(key => key.startsWith("conc.")).map(key => Number(key.slice(5))).sort((a, b) => a - b);
       return levels.length ? [[`${levels.join(" / ")} at once`, levels.map(level => fmt.int(speed["conc." + level].value)).join(" / ") + " tok/s"]] : [];
     })(),
+    ...tasks().flatMap(task => {
+      const parts = Object.entries((model.tasks[task] || {}).parts || {});
+      return parts.length ? [[`${label(task)} by part`, parts.map(([key, value]) => `${/^\d+$/.test(key) ? fmt.ctx(Number(key)) : key} ${Math.round(value)}%`).join(" · ")]] : [];
+    }),
     ["Requests the server takes at once", model.capacity && model.capacity.slots],
     ["Tokens per request", model.capacity && model.capacity.context && fmt.int(model.capacity.context)],
     ["Context shared by all requests", model.capacity && model.capacity.pool && fmt.int(model.capacity.pool)],
