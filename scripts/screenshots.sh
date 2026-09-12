@@ -7,7 +7,7 @@ browser=$(command -v chromium || command -v google-chrome-stable || command -v g
   || true)
 [[ -n "$browser" && -x "$browser" ]] || { echo "screenshots.sh: no Chromium found" >&2; exit 1; }
 mbench board >/dev/null
-common=(--headless --no-sandbox --disable-gpu --hide-scrollbars --virtual-time-budget=4000 --window-size=1400,2600)
+common=(--headless --no-sandbox --disable-gpu --hide-scrollbars --virtual-time-budget=5000 --force-device-scale-factor=2 --window-size=1500,2400)
 "$browser" "${common[@]}" --screenshot=docs/leaderboard.png "file://$page" 2>/dev/null
 "$browser" "${common[@]}" --force-dark-mode --blink-settings=preferredColorScheme=0 --screenshot=docs/leaderboard-dark.png "file://$page" 2>/dev/null
 echo "docs/leaderboard.png docs/leaderboard-dark.png"
