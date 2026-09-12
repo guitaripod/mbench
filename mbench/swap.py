@@ -89,10 +89,6 @@ def trimmed_info(info):
     }
 
 
-def context_from(info):
-    return capacity(info)["context"]
-
-
 def positive(*values):
     found = [int(value) for value in values if isinstance(value, (int, float)) and value > 0]
     return min(found) if found else None

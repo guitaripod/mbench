@@ -9,7 +9,6 @@ import numpy as np
 from . import suite
 
 BINARY_TASKS = ("supergpqa", "math", "lcb", "tools")
-BINNED_TASKS = ("mrcr", "graphwalks")
 BOOTSTRAP_DRAWS = 4000
 
 
