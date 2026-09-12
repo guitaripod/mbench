@@ -1,9 +1,11 @@
 import json
 import re
 import subprocess
+from importlib import metadata
 from pathlib import Path
 
-from . import gpu
+from . import __version__ as VERSION
+from . import gpu, paths
 
 PLACEHOLDER_VERSIONS = ("", "0.0.0", "0.0.0.dev0", "unknown", "dev")
 ENGINE_LABELS = {"sglang": "SGLang", "llama.cpp": "llama.cpp", "vllm": "vLLM"}
@@ -135,3 +137,32 @@ def changed(previous, hardware, found):
     if was_build and found and build_label(was_build) != build_label(found):
         moved.append(f"{build_label(was_build)} → {build_label(found)}")
     return moved
+
+
+def checkout_commit(root):
+    """The commit of the source checkout mbench runs from (an editable install), marked -dirty when its package files changed."""
+    def git(*args):
+        return subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True).stdout.strip()
+
+    try:
+        top = git("rev-parse", "--show-toplevel")
+        if not top or Path(top).resolve() != root.resolve():
+            return None
+        return git("rev-parse", "--short", "HEAD") + ("-dirty" if git("status", "--porcelain", "--", "mbench") else "")
+    except FileNotFoundError:
+        return None
+
+
+def installed_commit():
+    """The commit `uv tool install git+…` built from, which uv and pip record in the package's direct_url.json (PEP 610)."""
+    try:
+        record = json.loads(metadata.distribution("mbench").read_text("direct_url.json") or "{}")
+    except metadata.PackageNotFoundError:
+        return None
+    return ((record.get("vcs_info") or {}).get("commit_id") or "")[:7] or None
+
+
+def harness():
+    """The mbench that is measuring: a run records it when it starts, not when it was queued, because the code can move
+    between the two."""
+    return f"{VERSION}+{checkout_commit(paths.PACKAGE.parent) or installed_commit() or 'nogit'}"

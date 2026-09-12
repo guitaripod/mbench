@@ -83,3 +83,17 @@ def test_the_board_groups_models_by_the_setup_that_measured_them():
               {"stack": stack.of({"hardware": {"gpu": "A", "driver": "1"}})}]
     found = board.hosts(models)
     assert [(entry["label"], entry["models"]) for entry in found] == [("A · driver 1", 2), ("B · driver 1", 1)]
+
+
+def test_a_git_install_records_the_commit_it_was_built_from(monkeypatch):
+    class Distribution:
+        def read_text(self, name):
+            return json.dumps({"url": "https://github.com/guitaripod/mbench",
+                               "vcs_info": {"vcs": "git", "commit_id": "5fbf2e1c0ffee0ddba11"}})
+
+    monkeypatch.setattr(stack.metadata, "distribution", lambda name: Distribution())
+    assert stack.installed_commit() == "5fbf2e1"
+
+
+def test_a_directory_outside_any_checkout_has_no_checkout_commit(tmp_path):
+    assert stack.checkout_commit(tmp_path) is None
