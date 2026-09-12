@@ -422,14 +422,44 @@ def cell(entry, digits=1):
     return f"{entry['value']:.{digits}f}"
 
 
+def ranking_table(view, effort):
+    """The ranked table as a header plus rows of strings, shared by the terminal and the markdown output."""
+    header = ["Model", "Quality", *[view["taskShort"][task] for task in view["indexTasks"]],
+              "tok/s", "Peak", "TTFT 32k", "Wh/correct", "Run"]
+    rows = []
+    for model in sorted(view["rankings"][effort], key=lambda model: -((model["index"] or {}).get("value") or -1)):
+        speed = model["speed"]
+        kind = model["run"]["kind"]
+        rows.append([
+            model["name"], cell(model["index"]), *[cell(model["tasks"].get(task)) for task in view["indexTasks"]],
+            cell(speed.get("decode"), 0), cell(speed.get("peak"), 0), cell(speed.get("ttft.32000")),
+            cell(model["energy"].get("perCorrect"), 2),
+            datetime.fromtimestamp(model["run"]["finished"]).strftime("%d %b") + ("" if kind == "full" else f" {kind}"),
+        ])
+    return header, rows
+
+
+def print_markdown(header, rows):
+    print("| " + " | ".join(header) + " |")
+    print("|" + "|".join(["---"] + ["--:"] * (len(header) - 1)) + "|")
+    for row in rows:
+        print("| " + " | ".join(str(value) for value in row) + " |")
+
+
+def print_columns(header, rows):
+    widths = [max(len(str(row[index])) for row in [header, *rows]) for index in range(len(header))]
+    for row in [header, *rows]:
+        print("  ".join(str(value).ljust(width) if index == 0 else str(value).rjust(width)
+                        for index, (value, width) in enumerate(zip(row, widths))))
+
+
 def cmd_ls(args):
     data = board.collect(store.connect())
     version = args.suite or suite.VERSION
     if version not in data["suites"]:
         fail(f"no suite v{version}; there are {', '.join('v' + name for name in data['suites'])}")
     view = data["suites"][version]
-    models = view["rankings"].get(args.effort, [])
-    if not models:
+    if not view["rankings"].get(args.effort):
         others = ", ".join(effort for effort in view["efforts"] if effort != args.effort)
         older = [name for name, other in data["suites"].items() if name != version and other["efforts"]]
         print(f"No finished {args.effort}-effort runs on suite v{version} yet."
@@ -437,25 +467,20 @@ def cmd_ls(args):
               + (f" Older suites have runs: `mbench ls --suite {older[0]}`." if older else "")
               + ("" if others or older else " Start one with `mbench run <llama-swap model>`."))
         return
-    header = ["Model", "Quality", *[view["taskShort"][task] for task in view["indexTasks"]],
-              "tok/s", "Peak", "TTFT 32k", "Wh/correct", "Run"]
-    rows = []
-    ordered = sorted(models, key=lambda model: -((model["index"] or {}).get("value") or -1))
-    for model in ordered:
-        speed = model["speed"]
-        kind = model["run"]["kind"]
-        rows.append([
-            model["id"], cell(model["index"]), *[cell(model["tasks"].get(task)) for task in view["indexTasks"]],
-            cell(speed.get("decode"), 0), cell(speed.get("peak"), 0), cell(speed.get("ttft.32000")),
-            cell(model["energy"].get("perCorrect"), 2),
-            datetime.fromtimestamp(model["run"]["finished"]).strftime("%d %b") + ("" if kind == "full" else f" {kind}"),
-        ])
-    widths = [max(len(str(row[index])) for row in [header, *rows]) for index in range(len(header))]
-    for row in [header, *rows]:
-        print("  ".join(str(value).ljust(width) if index == 0 else str(value).rjust(width)
-                        for index, (value, width) in enumerate(zip(row, widths))))
+    header, rows = ranking_table(view, args.effort)
+    (print_markdown if args.markdown else print_columns)(header, rows)
+    if args.markdown:
+        hardware = data.get("hardware") or {}
+        print(f"\n_{len(rows)} models on {hardware.get('gpu', 'this GPU')}, suite {data['suite']}, "
+              f"{args.effort} effort, measured {datetime.now():%d %b %Y}._")
+        return
     for task, why in view["health"].get(args.effort, {}).items():
         print(f"note: {view['taskLabels'][task]} isn't separating these models ({why})")
+
+
+def cmd_export(args):
+    for path in board.export(store.connect(), Path(args.out or paths.DATA / "site")):
+        print(path)
 
 
 def comparison_run(db, name, effort):
@@ -595,6 +620,7 @@ examples:
   mbench doctor qwen3-32b                       check a model's server before spending a night on it
   mbench sources                                newer question sets, or pinned files that moved upstream
   mbench board --open                           the leaderboard page
+  mbench export --out site                      the page plus board.json, ready to publish
 
 A model is any llama-swap id (see `mbench profile <id>`). Only one run at a time; a run
 swaps its model into the GPU and unloads whatever llama-swap had loaded.
@@ -683,7 +709,7 @@ def parser():
                                    epilog=ROOT_EPILOG, formatter_class=formatter)
     root.add_argument("--version", action="version", version=f"mbench {__version__}")
     commands = root.add_subparsers(dest="command", required=True, title="commands",
-                                   metavar="{run,status,logs,cancel,resume,ls,compare,doctor,sources,board,profile}")
+                                   metavar="{run,status,logs,cancel,resume,ls,compare,doctor,sources,export,board,profile}")
 
     run = commands.add_parser("run", help="benchmark a llama-swap model", description=RUN_DESCRIPTION,
                               epilog=RUN_EPILOG, formatter_class=formatter)
@@ -724,6 +750,7 @@ def parser():
     ls = commands.add_parser("ls", help="ranked table of every model in the terminal")
     ls.add_argument("--effort", default="medium", metavar="LEVEL", help="which effort's ranking, e.g. medium or max (default medium)")
     ls.add_argument("--suite", metavar="VERSION", help=f"which suite version's ranking (default {suite.VERSION})")
+    ls.add_argument("--markdown", action="store_true", help="print the table as markdown, for a README or an issue")
     ls.set_defaults(handler=cmd_ls)
     compare = commands.add_parser("compare", help="paired comparison of two models or runs, task by task",
                                   description="Compares two runs on the questions both answered, with a 95% bootstrap "
@@ -737,6 +764,9 @@ def parser():
     doctor_parser.add_argument("--effort", default="medium", metavar="LEVEL", help="effort to check at (default medium)")
     doctor_parser.set_defaults(handler=cmd_doctor)
     commands.add_parser("sources", help="newer question sets, or pinned files changed upstream").set_defaults(handler=cmd_sources)
+    export_parser = commands.add_parser("export", help="write the leaderboard page and its data to a folder you can publish")
+    export_parser.add_argument("--out", metavar="DIR", help="where to write index.html and board.json (default ~/.local/share/mbench/site)")
+    export_parser.set_defaults(handler=cmd_export)
     board_parser = commands.add_parser("board", help="rebuild the leaderboard page and print its path")
     board_parser.add_argument("--open", action="store_true", help="also open it in the browser")
     board_parser.set_defaults(handler=cmd_board)

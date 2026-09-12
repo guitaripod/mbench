@@ -147,10 +147,22 @@ def collect(db):
     }
 
 
+def page(data):
+    """The whole leaderboard as one self-contained file: the template with the run data baked in."""
+    return TEMPLATE.read_text().replace("/*__DATA__*/null", json.dumps(data))
+
+
 def build():
     db = store.connect()
-    data = collect(db)
-    html = TEMPLATE.read_text().replace("/*__DATA__*/null", json.dumps(data))
     paths.BOARD.parent.mkdir(parents=True, exist_ok=True)
-    paths.BOARD.write_text(html)
+    paths.BOARD.write_text(page(collect(db)))
     return paths.BOARD
+
+
+def export(db, directory):
+    """A folder anyone can serve: the page, plus the same numbers as JSON so other tools can read them."""
+    data = collect(db)
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / "index.html").write_text(page(data))
+    (directory / "board.json").write_text(json.dumps(data, indent=1) + "\n")
+    return [directory / "index.html", directory / "board.json"]

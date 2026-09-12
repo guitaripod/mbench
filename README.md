@@ -20,8 +20,17 @@ It measures the model as your server actually runs it — quantization, chat tem
 ## What comes out
 
 <!--LEADERBOARD-->
+| Model | Quality | SuperGPQA | Math | LCB | MRCR | Graphwalks | Tools | tok/s | Peak | TTFT 32k | Wh/correct | Run |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| Qwen 3.8 27B · SGLang · DFlash2 · 524K | 81.0 | 61.2 | 81.0 | 76.2 | 78.4 | 94.5 | 100.0 | 157 | 400 | 5.0 | 2.67 | 12 Sep |
+| GPT-OSS 120B · SGLang · MXFP4 · DFlash · 128K | 71.2 | 51.4 | 87.3 | 83.2 | 11.0 | 64.4 | 96.5 | 206 | 432 | 1.8 | 5.99 | 12 Sep |
+
+_2 models on NVIDIA RTX PRO 6000 Blackwell Workstation Edition, suite full/v1, max effort, measured 12 Sep 2026._
+<!--/LEADERBOARD-->
 
 Quality is the index; then one column per task, single-request decode speed, peak throughput across all requests, first-token wait on a 32k prompt, and board watt-hours per correct answer. `mbench board --open` opens the same thing as a page, with 95% intervals, per-length breakdowns and every server setting behind each run.
+
+Those are one GPU's numbers — yours will differ with your hardware, quantization and server settings. The database is the record; everything else is a projection of it: `mbench export --out site` writes that page plus a `board.json` of the same numbers, ready to serve ([mine is here](https://guitaripod.github.io/mbench)), and `scripts/publish.sh` refreshes the page, the screenshots and the table above in one go.
 
 ## What a run measures
 
@@ -122,6 +131,7 @@ mbench compare <a> <b>                paired differences, task by task, with 95%
 mbench doctor <id>                    check a model's server before spending a night on it
 mbench sources                        newer question sets, or pinned files that moved
 mbench board --open                   the leaderboard page
+mbench export --out site              the page plus board.json, ready to publish
 mbench profile <id>                   what mbench knows about a model
 ```
 
@@ -150,7 +160,7 @@ Questions come from [SuperGPQA](https://huggingface.co/datasets/m-a-p/SuperGPQA)
 ```
 uv run --group dev pytest
 uv tool install --editable .
-scripts/screenshots.sh        # docs/leaderboard*.png from your own leaderboard
+scripts/publish.sh max         # site/, docs/leaderboard*.png and the table above
 ```
 
 Licensed under GPL-3.0-or-later.

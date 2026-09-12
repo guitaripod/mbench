@@ -1,3 +1,5 @@
+import json
+
 from mbench import board, paths, store, suite
 
 
@@ -54,3 +56,16 @@ def test_warnings_say_what_a_context_cap_cost():
     warnings = board.warnings_for(tasks, {"context": 65536}, {"mrcr": "MRCR 8-needle", "graphwalks": "Graphwalks"})
     assert warnings == ["Capped at 64k tokens per request: MRCR 8-needle 25% out of reach"]
     assert board.warnings_for({"math": {}}, {}, {}) == []
+
+
+def test_export_writes_a_page_and_its_data(monkeypatch, tmp_path):
+    monkeypatch.setattr(paths, "DATA", tmp_path)
+    monkeypatch.setattr(paths, "DB", tmp_path / "bench.db")
+    db = store.connect()
+    store.insert_run(db, {"id": "r", "model": "m", "suite": suite.label("full"), "effort": "max", "status": "complete",
+                          "created": 1.0, "finished": 1.0})
+    written = board.export(db, tmp_path / "site")
+    assert [path.name for path in written] == ["index.html", "board.json"]
+    page = (tmp_path / "site" / "index.html").read_text()
+    assert "/*__DATA__*/null" not in page and '"suites"' in page
+    assert json.loads((tmp_path / "site" / "board.json").read_text())["current"] == suite.VERSION

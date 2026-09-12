@@ -70,3 +70,16 @@ def test_carry_over_copies_only_files_that_still_apply(monkeypatch, tmp_path):
     carried = cli.carry_over(earlier(suite="full/v0"), "r2", ["speed", "supergpqa", "tools", "lcb"])
     assert carried == ["speed", "lcb"]
     assert sorted(path.name for path in (tmp_path / "r2").iterdir()) == ["lcb.graded.jsonl", "lcb.jsonl", "speed.json"]
+
+
+def test_the_markdown_table_is_a_github_table(capsys):
+    view = {"indexTasks": ["math"], "taskShort": {"math": "Math"}, "rankings": {"max": [{
+        "name": "A Model", "index": {"value": 81.0}, "tasks": {"math": {"value": 76.25}},
+        "speed": {"decode": {"value": 157.4}, "peak": {"value": 400.2}, "ttft.32000": {"value": 5.04}},
+        "energy": {"perCorrect": {"value": 2.671}}, "run": {"finished": 1789200000.0, "kind": "full"}}]}}
+    header, rows = cli.ranking_table(view, "max")
+    cli.print_markdown(header, rows)
+    lines = capsys.readouterr().out.splitlines()
+    assert lines[0].startswith("| Model | Quality | Math |")
+    assert lines[1] == "|---|--:|--:|--:|--:|--:|--:|--:|"
+    assert lines[2] == "| A Model | 81.0 | 76.2 | 157 | 400 | 5.0 | 2.67 | 12 Sep |"
