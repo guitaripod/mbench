@@ -130,7 +130,7 @@ mbench profile <id>                   what mbench knows about a model
 A full run takes hours, so it stays out of the way:
 
 - **`--at 03:00 --until 08:00`** runs models one after another inside a nightly window. Whatever is unfinished at 08:00 stops, llama-swap unloads the model, and the run continues from its saved answers the next night. Near the end of a window a run stops taking questions that couldn't finish in time.
-- **Scheduled runs give way.** When a game or another GPU job holds the card for a minute, the run pauses and retries every ten minutes.
+- **Runs give way.** When a game or another GPU job holds the card for a minute, the run unloads the model, pauses and retries every ten minutes, whether it was scheduled or started by hand. `--keep-gpu` turns that off.
 - **Every run starts with the doctor checks**, so a misconfigured server fails in the first minute instead of producing a night of zeros.
 - **The request count matches the server.** mbench reads how many requests it accepts at once and how much context they share, then sends many short questions in parallel and long conversations one at a time.
 - **`--reuse`** starts a fresh run that keeps the answers of an earlier one for every task whose questions and scoring didn't change, and measures only the rest.

@@ -108,6 +108,11 @@ def note(run_id, message):
         handle.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {message}\n")
 
 
+def gives_way(flags):
+    """Every run steps aside for a game or another GPU job unless it was started with --keep-gpu."""
+    return flags.get("yield", True)
+
+
 def park(db, run_id, not_before, reason, counter):
     """Puts a run back on the schedule to continue from its saved answers; counter is "paused" for a closing window and
     "yielded" for giving the GPU away. Returns how many times that has happened to the run."""
@@ -153,7 +158,7 @@ def tick(db, moment=None):
                 later = next_start(moment, flags["window"]["start"]).timestamp()
                 store.update_run(db, run["id"], flags={**flags, "not_before": later})
                 continue
-            if flags.get("yield"):
+            if gives_way(flags):
                 contended = gpu.contention() if contended is None else contended
                 if contended:
                     continue

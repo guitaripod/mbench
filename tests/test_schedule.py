@@ -113,6 +113,16 @@ def test_runs_that_give_way_wait_while_other_work_holds_the_gpu(world, monkeypat
     assert schedule.tick(db, datetime(2026, 9, 12, 3, 5)) == "polite"
 
 
+def test_a_run_gives_way_unless_it_asked_to_keep_the_gpu(world, monkeypatch):
+    db, actions = world
+    monkeypatch.setattr(schedule.gpu, "contention", lambda: [{"name": "Borderlands4.exe"}])
+    add(db, "default", "scheduled", datetime(2026, 9, 12, 3, 0))
+    assert schedule.gives_way({}) and not schedule.gives_way({"yield": False})
+    assert schedule.tick(db, datetime(2026, 9, 12, 3, 0)) is None
+    store.update_run(db, "default", flags={**store.get_run(db, "default")["flags"], "yield": False})
+    assert schedule.tick(db, datetime(2026, 9, 12, 3, 0)) == "default"
+
+
 def test_parking_counts_and_keeps_the_rest_of_the_flags(world):
     db, actions = world
     add(db, "r", "running", datetime(2026, 9, 12, 3, 0))

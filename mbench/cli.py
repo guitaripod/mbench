@@ -244,12 +244,12 @@ def cmd_run(args):
         run_id = f"{datetime.now():%Y%m%d-%H%M%S}-{profile.id}"
         (paths.RUNS / run_id).mkdir(parents=True, exist_ok=True)
         carried = carry_over(source, run_id, tasks) if source else []
-        flags = {"tasks": tasks, "submit": args.submit, "effort_level": level}
+        flags = {"tasks": tasks, "submit": args.submit, "effort_level": level, "yield": not args.keep_gpu}
         if carried:
             flags["reused"] = {"run": source["id"], "tasks": carried}
         starts_now = window is None and not active and position == 0
         if not starts_now:
-            flags.update(not_before=begins, window=window, **({"yield": True} if window else {}))
+            flags.update(not_before=begins, window=window)
         store.insert_run(db, {
             "id": run_id, "model": profile.id, "name": profile.name, "suite": suite.label(suite_name),
             "effort": args.effort, "status": "queued" if starts_now else "scheduled", "harness": stack.harness(),
@@ -375,14 +375,15 @@ def cmd_resume(args):
         fail(f"{run['id']} was measured under suite v{suite.version_of(run['suite'])} and this mbench runs v{suite.VERSION}; "
              f"`mbench run {run['model']} --reuse {run['id']}` starts a v{suite.VERSION} run that keeps what still applies")
     at, window = window_of(args)
+    flags = {**(run.get("flags") or {}), "yield": not args.keep_gpu}
     if window:
         begins = schedule.first_start(datetime.now(), window, at).timestamp()
         store.update_run(db, run["id"], status="scheduled", error=None,
-                         flags={**(run.get("flags") or {}), "not_before": begins, "window": window})
+                         flags={**flags, "not_before": begins, "window": window})
         schedule.install_timer()
         print(f"{run['id']}: continues {schedule.describe(begins)}.")
         return
-    store.update_run(db, run["id"], status="queued", error=None)
+    store.update_run(db, run["id"], status="queued", error=None, flags=flags)
     spawn(run["id"], args.foreground)
     if not args.foreground and not args.detach:
         follow(run["id"])
@@ -714,6 +715,8 @@ def parser():
     run.add_argument("--submit", nargs="?", const="all", choices=lmx.SUBMIT_CHOICES, metavar="{all,speed,evals}",
                      help="also submit to localmaxxing: all (default), speed or evals")
     run.add_argument("--at", metavar="TIME", help="start at this time (03:00, or '2026-09-12 03:00') instead of now")
+    run.add_argument("--keep-gpu", action="store_true",
+                     help="don't step aside when another program wants the GPU (a game, ComfyUI)")
     run.add_argument("--until", metavar="TIME", help="with --at: stop at this time each day and continue at --at the next")
     run.add_argument("--note", help="free text stored with the run")
     run.add_argument("--detach", action="store_true", help="start and return immediately instead of following progress")
@@ -733,6 +736,7 @@ def parser():
     resume.add_argument("--detach", action="store_true", help="start and return immediately")
     resume.add_argument("--foreground", action="store_true", help="run in this process instead of a systemd unit")
     resume.add_argument("--at", metavar="TIME", help="continue at this time instead of now")
+    resume.add_argument("--keep-gpu", action="store_true", help="don't step aside for other GPU work")
     resume.add_argument("--until", metavar="TIME", help="with --at: stop at this time each day and continue the next")
     resume.set_defaults(handler=cmd_resume)
     ls = commands.add_parser("ls", help="ranked table of every model in the terminal")

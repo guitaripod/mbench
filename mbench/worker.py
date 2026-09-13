@@ -190,6 +190,7 @@ def give_way(db, run, events, found):
     names = ", ".join(process["name"] for process in found) or "another program"
     swap.unload()
     count = schedule.park(db, run["id"], resumes, f"gave the GPU to {names}", "yielded")
+    schedule.install_timer()
     events.emit("yielded", to=names, retry=schedule.describe(resumes))
     if count == 1:
         notify.send("mbench gave way", f"{run['model']} paused while {names} uses the GPU; it tries again every ten minutes",
@@ -228,7 +229,7 @@ def execute(run_id):
         if deadline and deadline - time.time() < MIN_WINDOW_S:
             park_for_window(db, run, events, window)
             return
-        if flags.get("yield"):
+        if schedule.gives_way(flags):
             found = gpu.contention()
             if found:
                 give_way(db, run, events, found)
@@ -257,7 +258,7 @@ def execute(run_id):
                 events.emit("doctor", check=check["check"], status=check["status"], detail=check["detail"])
         if doctor.failures(checks):
             raise RuntimeError("doctor: " + "; ".join(f"{check['check']}: {check['detail']}" for check in doctor.failures(checks)))
-        if flags.get("yield"):
+        if schedule.gives_way(flags):
             watch = GpuWatch(halt, events)
             watch.start()
         if "speed" in tasks:
