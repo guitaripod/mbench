@@ -15,4 +15,11 @@ mkdir -p docs
 common=(--headless --no-sandbox --disable-gpu --hide-scrollbars --virtual-time-budget=5000 --force-device-scale-factor=2 --window-size=1500,2400)
 "$browser" "${common[@]}" --screenshot=docs/leaderboard.png "file://$PWD/$page" 2>/dev/null
 "$browser" "${common[@]}" --force-dark-mode --blink-settings=preferredColorScheme=0 --screenshot=docs/leaderboard-dark.png "file://$PWD/$page" 2>/dev/null
-echo "docs/leaderboard.png docs/leaderboard-dark.png"
+out="docs/leaderboard.png docs/leaderboard-dark.png"
+card="$(dirname "$page")/card.html"
+if [[ -f "$card" ]]; then
+  "$browser" --headless --no-sandbox --disable-gpu --hide-scrollbars --virtual-time-budget=8000 \
+    --force-device-scale-factor=2 --window-size=1200,675 --screenshot=docs/card.png "file://$PWD/$card?bare=1" 2>/dev/null
+  out="$out docs/card.png"
+fi
+echo "$out"

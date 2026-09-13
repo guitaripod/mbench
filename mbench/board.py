@@ -8,6 +8,7 @@ KINDS = ("full", "quick")
 EFFORT_ORDER = ("medium", "max", "high", "xhigh", "low", "min", "minimal", "none")
 DEFAULT_EFFORT = "medium"
 TEMPLATE = paths.PACKAGE / "templates" / "leaderboard.html"
+CARD = paths.PACKAGE / "templates" / "card.html"
 PART_PREFIXES = (".bin.", ".part.")
 
 
@@ -159,15 +160,17 @@ def collect(db):
     }
 
 
-def page(data):
+def page(data, template=None):
     """The whole leaderboard as one self-contained file: the template with the run data baked in."""
-    return TEMPLATE.read_text().replace("/*__DATA__*/null", json.dumps(data))
+    return (template or TEMPLATE).read_text().replace("/*__DATA__*/null", json.dumps(data))
 
 
 def build():
     db = store.connect()
     paths.BOARD.parent.mkdir(parents=True, exist_ok=True)
-    paths.BOARD.write_text(page(collect(db)))
+    data = collect(db)
+    paths.BOARD.write_text(page(data))
+    (paths.BOARD.parent / "card.html").write_text(page(data, CARD))
     return paths.BOARD
 
 
@@ -176,5 +179,6 @@ def export(db, directory):
     data = collect(db)
     directory.mkdir(parents=True, exist_ok=True)
     (directory / "index.html").write_text(page(data))
+    (directory / "card.html").write_text(page(data, CARD))
     (directory / "board.json").write_text(json.dumps(data, indent=1) + "\n")
-    return [directory / "index.html", directory / "board.json"]
+    return [directory / "index.html", directory / "card.html", directory / "board.json"]

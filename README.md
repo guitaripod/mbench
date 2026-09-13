@@ -96,7 +96,7 @@ spec = { method = "EAGLE3", draft = "lmsys/EAGLE3-gpt-oss-120b-bf16", tokens_per
 
 **3. Run it.** `mbench run <id> --effort max`, or `mbench run <a> <b> --at 02:00 --until 09:00` for a nightly window. Extra models queue and run one at a time. Answers are written as they arrive, so a pause costs nothing, and the local page rebuilds when the run ends.
 
-**4. Read it.** `mbench ls --effort max` in the terminal, `mbench board --open` for the page, `mbench compare <a> <b>` when two models look close and you want to know whether the gap is real.
+**4. Read it.** `mbench ls --effort max` in the terminal, `mbench board --open` for the page, `mbench compare <a> <b>` when two models look close and you want to know whether the gap is real. The page's *share card ↗* link opens a 1200 × 675 comparison card — two models, every task difference, ties greyed out — that downloads as a PNG for posting.
 
 **5. Publish it.** `scripts/publish.sh max` exports `site/index.html` and `site/board.json`, re-renders both screenshots, and rewrites the table above between its markers. Commit and push: the `pages` workflow redeploys the site on any change under `site/`. The database is the record; the page, the JSON and that table are all projections of it, so nothing is typed by hand.
 

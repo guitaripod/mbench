@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mbench comparison card</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100..125,600..800&family=Atkinson+Hyperlegible+Mono:wght@400;600&family=Atkinson+Hyperlegible+Next:ital,wght@0,400;0,600;1,400&display=swap">
+<style>
+:root {
+  color-scheme: light dark;
+  --page: #f9f9f7;
+  --ink: #0b0b0b;
+  --ink-2: #52514e;
+  --muted: #898781;
+  --border: rgba(11, 11, 11, 0.12);
+  --ui: "Atkinson Hyperlegible Next", system-ui, -apple-system, sans-serif;
+  --mono: "Atkinson Hyperlegible Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --page: #0d0d0d; --ink: #ffffff; --ink-2: #c3c2b7; --border: rgba(255, 255, 255, 0.14); }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--ink); font-family: var(--ui); }
+main { max-width: 1240px; margin: 0 auto; padding: 1.5rem 1.25rem 3rem; display: grid; gap: 1rem; }
+h1 { font-family: "Archivo", var(--ui); font-size: 1.25rem; margin: 0; font-weight: 700; }
+.controls { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; }
+label { font-size: 0.8rem; color: var(--ink-2); display: grid; gap: 0.2rem; }
+select, button { font: inherit; font-size: 0.85rem; padding: 0.35rem 0.5rem; border-radius: 6px;
+  border: 1px solid var(--border); background: var(--page); color: var(--ink); }
+button { cursor: pointer; font-weight: 600; }
+button:hover { border-color: var(--ink-2); }
+canvas { width: 100%; max-width: 1200px; aspect-ratio: 1200 / 675; border: 1px solid var(--border); border-radius: 8px; }
+.hint { font-size: 0.8rem; color: var(--muted); margin: 0; max-width: 70ch; }
+body.bare { background: none; }
+body.bare main { max-width: none; margin: 0; padding: 0; gap: 0; }
+body.bare .controls, body.bare h1, body.bare .hint { display: none; }
+body.bare canvas { width: 1200px; border: 0; border-radius: 0; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Comparison card</h1>
+  <div class="controls">
+    <label>Effort<select id="effort"></select></label>
+    <label>Left<select id="left"></select></label>
+    <label>Right<select id="right"></select></label>
+    <label>Theme<select id="theme"><option value="light">Light</option><option value="dark">Dark</option></select></label>
+    <button id="download" type="button">Download PNG</button>
+  </div>
+  <canvas id="card" width="2400" height="1350"></canvas>
+  <p class="hint">1200 × 675 at 2×, the size X and Slack want. A difference smaller than the two 95% intervals allow is
+  drawn in grey and marked "tied" — this run can't tell those two apart. <code>mbench compare</code> answers the same
+  question question by question, which is a sharper test.</p>
+</main>
+<script>
+const DATA = /*__DATA__*/null;
+const W = 1200, H = 675, S = 2;
+const PALETTE = {
+  light: { page: "#f9f9f7", ink: "#0b0b0b", ink2: "#52514e", muted: "#898781", grid: "#e1e0d9", axis: "#c3c2b7",
+           a: "#2a78d6", b: "#c05621", tie: "#c3c2b7" },
+  dark: { page: "#0d0d0d", ink: "#ffffff", ink2: "#c3c2b7", muted: "#898781", grid: "#2c2c2a", axis: "#45443f",
+          a: "#3987e5", b: "#d4762a", tie: "#45443f" },
+};
+const SUITES = DATA.suites || {};
+const CURRENT = DATA.current || Object.keys(SUITES)[0];
+const view = SUITES[CURRENT] || { efforts: [], rankings: {}, indexTasks: [], taskShort: {} };
+const canvas = document.getElementById("card");
+const context = canvas.getContext("2d");
+const state = { effort: null, left: null, right: null, theme: matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light" };
+
+function models() {
+  return (view.rankings[state.effort] || []).slice().sort((one, two) => (two.index?.value ?? -1) - (one.index?.value ?? -1));
+}
+
+function shortName(model) {
+  return (model.name || model.id).split(" · ")[0];
+}
+
+function half(entry) {
+  return entry && entry.lo != null && entry.hi != null ? (entry.hi - entry.lo) / 2 : null;
+}
+
+function text(value, x, y, options) {
+  const { size = 16, weight = 400, family = "ui", color = "ink", align = "left" } = options || {};
+  const stack = family === "display" ? '"Archivo", system-ui, sans-serif'
+    : family === "mono" ? '"Atkinson Hyperlegible Mono", ui-monospace, monospace'
+    : '"Atkinson Hyperlegible Next", system-ui, sans-serif';
+  context.font = `${weight} ${size * S}px ${stack}`;
+  context.fillStyle = PALETTE[state.theme][color] || color;
+  context.textAlign = align;
+  context.textBaseline = "alphabetic";
+  context.fillText(value, x * S, y * S);
+  return context.measureText(value).width / S;
+}
+
+function box(x, y, width, height, color, radius = 0) {
+  context.fillStyle = PALETTE[state.theme][color] || color;
+  context.beginPath();
+  context.roundRect(x * S, y * S, width * S, height * S, radius * S);
+  context.fill();
+}
+
+function dot(x, y, color) {
+  context.fillStyle = PALETTE[state.theme][color] || color;
+  context.beginPath();
+  context.arc(x * S, y * S, 5 * S, 0, Math.PI * 2);
+  context.fill();
+}
+
+function fit(value, limit, size, weight, family) {
+  let step = size;
+  while (step > 12) {
+    context.font = `${weight} ${step * S}px ${family === "display" ? '"Archivo", sans-serif' : '"Atkinson Hyperlegible Next", sans-serif'}`;
+    if (context.measureText(value).width / S <= limit) break;
+    step -= 1;
+  }
+  return step;
+}
+
+function header(model, x, side, colour) {
+  const name = shortName(model);
+  dot(x + 6, 132, colour);
+  const size = fit(name, 440, 26, 600, "display");
+  text(name, x + 22, 139, { size, weight: 600, family: "display" });
+  const facts = [model.engine, model.quantization, model.spec, model.context ? Math.round(model.context / 1024) + "k ctx" : null]
+    .filter(Boolean).join(" · ");
+  text(facts, x + 22, 160, { size: 13, family: "mono", color: "muted" });
+  const index = model.index && model.index.value != null ? model.index.value.toFixed(1) : "–";
+  const width = text(index, x, 218, { size: 54, weight: 700, family: "display" });
+  const spread = half(model.index);
+  text("quality index" + (spread != null ? `  ±${spread.toFixed(1)}` : ""), x + width + 10, 218,
+    { size: 14, family: "mono", color: "muted" });
+}
+
+function rows(left, right) {
+  const tasks = view.indexTasks.filter(task => left.tasks[task] || right.tasks[task]);
+  const deltas = tasks.map(task => {
+    const one = left.tasks[task], two = right.tasks[task];
+    const delta = (one?.value ?? 0) - (two?.value ?? 0);
+    const noise = Math.hypot(half(one) ?? 0, half(two) ?? 0);
+    return { task, delta, tied: Math.abs(delta) < noise, one, two };
+  });
+  const peak = Math.max(...deltas.map(entry => Math.abs(entry.delta)), 1);
+  const axis = 560, reach = 250, top = 268, step = 40;
+  text("◀ " + shortName(left) + " ahead", axis - 14, top - 14, { size: 13, family: "mono", color: "a", align: "right" });
+  text(shortName(right) + " ahead ▶", axis + 14, top - 14, { size: 13, family: "mono", color: "b" });
+  box(axis - 0.5, top - 4, 1, deltas.length * step + 6, "axis");
+  deltas.forEach((entry, index) => {
+    const y = top + index * step;
+    text(view.taskShort[entry.task] || entry.task, axis - reach - 24, y + 14, { size: 15, color: "ink2", align: "right" });
+    const width = Math.max(3, (Math.abs(entry.delta) / peak) * reach);
+    const colour = entry.tied ? "tie" : entry.delta > 0 ? "a" : "b";
+    const x = entry.delta > 0 ? axis - width - 1 : axis + 1;
+    box(x, y + 3, width, 14, colour, 4);
+    const label = (entry.delta > 0 ? "+" : "−") + Math.abs(entry.delta).toFixed(1) + (entry.tied ? "  tied" : "");
+    const inside = width > 96 && !entry.tied;
+    const at = entry.delta > 0 ? (inside ? x + 10 : x - 8) : (inside ? x + width - 10 : x + width + 8);
+    text(label, at, y + 15, { size: 14, family: "mono",
+      color: inside && !entry.tied ? "page" : entry.tied ? "muted" : "ink2",
+      align: entry.delta > 0 ? (inside ? "left" : "right") : (inside ? "right" : "left") });
+    text(pair(entry.one, entry.two), W - 56, y + 15, { size: 13, family: "mono", color: "muted", align: "right" });
+  });
+  return top + deltas.length * step;
+}
+
+function pair(one, two) {
+  const show = entry => entry && entry.value != null ? entry.value.toFixed(1) : "–";
+  return `${show(one)} / ${show(two)}`;
+}
+
+function strip(left, right, y) {
+  const items = [
+    ["Decode, one request", model => model.speed.decode, value => Math.round(value) + " tok/s", "high"],
+    ["Peak, all requests", model => model.speed.peak, value => Math.round(value) + " tok/s", "high"],
+    ["Energy per correct answer", model => model.energy.perCorrect, value => value.toFixed(2) + " Wh", "low"],
+  ];
+  const width = (W - 112) / items.length;
+  items.forEach(([label, pick, format, better], index) => {
+    const x = 56 + index * width;
+    text(label + (better === "low" ? "  (lower is better)" : ""), x, y + 22, { size: 13, family: "mono", color: "muted" });
+    const one = pick(left), two = pick(right);
+    const ahead = one && two ? (better === "low" ? one.value < two.value : one.value > two.value) : null;
+    dot(x + 5, y + 44, "a");
+    text(one ? format(one.value) : "–", x + 18, y + 49, { size: 20, weight: 600, family: "display", color: ahead === true ? "ink" : "ink2" });
+    dot(x + 5, y + 70, "b");
+    text(two ? format(two.value) : "–", x + 18, y + 75, { size: 20, weight: 600, family: "display", color: ahead === false ? "ink" : "ink2" });
+  });
+}
+
+function draw() {
+  const list = models();
+  const left = list.find(model => model.id === state.left) || list[0];
+  const right = list.find(model => model.id === state.right) || list[1] || list[0];
+  context.fillStyle = PALETTE[state.theme].page;
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  if (!left || !right) {
+    text("Two finished runs are needed for a comparison card.", 56, 100, { size: 20, family: "display" });
+    return;
+  }
+  text("mbench", 56, 62, { size: 24, weight: 700, family: "display" });
+  const stack = left.stack && left.stack.gpu ? left.stack.gpu.replace("NVIDIA ", "") : "one GPU";
+  text(`suite ${DATA.suite || "full"} · ${state.effort} effort · ${stack}`, W - 56, 62,
+    { size: 14, family: "mono", color: "muted", align: "right" });
+  box(56, 84, W - 112, 1, "grid");
+  header(left, 56, "left", "a");
+  header(right, W / 2 + 20, "right", "b");
+  box(56, 240, W - 112, 1, "grid");
+  const end = rows(left, right);
+  box(56, end + 14, W - 112, 1, "grid");
+  strip(left, right, end + 26);
+  text("guitaripod.github.io/mbench   ·   grey bars: the two 95% intervals overlap", 56, H - 28,
+    { size: 13, family: "mono", color: "muted" });
+  const when = left.run.finished ? new Date(Math.max(left.run.finished, right.run.finished) * 1000)
+    .toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "";
+  text(`same questions, same server settings${when ? " · " + when : ""}`, W - 56, H - 28,
+    { size: 13, family: "mono", color: "muted", align: "right" });
+}
+
+function option(value, label, selected) {
+  const node = document.createElement("option");
+  node.value = value;
+  node.textContent = label;
+  node.selected = selected;
+  return node;
+}
+
+function fillControls() {
+  const efforts = document.getElementById("effort");
+  efforts.replaceChildren(...(view.efforts || []).map(effort => option(effort, effort, effort === state.effort)));
+  const list = models();
+  for (const [id, key] of [["left", "left"], ["right", "right"]]) {
+    const select = document.getElementById(id);
+    select.replaceChildren(...list.map(model => option(model.id, shortName(model), model.id === state[key])));
+  }
+  document.getElementById("theme").value = state.theme;
+}
+
+function readHash() {
+  const params = new URLSearchParams(location.hash.slice(1));
+  const efforts = view.efforts || [];
+  state.effort = params.get("effort") && efforts.includes(params.get("effort")) ? params.get("effort")
+    : efforts.includes("max") ? "max" : efforts[0];
+  const list = models();
+  state.left = params.get("a") || (list[0] || {}).id;
+  state.right = params.get("b") || (list[1] || list[0] || {}).id;
+  if (params.get("theme")) state.theme = params.get("theme");
+}
+
+function writeHash() {
+  const params = new URLSearchParams({ effort: state.effort || "", a: state.left || "", b: state.right || "", theme: state.theme });
+  history.replaceState(null, "", "#" + params.toString());
+}
+
+function render() {
+  fillControls();
+  writeHash();
+  draw();
+}
+
+for (const [id, key] of [["effort", "effort"], ["left", "left"], ["right", "right"], ["theme", "theme"]]) {
+  document.getElementById(id).addEventListener("change", event => {
+    state[key] = event.target.value;
+    if (key === "effort") {
+      const list = models();
+      state.left = (list[0] || {}).id;
+      state.right = (list[1] || list[0] || {}).id;
+    }
+    render();
+  });
+}
+
+document.getElementById("download").addEventListener("click", () => {
+  canvas.toBlob(blob => {
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `mbench-${state.left}-vs-${state.right}.png`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 5000);
+  }, "image/png");
+});
+
+if (new URLSearchParams(location.search).get("bare") === "1") document.body.classList.add("bare");
+readHash();
+(document.fonts ? document.fonts.ready : Promise.resolve()).then(render);
+</script>
+</body>
+</html>

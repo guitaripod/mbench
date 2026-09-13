@@ -4,6 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>mbench leaderboard</title>
+<meta property="og:title" content="mbench leaderboard">
+<meta property="og:description" content="Local models ranked on one GPU: quality index, speed and energy, measured the same way each time.">
+<meta property="og:image" content="card.png">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100..125,600..800&family=Atkinson+Hyperlegible+Mono:wght@400;600&family=Atkinson+Hyperlegible+Next:ital,wght@0,400;0,600;1,400&display=swap">
@@ -123,6 +127,8 @@ td.model { white-space: normal; min-width: 17rem; }
 .strip-head { display: flex; justify-content: space-between; gap: 1rem; align-items: baseline; }
 .strip-head b { font-family: var(--mono); font-weight: 600; }
 .strip-note { color: var(--muted); font-size: 0.8rem; }
+.card-link { color: var(--series); text-decoration: none; }
+.card-link:hover { text-decoration: underline; }
 .notice { border-left: 3px solid var(--axis); padding: 0.35rem 0 0.35rem 0.7rem; color: var(--ink-2); font-size: 0.85rem; }
 .dot-other { fill: var(--deemph); }
 .ci-bar { stroke: var(--series); stroke-width: 3; stroke-linecap: round; }
@@ -277,6 +283,11 @@ function pctCell(entry, meter) {
 
 function numCell(value, format, title) {
   return h("td", { className: "num", text: format(value), title: title || null });
+}
+
+function cardLink(model) {
+  const other = sortedModels().find(entry => entry.id !== model.id) || model;
+  return `card.html#effort=${encodeURIComponent(state.effort)}&a=${encodeURIComponent(model.id)}&b=${encodeURIComponent(other.id)}`;
 }
 
 function setups() {
@@ -663,6 +674,7 @@ function renderDetail(host) {
       h("span", { text: `effort ${model.run.effort || "–"}` }), h("span", { text: `config ${model.fingerprint || "–"}` }),
       model.stack && model.stack.build ? h("span", { text: model.stack.build }) : null,
       model.stack && model.stack.gpu ? h("span", { text: model.stack.hostLabel }) : null,
+      h("a", { className: "card-link", href: cardLink(model), text: "share card ↗", target: "_blank", rel: "noopener" }),
     ]),
     (model.run.stackChange || []).length
       ? h("p", { className: "strip-note", text: "Changed since this model's previous run: " + model.run.stackChange.join("; ")
