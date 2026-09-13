@@ -65,7 +65,9 @@ def test_export_writes_a_page_and_its_data(monkeypatch, tmp_path):
     store.insert_run(db, {"id": "r", "model": "m", "suite": suite.label("full"), "effort": "max", "status": "complete",
                           "created": 1.0, "finished": 1.0})
     written = board.export(db, tmp_path / "site")
-    assert [path.name for path in written] == ["index.html", "board.json"]
+    assert [path.name for path in written] == ["index.html", "card.html", "board.json"]
     page = (tmp_path / "site" / "index.html").read_text()
     assert "/*__DATA__*/null" not in page and '"suites"' in page
+    card = (tmp_path / "site" / "card.html").read_text()
+    assert "/*__DATA__*/null" not in card and '"rankings"' in card
     assert json.loads((tmp_path / "site" / "board.json").read_text())["current"] == suite.VERSION
