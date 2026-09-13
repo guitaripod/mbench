@@ -16,8 +16,8 @@ class Sampler:
     def __init__(self, interval_ms=250):
         self.samples = []
         self.process = subprocess.Popen(
-            ["nvidia-smi", "--query-gpu=power.draw,memory.used,utilization.gpu", "--format=csv,noheader,nounits",
-             "-lms", str(interval_ms)],
+            ["nvidia-smi", "--query-gpu=power.draw,memory.used,utilization.gpu,temperature.gpu",
+             "--format=csv,noheader,nounits", "-lms", str(interval_ms)],
             stdout=subprocess.PIPE,
             text=True,
         )
@@ -27,10 +27,10 @@ class Sampler:
     def _read(self):
         for line in self.process.stdout or []:
             try:
-                power, memory, utilization = (float(part) for part in line.split(","))
+                power, memory, utilization, temperature = (float(part) for part in line.split(","))
             except ValueError:
                 continue
-            self.samples.append((time.time(), power, memory, utilization))
+            self.samples.append((time.time(), power, memory, utilization, temperature))
 
     def window(self, start, end):
         inside = [sample for sample in self.samples if start <= sample[0] <= end]
@@ -38,7 +38,8 @@ class Sampler:
             return {}
         busy = [sample for sample in inside if sample[3] >= 30] or inside
         return {"power_w": round(statistics.mean(sample[1] for sample in busy), 1),
-                "vram_mib": max(sample[2] for sample in inside)}
+                "vram_mib": max(sample[2] for sample in inside),
+                "temp_c": round(max(sample[4] for sample in inside), 1)}
 
     def energy_wh(self, start, end):
         """Board energy between two moments from the power samples, idle draw included; None without enough samples."""
@@ -149,6 +150,28 @@ def contention(samples=3):
 
 def describe_contention(found):
     return ", ".join(f"{process['name']} ({process['sm']:.0f}% GPU, {process['mib'] / 1024:.1f} GB)" for process in found)
+
+
+def health():
+    """The card as the driver sees it right now; None when nvidia-smi cannot reach it at all, which is what a GPU that
+    has fallen off the bus looks like from here."""
+    completed = subprocess.run(["nvidia-smi", "--query-gpu=temperature.gpu,power.draw", "--format=csv,noheader,nounits"],
+                               capture_output=True, text=True)
+    parts = [part.strip() for part in completed.stdout.split(",")]
+    if completed.returncode != 0 or len(parts) != 2:
+        return None
+    try:
+        return {"temp_c": float(parts[0]), "power_w": float(parts[1])}
+    except ValueError:
+        return None
+
+
+def last_fault(minutes=10):
+    """The newest Xid the kernel logged, which names what the driver hit when the card stopped answering."""
+    completed = subprocess.run(["journalctl", "-k", "--since", f"-{minutes}min", "-o", "cat", "--no-pager"],
+                               capture_output=True, text=True)
+    faults = [line for line in completed.stdout.splitlines() if "Xid" in line]
+    return faults[-1].split("NVRM: ")[-1] if faults else None
 
 
 def describe():

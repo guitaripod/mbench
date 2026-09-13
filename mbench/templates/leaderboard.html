@@ -715,6 +715,7 @@ function renderDetail(host) {
     ["Energy, quality tasks", model.energy && model.energy.quality && model.energy.quality.value.toFixed(0) + " Wh"],
     ["Energy per correct answer", model.energy && model.energy.perCorrect && model.energy.perCorrect.value.toFixed(2) + " Wh"],
     ["Board power, code prompt", speed.power && Math.round(speed.power.value) + " W"],
+    ["GPU temperature under load", speed.temp && Math.round(speed.temp.value) + " °C"],
     ["Energy per token", speed.energy && speed.energy.value.toFixed(2) + " J"],
     ["GSM8K (localmaxxing)", model.lmx.gsm8k && fmt.pct(model.lmx.gsm8k.value) + "%"],
     ["HellaSwag (localmaxxing)", model.lmx.hellaswag && fmt.pct(model.lmx.hellaswag.value) + "%"],

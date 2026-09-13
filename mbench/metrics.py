@@ -236,6 +236,9 @@ def speed_metrics(result):
         power = statistics.median(powers)
         out["speed.power"] = {"value": power, "unit": "W", "n": len(powers)}
         out["speed.energy"] = {"value": power / out["speed.decode.code-v1"]["value"], "unit": "J/token", "n": len(powers)}
+    temps = [row["temp_c"] for row in code_rows if row.get("temp_c")]
+    if temps:
+        out["speed.temp"] = {"value": statistics.median(temps), "unit": "C", "n": len(temps)}
     concurrency = defaultdict(list)
     for row in result.get("concurrency", []):
         if row.get("aggregate_tps"):

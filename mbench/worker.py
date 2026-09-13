@@ -11,6 +11,7 @@ from .profiles import Profile
 
 RAM_FLOOR_GB = 4.0
 GPU_WAIT_S = 1800
+CARD_CHECK_S = 15
 GPU_CHECK_S = 30
 YIELD_STRIKES = 2
 YIELD_RETRY_S = 600
@@ -78,6 +79,31 @@ class MemoryGuard(threading.Thread):
                 self.events.emit("abort", reason=f"free RAM {available:.1f} GB")
                 swap.unload()
                 self.halt.set("memory")
+                return
+
+    def stop(self):
+        self.stopped.set()
+
+
+class CardGuard(threading.Thread):
+    """Stops the run when the driver can't reach the card at all. A GPU that has fallen off the bus answers nothing, so
+    every request after it would be recorded as a failure of the model."""
+
+    def __init__(self, halt, events):
+        super().__init__(daemon=True)
+        self.halt = halt
+        self.events = events
+        self.stopped = threading.Event()
+        self.fault = None
+
+    def run(self):
+        misses = 0
+        while not self.stopped.wait(CARD_CHECK_S):
+            misses = misses + 1 if gpu.health() is None else 0
+            if misses >= 2:
+                self.fault = gpu.last_fault() or "nvidia-smi can no longer reach the GPU"
+                self.events.emit("abort", reason=f"the GPU stopped answering: {self.fault}")
+                self.halt.set("card")
                 return
 
     def stop(self):
@@ -217,6 +243,8 @@ def execute(run_id):
     halt = Halt()
     guard = MemoryGuard(halt, events)
     guard.start()
+    card = CardGuard(halt, events)
+    card.start()
     watch = sampler = None
     store.update_run(db, run_id, status="running", started=time.time(), error=None)
     events.emit("started", model=profile.id, suite=run["suite"], effort=f"{run['effort']} ({level})")
@@ -294,6 +322,8 @@ def execute(run_id):
         if halt.is_set():
             if halt.reason == "memory":
                 raise RuntimeError(f"stopped because free RAM fell below {RAM_FLOOR_GB:.0f} GB")
+            if halt.reason == "card":
+                raise RuntimeError(f"stopped because the GPU stopped answering: {card.fault}")
             give_way(db, run, events, watch.found if watch else [])
             return
         if runner.drained:
@@ -317,6 +347,7 @@ def execute(run_id):
         notify.send("mbench failed", f"{profile.id}: {str(error)[:200]}", run=run_id, status="failed")
     finally:
         guard.stop()
+        card.stop()
         if watch:
             watch.stop()
         if sampler:

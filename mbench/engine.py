@@ -8,12 +8,13 @@ from collections import deque
 import openai
 from openai import AsyncOpenAI
 
-from . import paths, scoring, suite, tool_cases
+from . import gpu, paths, scoring, suite, tool_cases
 
 CONTEXT_ERROR_WORDS = ("context", "too long", "maximum", "exceeds", "max_tokens")
 MIN_ANSWER_TOKENS = 2048
 ANSWER_RESERVE = 16384
 POOL_HEADROOM = 0.9
+SERVER_GONE_STREAK = 8
 FALLBACK_TOKENS_PER_SECOND = 40
 EFFORT_OFF = "none"
 
@@ -191,6 +192,11 @@ def percentile(values, share):
     return ordered[min(len(ordered) - 1, int(share * (len(ordered) - 1)))]
 
 
+class ServerGone(RuntimeError):
+    """The server stopped answering part way through a task. Those answers are missing, not wrong, so the run stops
+    rather than scoring a dead server's silence."""
+
+
 class QualityRunner:
     """Runs one task's items as many at a time as the server takes, appending each answer so an interrupted run resumes
     where it stopped. It stops dispatching when an item couldn't finish before the deadline, and stops outright when
@@ -206,6 +212,8 @@ class QualityRunner:
         self.pool = int(pool * POOL_HEADROOM) if pool else None
         self.deadline = deadline
         self.drained = False
+        self.gone = None
+        self.streak = 0
         self.latencies = {}
         self.client = AsyncOpenAI(base_url=paths.SWAP_URL + "/v1", api_key="none", timeout=7200, max_retries=0)
 
@@ -296,6 +304,21 @@ class QualityRunner:
                     raise
         return out_of_context(task, item, started)
 
+    def note_failure(self, error):
+        """A server that has died answers nothing at all, so its failures arrive one after another."""
+        self.streak += 1
+        if self.streak >= SERVER_GONE_STREAK:
+            self.gone = repr(error)[:300]
+
+    def check_alive(self, task, pending, failures):
+        """Most of a task failing means the server went away, not that the model got the answers wrong."""
+        if not pending or (not self.gone and len(failures) < max(SERVER_GONE_STREAK, len(pending) // 2)):
+            return
+        fault = gpu.last_fault()
+        detail = self.gone or (failures[0]["error"] if failures else "")
+        raise ServerGone(f"the server stopped answering during {task}: {len(failures)} of {len(pending)} requests failed"
+                         + (f"; {fault}" if fault else f"; {detail[:200]}"))
+
     async def watch(self, running):
         while not self.stop.is_set():
             await asyncio.sleep(1)
@@ -322,7 +345,7 @@ class QualityRunner:
                 self.report(task, counter["done"], len(items))
 
         async def one(item):
-            if self.stop.is_set():
+            if self.stop.is_set() or self.gone:
                 return
             if item["meta"].get("unreachable"):
                 await write(out_of_context(task, item, time.time()))
@@ -341,10 +364,12 @@ class QualityRunner:
                 except Exception as error:
                     if not context_error(error):
                         failures.append({"id": item["id"], "error": repr(error)[:500]})
+                        self.note_failure(error)
                         return
                     record = await self.retry_fitted(task, item, error, started)
                 if record["finish"] != "context":
                     self.latencies[task].append(record["latency"])
+                self.streak = 0
                 await write(record)
             finally:
                 gate.release(size)
@@ -360,9 +385,10 @@ class QualityRunner:
 
         pending = [item for item in items if item["id"] not in done]
         await wave(pending)
-        if failures and not self.stop.is_set() and not self.drained:
+        if failures and not self.stop.is_set() and not self.drained and not self.gone:
             retry_ids = {failure["id"] for failure in failures}
             failures.clear()
             await asyncio.sleep(15)
             await wave([item for item in pending if item["id"] in retry_ids])
+        self.check_alive(task, pending, failures)
         return failures

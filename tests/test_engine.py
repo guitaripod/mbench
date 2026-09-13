@@ -132,3 +132,36 @@ def test_unreachable_items_score_zero_without_a_request(tmp_path):
     asyncio.run(runner(tmp_path, [], seen).run("mrcr", [item]))
     record = json.loads((tmp_path / "mrcr.jsonl").read_text())
     assert (record["finish"], record["score"], seen) == ("context", 0.0, [])
+
+
+def items_for(task, count):
+    return [{"id": f"{task}-{index}", "task": task, "messages": [], "gold": "A", "meta": {}, "max_tokens": 16,
+             "sample": 0, "tools": None} for index in range(count)]
+
+
+def dead(tmp_path, monkeypatch, failures, total):
+    monkeypatch.setattr(engine.gpu, "last_fault", lambda *args: "Xid (PCI:0000:01:00): 79, GPU has fallen off the bus.")
+    instance = QualityRunner(profile(), tmp_path, "medium", lambda *args: None, threading.Event(), slots=4)
+    calls = {"n": 0}
+
+    async def fake_call(item, messages=None, seed_key=None):
+        calls["n"] += 1
+        if calls["n"] <= failures:
+            raise openai.InternalServerError("upstream command exited prematurely", response=httpx.Response(
+                500, request=httpx.Request("POST", "http://swap/v1/chat/completions")), body=None)
+        return response(message("Answer: A"))
+
+    instance.call = fake_call
+    return instance, items_for("supergpqa", total)
+
+
+def test_a_server_that_stops_answering_stops_the_run(tmp_path, monkeypatch):
+    runner_instance, items = dead(tmp_path, monkeypatch, failures=40, total=20)
+    with pytest.raises(engine.ServerGone, match="fallen off the bus"):
+        asyncio.run(runner_instance.run("supergpqa", items))
+
+
+def test_a_few_failures_are_only_failures(tmp_path, monkeypatch):
+    runner_instance, items = dead(tmp_path, monkeypatch, failures=2, total=20)
+    failures = asyncio.run(runner_instance.run("supergpqa", items))
+    assert failures == [] and len(runner_instance.done("supergpqa")) == 20
