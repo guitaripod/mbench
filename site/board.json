@@ -1,5 +1,5 @@
 {
- "generated": 1789242899.0909836,
+ "generated": 1789305765.5819223,
  "suite": "full/v1",
  "current": "1",
  "hardware": {
@@ -64,6 +64,435 @@
    ],
    "rankings": {
     "max": [
+     {
+      "id": "sglang-muse30b",
+      "name": "Muse Glimmer 30B \u00b7 SGLang \u00b7 FP8 \u00b7 DFlash2 \u00b7 128K",
+      "engine": "sglang",
+      "quantization": "FP8-block",
+      "spec": "DFlash2",
+      "context": 131072,
+      "fingerprint": "270f8a6e802c2899",
+      "stack": {
+       "host": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition|610.57.04",
+       "hostLabel": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition \u00b7 driver 610.57.04",
+       "gpu": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+       "driver": "610.57.04",
+       "vramMib": 97887,
+       "engine": "sglang",
+       "build": "SGLang c0ead5877",
+       "source": "/mnt/nvme8tb/sglang/src/python"
+      },
+      "run": {
+       "id": "20260912-203516-sglang-muse30b",
+       "suite": "full/v1",
+       "kind": "full",
+       "finished": 1789302707.0229216,
+       "effort": "max",
+       "harness": "1.1.0+17e48e2",
+       "contended": [],
+       "failedItems": 0,
+       "notes": null,
+       "reused": null,
+       "stackChange": []
+      },
+      "index": {
+       "value": 71.60569547983675,
+       "unit": "%",
+       "n": 5,
+       "lo": 68.41899073148006,
+       "hi": 74.70996169601001
+      },
+      "tasks": {
+       "supergpqa": {
+        "value": 57.77351247600768,
+        "unit": "%",
+        "n": 521,
+        "lo": 53.49052942436039,
+        "hi": 61.942698429529244,
+        "tokens": 4999.468330134357,
+        "latency": 22.58,
+        "truncated": 3.262955854126679,
+        "unreachable": null,
+        "malformed": null,
+        "parts": {}
+       },
+       "math": {
+        "value": 84.12698412698413,
+        "unit": "%",
+        "n": 63,
+        "lo": 75.88154562601417,
+        "hi": 92.37242262795408,
+        "tokens": 16917.45238095238,
+        "latency": 91.115,
+        "truncated": 4.761904761904762,
+        "unreachable": null,
+        "malformed": null,
+        "parts": {
+         "aime": 91.66666666666666,
+         "hmmt": 77.27272727272727
+        }
+       },
+       "lcb": {
+        "value": 62.37623762376238,
+        "unit": "%",
+        "n": 101,
+        "lo": 52.63845938651245,
+        "hi": 71.20703705764711,
+        "tokens": 16601.356435643564,
+        "latency": 75.95,
+        "truncated": 7.920792079207921,
+        "unreachable": null,
+        "malformed": null,
+        "parts": {}
+       },
+       "mrcr": {
+        "value": 33.94717790860636,
+        "unit": "%",
+        "n": 60,
+        "lo": 23.50273661814164,
+        "hi": 44.39161919907109,
+        "tokens": 7243.983050847458,
+        "latency": 97.19,
+        "truncated": 0.0,
+        "unreachable": 1.6666666666666667,
+        "malformed": null,
+        "parts": {
+         "131072": 37.20704226615851,
+         "16384": 28.822112334192674,
+         "32768": 37.143947146094085,
+         "65536": 32.615609887980185
+        }
+       },
+       "graphwalks": {
+        "value": 78.8194663309896,
+        "unit": "%",
+        "n": 48,
+        "lo": 68.07090099581487,
+        "hi": 89.56803166616433,
+        "tokens": 31442.5,
+        "latency": 398.9,
+        "truncated": 6.25,
+        "unreachable": null,
+        "malformed": null,
+        "parts": {
+         "16384": 83.33333333333334,
+         "32768": 95.12820512820512,
+         "65536": 42.592592592592595,
+         "8192": 94.22373426982733
+        }
+       },
+       "tools": {
+        "value": 97.36842105263158,
+        "unit": "%",
+        "n": 38,
+        "lo": 93.56574223588176,
+        "hi": 100.0,
+        "tokens": 448.50877192982455,
+        "latency": 3.9850000000000003,
+        "truncated": 0.0,
+        "unreachable": null,
+        "malformed": 0.0,
+        "parts": {
+         "clarify": 88.88888888888889,
+         "conditional": 100.0,
+         "distractor": 100.0,
+         "irrelevant": 100.0,
+         "multi-turn": 77.77777777777779,
+         "parallel": 100.0,
+         "policy": 100.0,
+         "recovery": 100.0,
+         "sequential": 100.0,
+         "single": 100.0
+        }
+       }
+      },
+      "capacity": {
+       "slots": 8,
+       "context": 131072,
+       "pool": 1348736
+      },
+      "warnings": [
+       "Capped at 128k tokens per request: MRCR 8-needle 2% out of reach"
+      ],
+      "energy": {
+       "perCorrect": {
+        "value": 2.73324231626073,
+        "unit": "Wh",
+        "n": 639,
+        "lo": null,
+        "hi": null
+       },
+       "quality": {
+        "value": 1747.093,
+        "unit": "Wh",
+        "n": 6,
+        "lo": null,
+        "hi": null
+       }
+      },
+      "speed": {
+       "accept.code-v1": {
+        "value": 4.249,
+        "unit": "tokens/step",
+        "n": 3,
+        "lo": 4.163,
+        "hi": 4.321
+       },
+       "accept.prose-v1": {
+        "value": 3.057,
+        "unit": "tokens/step",
+        "n": 3,
+        "lo": 2.868,
+        "hi": 3.094
+       },
+       "accept.reasoning-v1": {
+        "value": 5.988,
+        "unit": "tokens/step",
+        "n": 3,
+        "lo": 5.818,
+        "hi": 6.44
+       },
+       "conc.1": {
+        "value": 195.25,
+        "unit": "tok/s",
+        "n": 2,
+        "lo": 188.0,
+        "hi": 202.5
+       },
+       "conc.2": {
+        "value": 253.10000000000002,
+        "unit": "tok/s",
+        "n": 2,
+        "lo": 250.9,
+        "hi": 255.3
+       },
+       "conc.4": {
+        "value": 374.25,
+        "unit": "tok/s",
+        "n": 2,
+        "lo": 374.2,
+        "hi": 374.3
+       },
+       "conc.8": {
+        "value": 679.75,
+        "unit": "tok/s",
+        "n": 2,
+        "lo": 678.0,
+        "hi": 681.5
+       },
+       "decode": {
+        "value": 143.34333333333333,
+        "unit": "tok/s",
+        "n": 3,
+        "lo": null,
+        "hi": null
+       },
+       "decode.code-v1": {
+        "value": 137.71,
+        "unit": "tok/s",
+        "n": 3,
+        "lo": 134.64,
+        "hi": 139.73
+       },
+       "decode.prose-v1": {
+        "value": 98.2,
+        "unit": "tok/s",
+        "n": 3,
+        "lo": 92.38,
+        "hi": 99.56
+       },
+       "decode.reasoning-v1": {
+        "value": 194.12,
+        "unit": "tok/s",
+        "n": 3,
+        "lo": 188.23,
+        "hi": 208.23
+       },
+       "decode_at.1000": {
+        "value": 394.25,
+        "unit": "tok/s",
+        "n": 2,
+        "lo": 277.38,
+        "hi": 511.12
+       },
+       "decode_at.120000": {
+        "value": 76.975,
+        "unit": "tok/s",
+        "n": 2,
+        "lo": 74.25,
+        "hi": 79.7
+       },
+       "decode_at.32000": {
+        "value": 88.61500000000001,
+        "unit": "tok/s",
+        "n": 2,
+        "lo": 87.83,
+        "hi": 89.4
+       },
+       "decode_at.64000": {
+        "value": 83.86500000000001,
+        "unit": "tok/s",
+        "n": 2,
+        "lo": 82.28,
+        "hi": 85.45
+       },
+       "decode_at.8000": {
+        "value": 79.99000000000001,
+        "unit": "tok/s",
+        "n": 2,
+        "lo": 74.54,
+        "hi": 85.44
+       },
+       "energy": {
+        "value": 2.478396630600537,
+        "unit": "J/token",
+        "n": 3,
+        "lo": null,
+        "hi": null
+       },
+       "peak": {
+        "value": 679.75,
+        "unit": "tok/s",
+        "n": 2,
+        "lo": 678.0,
+        "hi": 681.5
+       },
+       "peak_at": {
+        "value": 8.0,
+        "unit": "requests",
+        "n": 2,
+        "lo": null,
+        "hi": null
+       },
+       "power": {
+        "value": 341.3,
+        "unit": "W",
+        "n": 3,
+        "lo": null,
+        "hi": null
+       },
+       "prefill.1000": {
+        "value": 6420.4,
+        "unit": "tok/s",
+        "n": 2,
+        "lo": 6395.1,
+        "hi": 6445.7
+       },
+       "prefill.120000": {
+        "value": 6406.35,
+        "unit": "tok/s",
+        "n": 2,
+        "lo": 6383.6,
+        "hi": 6429.1
+       },
+       "prefill.32000": {
+        "value": 7978.45,
+        "unit": "tok/s",
+        "n": 2,
+        "lo": 7974.9,
+        "hi": 7982.0
+       },
+       "prefill.64000": {
+        "value": 7350.75,
+        "unit": "tok/s",
+        "n": 2,
+        "lo": 7347.0,
+        "hi": 7354.5
+       },
+       "prefill.8000": {
+        "value": 8319.7,
+        "unit": "tok/s",
+        "n": 2,
+        "lo": 8276.0,
+        "hi": 8363.4
+       },
+       "ttft.1000": {
+        "value": 0.17055,
+        "unit": "s",
+        "n": 2,
+        "lo": 0.1705,
+        "hi": 0.1706
+       },
+       "ttft.120000": {
+        "value": 18.65025,
+        "unit": "s",
+        "n": 2,
+        "lo": 18.5437,
+        "hi": 18.7568
+       },
+       "ttft.32000": {
+        "value": 4.001049999999999,
+        "unit": "s",
+        "n": 2,
+        "lo": 4.0004,
+        "hi": 4.0017
+       },
+       "ttft.64000": {
+        "value": 8.6567,
+        "unit": "s",
+        "n": 2,
+        "lo": 8.6447,
+        "hi": 8.6687
+       },
+       "ttft.8000": {
+        "value": 0.97035,
+        "unit": "s",
+        "n": 2,
+        "lo": 0.9703,
+        "hi": 0.9704
+       },
+       "ttft.short": {
+        "value": 78.89999999999999,
+        "unit": "ms",
+        "n": 9,
+        "lo": 72.5,
+        "hi": 90.89999999999999
+       }
+      },
+      "lmx": {},
+      "submissions": [],
+      "server": {
+       "load_s": 0.1,
+       "model_path": "/mnt/nvme8tb/sglang/models/muse-glimmer-30b-fp8",
+       "served_model_name": "muse-glimmer",
+       "context_length": 131072,
+       "attention_backend": "flashinfer",
+       "mem_fraction_static": 0.85,
+       "max_running_requests": 8,
+       "chunked_prefill_size": 8192,
+       "kv_cache_dtype": "fp8_e4m3",
+       "dtype": "auto",
+       "tp_size": 1,
+       "page_size": 64,
+       "sampling_backend": "flashinfer",
+       "moe_runner_backend": "auto",
+       "speculative_algorithm": "DFLASH",
+       "speculative_draft_model_path": "/mnt/nvme8tb/sglang/models/muse-glimmer-30b-dflash2",
+       "speculative_num_draft_tokens": 16,
+       "speculative_draft_window_size": 2048,
+       "build": {
+        "engine": "sglang",
+        "commit": "c0ead5877",
+        "dated": "2026-09-06",
+        "source": "/mnt/nvme8tb/sglang/src/python"
+       },
+       "capacity": {
+        "slots": 8,
+        "context": 131072,
+        "pool": 1348736
+       }
+      },
+      "history": [
+       {
+        "id": "20260912-203516-sglang-muse30b",
+        "suite": "full/v1",
+        "effort": "max",
+        "finished": 1789302707.0229216,
+        "index": 71.60569547983675,
+        "decode": 143.34333333333333
+       }
+      ]
+     },
      {
       "id": "sglang-27b",
       "name": "Qwen 3.8 27B \u00b7 SGLang \u00b7 DFlash2 \u00b7 524K",
@@ -920,14 +1349,17 @@
     ]
    },
    "health": {
-    "max": {}
+    "max": {
+     "math": "models differ by less than the noise",
+     "tools": "near the ceiling for every model"
+    }
    },
    "hosts": {
     "max": [
      {
       "key": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition|610.57.04",
       "label": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition \u00b7 driver 610.57.04",
-      "models": 2
+      "models": 3
      }
     ]
    }
@@ -954,6 +1386,435 @@
  ],
  "rankings": {
   "max": [
+   {
+    "id": "sglang-muse30b",
+    "name": "Muse Glimmer 30B \u00b7 SGLang \u00b7 FP8 \u00b7 DFlash2 \u00b7 128K",
+    "engine": "sglang",
+    "quantization": "FP8-block",
+    "spec": "DFlash2",
+    "context": 131072,
+    "fingerprint": "270f8a6e802c2899",
+    "stack": {
+     "host": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition|610.57.04",
+     "hostLabel": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition \u00b7 driver 610.57.04",
+     "gpu": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+     "driver": "610.57.04",
+     "vramMib": 97887,
+     "engine": "sglang",
+     "build": "SGLang c0ead5877",
+     "source": "/mnt/nvme8tb/sglang/src/python"
+    },
+    "run": {
+     "id": "20260912-203516-sglang-muse30b",
+     "suite": "full/v1",
+     "kind": "full",
+     "finished": 1789302707.0229216,
+     "effort": "max",
+     "harness": "1.1.0+17e48e2",
+     "contended": [],
+     "failedItems": 0,
+     "notes": null,
+     "reused": null,
+     "stackChange": []
+    },
+    "index": {
+     "value": 71.60569547983675,
+     "unit": "%",
+     "n": 5,
+     "lo": 68.41899073148006,
+     "hi": 74.70996169601001
+    },
+    "tasks": {
+     "supergpqa": {
+      "value": 57.77351247600768,
+      "unit": "%",
+      "n": 521,
+      "lo": 53.49052942436039,
+      "hi": 61.942698429529244,
+      "tokens": 4999.468330134357,
+      "latency": 22.58,
+      "truncated": 3.262955854126679,
+      "unreachable": null,
+      "malformed": null,
+      "parts": {}
+     },
+     "math": {
+      "value": 84.12698412698413,
+      "unit": "%",
+      "n": 63,
+      "lo": 75.88154562601417,
+      "hi": 92.37242262795408,
+      "tokens": 16917.45238095238,
+      "latency": 91.115,
+      "truncated": 4.761904761904762,
+      "unreachable": null,
+      "malformed": null,
+      "parts": {
+       "aime": 91.66666666666666,
+       "hmmt": 77.27272727272727
+      }
+     },
+     "lcb": {
+      "value": 62.37623762376238,
+      "unit": "%",
+      "n": 101,
+      "lo": 52.63845938651245,
+      "hi": 71.20703705764711,
+      "tokens": 16601.356435643564,
+      "latency": 75.95,
+      "truncated": 7.920792079207921,
+      "unreachable": null,
+      "malformed": null,
+      "parts": {}
+     },
+     "mrcr": {
+      "value": 33.94717790860636,
+      "unit": "%",
+      "n": 60,
+      "lo": 23.50273661814164,
+      "hi": 44.39161919907109,
+      "tokens": 7243.983050847458,
+      "latency": 97.19,
+      "truncated": 0.0,
+      "unreachable": 1.6666666666666667,
+      "malformed": null,
+      "parts": {
+       "131072": 37.20704226615851,
+       "16384": 28.822112334192674,
+       "32768": 37.143947146094085,
+       "65536": 32.615609887980185
+      }
+     },
+     "graphwalks": {
+      "value": 78.8194663309896,
+      "unit": "%",
+      "n": 48,
+      "lo": 68.07090099581487,
+      "hi": 89.56803166616433,
+      "tokens": 31442.5,
+      "latency": 398.9,
+      "truncated": 6.25,
+      "unreachable": null,
+      "malformed": null,
+      "parts": {
+       "16384": 83.33333333333334,
+       "32768": 95.12820512820512,
+       "65536": 42.592592592592595,
+       "8192": 94.22373426982733
+      }
+     },
+     "tools": {
+      "value": 97.36842105263158,
+      "unit": "%",
+      "n": 38,
+      "lo": 93.56574223588176,
+      "hi": 100.0,
+      "tokens": 448.50877192982455,
+      "latency": 3.9850000000000003,
+      "truncated": 0.0,
+      "unreachable": null,
+      "malformed": 0.0,
+      "parts": {
+       "clarify": 88.88888888888889,
+       "conditional": 100.0,
+       "distractor": 100.0,
+       "irrelevant": 100.0,
+       "multi-turn": 77.77777777777779,
+       "parallel": 100.0,
+       "policy": 100.0,
+       "recovery": 100.0,
+       "sequential": 100.0,
+       "single": 100.0
+      }
+     }
+    },
+    "capacity": {
+     "slots": 8,
+     "context": 131072,
+     "pool": 1348736
+    },
+    "warnings": [
+     "Capped at 128k tokens per request: MRCR 8-needle 2% out of reach"
+    ],
+    "energy": {
+     "perCorrect": {
+      "value": 2.73324231626073,
+      "unit": "Wh",
+      "n": 639,
+      "lo": null,
+      "hi": null
+     },
+     "quality": {
+      "value": 1747.093,
+      "unit": "Wh",
+      "n": 6,
+      "lo": null,
+      "hi": null
+     }
+    },
+    "speed": {
+     "accept.code-v1": {
+      "value": 4.249,
+      "unit": "tokens/step",
+      "n": 3,
+      "lo": 4.163,
+      "hi": 4.321
+     },
+     "accept.prose-v1": {
+      "value": 3.057,
+      "unit": "tokens/step",
+      "n": 3,
+      "lo": 2.868,
+      "hi": 3.094
+     },
+     "accept.reasoning-v1": {
+      "value": 5.988,
+      "unit": "tokens/step",
+      "n": 3,
+      "lo": 5.818,
+      "hi": 6.44
+     },
+     "conc.1": {
+      "value": 195.25,
+      "unit": "tok/s",
+      "n": 2,
+      "lo": 188.0,
+      "hi": 202.5
+     },
+     "conc.2": {
+      "value": 253.10000000000002,
+      "unit": "tok/s",
+      "n": 2,
+      "lo": 250.9,
+      "hi": 255.3
+     },
+     "conc.4": {
+      "value": 374.25,
+      "unit": "tok/s",
+      "n": 2,
+      "lo": 374.2,
+      "hi": 374.3
+     },
+     "conc.8": {
+      "value": 679.75,
+      "unit": "tok/s",
+      "n": 2,
+      "lo": 678.0,
+      "hi": 681.5
+     },
+     "decode": {
+      "value": 143.34333333333333,
+      "unit": "tok/s",
+      "n": 3,
+      "lo": null,
+      "hi": null
+     },
+     "decode.code-v1": {
+      "value": 137.71,
+      "unit": "tok/s",
+      "n": 3,
+      "lo": 134.64,
+      "hi": 139.73
+     },
+     "decode.prose-v1": {
+      "value": 98.2,
+      "unit": "tok/s",
+      "n": 3,
+      "lo": 92.38,
+      "hi": 99.56
+     },
+     "decode.reasoning-v1": {
+      "value": 194.12,
+      "unit": "tok/s",
+      "n": 3,
+      "lo": 188.23,
+      "hi": 208.23
+     },
+     "decode_at.1000": {
+      "value": 394.25,
+      "unit": "tok/s",
+      "n": 2,
+      "lo": 277.38,
+      "hi": 511.12
+     },
+     "decode_at.120000": {
+      "value": 76.975,
+      "unit": "tok/s",
+      "n": 2,
+      "lo": 74.25,
+      "hi": 79.7
+     },
+     "decode_at.32000": {
+      "value": 88.61500000000001,
+      "unit": "tok/s",
+      "n": 2,
+      "lo": 87.83,
+      "hi": 89.4
+     },
+     "decode_at.64000": {
+      "value": 83.86500000000001,
+      "unit": "tok/s",
+      "n": 2,
+      "lo": 82.28,
+      "hi": 85.45
+     },
+     "decode_at.8000": {
+      "value": 79.99000000000001,
+      "unit": "tok/s",
+      "n": 2,
+      "lo": 74.54,
+      "hi": 85.44
+     },
+     "energy": {
+      "value": 2.478396630600537,
+      "unit": "J/token",
+      "n": 3,
+      "lo": null,
+      "hi": null
+     },
+     "peak": {
+      "value": 679.75,
+      "unit": "tok/s",
+      "n": 2,
+      "lo": 678.0,
+      "hi": 681.5
+     },
+     "peak_at": {
+      "value": 8.0,
+      "unit": "requests",
+      "n": 2,
+      "lo": null,
+      "hi": null
+     },
+     "power": {
+      "value": 341.3,
+      "unit": "W",
+      "n": 3,
+      "lo": null,
+      "hi": null
+     },
+     "prefill.1000": {
+      "value": 6420.4,
+      "unit": "tok/s",
+      "n": 2,
+      "lo": 6395.1,
+      "hi": 6445.7
+     },
+     "prefill.120000": {
+      "value": 6406.35,
+      "unit": "tok/s",
+      "n": 2,
+      "lo": 6383.6,
+      "hi": 6429.1
+     },
+     "prefill.32000": {
+      "value": 7978.45,
+      "unit": "tok/s",
+      "n": 2,
+      "lo": 7974.9,
+      "hi": 7982.0
+     },
+     "prefill.64000": {
+      "value": 7350.75,
+      "unit": "tok/s",
+      "n": 2,
+      "lo": 7347.0,
+      "hi": 7354.5
+     },
+     "prefill.8000": {
+      "value": 8319.7,
+      "unit": "tok/s",
+      "n": 2,
+      "lo": 8276.0,
+      "hi": 8363.4
+     },
+     "ttft.1000": {
+      "value": 0.17055,
+      "unit": "s",
+      "n": 2,
+      "lo": 0.1705,
+      "hi": 0.1706
+     },
+     "ttft.120000": {
+      "value": 18.65025,
+      "unit": "s",
+      "n": 2,
+      "lo": 18.5437,
+      "hi": 18.7568
+     },
+     "ttft.32000": {
+      "value": 4.001049999999999,
+      "unit": "s",
+      "n": 2,
+      "lo": 4.0004,
+      "hi": 4.0017
+     },
+     "ttft.64000": {
+      "value": 8.6567,
+      "unit": "s",
+      "n": 2,
+      "lo": 8.6447,
+      "hi": 8.6687
+     },
+     "ttft.8000": {
+      "value": 0.97035,
+      "unit": "s",
+      "n": 2,
+      "lo": 0.9703,
+      "hi": 0.9704
+     },
+     "ttft.short": {
+      "value": 78.89999999999999,
+      "unit": "ms",
+      "n": 9,
+      "lo": 72.5,
+      "hi": 90.89999999999999
+     }
+    },
+    "lmx": {},
+    "submissions": [],
+    "server": {
+     "load_s": 0.1,
+     "model_path": "/mnt/nvme8tb/sglang/models/muse-glimmer-30b-fp8",
+     "served_model_name": "muse-glimmer",
+     "context_length": 131072,
+     "attention_backend": "flashinfer",
+     "mem_fraction_static": 0.85,
+     "max_running_requests": 8,
+     "chunked_prefill_size": 8192,
+     "kv_cache_dtype": "fp8_e4m3",
+     "dtype": "auto",
+     "tp_size": 1,
+     "page_size": 64,
+     "sampling_backend": "flashinfer",
+     "moe_runner_backend": "auto",
+     "speculative_algorithm": "DFLASH",
+     "speculative_draft_model_path": "/mnt/nvme8tb/sglang/models/muse-glimmer-30b-dflash2",
+     "speculative_num_draft_tokens": 16,
+     "speculative_draft_window_size": 2048,
+     "build": {
+      "engine": "sglang",
+      "commit": "c0ead5877",
+      "dated": "2026-09-06",
+      "source": "/mnt/nvme8tb/sglang/src/python"
+     },
+     "capacity": {
+      "slots": 8,
+      "context": 131072,
+      "pool": 1348736
+     }
+    },
+    "history": [
+     {
+      "id": "20260912-203516-sglang-muse30b",
+      "suite": "full/v1",
+      "effort": "max",
+      "finished": 1789302707.0229216,
+      "index": 71.60569547983675,
+      "decode": 143.34333333333333
+     }
+    ]
+   },
    {
     "id": "sglang-27b",
     "name": "Qwen 3.8 27B \u00b7 SGLang \u00b7 DFlash2 \u00b7 524K",
