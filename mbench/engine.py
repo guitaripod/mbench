@@ -383,12 +383,15 @@ class QualityRunner:
                 try:
                     record = await self.solve(task, item, started)
                 except Exception as error:
-                    if not context_error(error):
+                    if template_error(error):
+                        record = refused(task, item, started)
+                    elif not context_error(error):
                         failures.append({"id": item["id"], "error": repr(error)[:500]})
                         self.note_failure(error)
                         return
-                    record = await self.retry_fitted(task, item, error, started)
-                if record["finish"] != "context":
+                    else:
+                        record = await self.retry_fitted(task, item, error, started)
+                if record["finish"] not in ("context", "template"):
                     self.latencies[task].append(record["latency"])
                 self.streak = 0
                 await write(record)

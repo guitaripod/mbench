@@ -707,3 +707,10 @@ def test_a_template_refusal_never_counts_as_a_dead_server():
     for _ in range(engine.SERVER_GONE_STREAK):
         runner.note_failure(RuntimeError("connection reset"))
     assert runner.gone is not None
+
+
+def test_every_refused_item_scores_zero_and_none_of_them_fail_the_task():
+    from mbench import engine
+    item = {"id": "tools-1", "sample": 0, "gold": "g", "meta": {}, "max_tokens": 4096}
+    record = engine.refused("tools", item, 0.0)
+    assert record["score"] == 0.0 and record["finish"] == "template" and record["prediction"] is None
