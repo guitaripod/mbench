@@ -35,9 +35,18 @@ enum LoadError: Error {
     case exited(Int32)
 }
 
+actor LoadGate {
+    /// Serialises load and unload. Two control requests arriving together — a run finishing as the next one starts —
+    /// used to race inside the runner and drop the connection, which the host could only read as the phone dying.
+    func run<T>(_ body: () async throws -> T) async rethrows -> T {
+        try await body()
+    }
+}
+
 final class LlamaServerRunner: @unchecked Sendable {
     static let shared = LlamaServerRunner()
 
+    private let gate = LoadGate()
     private let lock = NSLock()
     private var status = ServerStatus(state: "idle", args: [])
     private var thread: Thread?
@@ -59,8 +68,16 @@ final class LlamaServerRunner: @unchecked Sendable {
     }
 
     func load(_ request: LoadRequest) async throws -> ServerStatus {
+        try await gate.run { try await self.start(request) }
+    }
+
+    func unload() async {
+        await gate.run { await self.stop() }
+    }
+
+    private func start(_ request: LoadRequest) async throws -> ServerStatus {
         guard let model = ModelStore.resolve(request.model) else { throw LoadError.unknownModel(request.model) }
-        await unload()
+        await stop()
 
         let port = request.port ?? 8080
         let arguments = LlamaServerRunner.arguments(for: request, model: model, port: port)
@@ -87,7 +104,7 @@ final class LlamaServerRunner: @unchecked Sendable {
         return current
     }
 
-    func unload() async {
+    private func stop() async {
         lock.lock()
         let running = thread != nil
         let semaphore = finished

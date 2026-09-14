@@ -1,3 +1,4 @@
+import http.client
 import json
 import os
 import shutil
@@ -15,6 +16,8 @@ CONTROL_URL = "http://127.0.0.1:18081"
 SERVER_URL = "http://127.0.0.1:18080"
 LOAD_TIMEOUT_S = 1800
 HEALTH_TIMEOUT_S = 10
+SETTLE_S = 5
+LOAD_ATTEMPTS = 3
 
 MODELS = {
     "iPhone18,1": {"device": "iPhone 17 Pro", "soc": "A19 Pro", "ram_gb": 12, "bandwidth_gbs": 76.8},
@@ -72,14 +75,28 @@ class Device:
 
     def load(self, request):
         """Loads the model and waits for llama-server to answer; the phone needs minutes for a first load, since
-        Metal compiles every kernel from source on the device."""
-        return self.post("/mb/load", request, timeout=LOAD_TIMEOUT_S)
+        Metal compiles every kernel from source on the device. A dropped connection is retried: the app may still be
+        tearing down the model the run before it used, and a lost connection is not a lost phone."""
+        for attempt in range(LOAD_ATTEMPTS):
+            try:
+                return self.post("/mb/load", request, timeout=LOAD_TIMEOUT_S)
+            except (OSError, urllib.error.HTTPError, http.client.HTTPException) as error:
+                if attempt == LOAD_ATTEMPTS - 1 or not self.reachable():
+                    raise Unreachable(f"{self.control_url} did not load the model: {error!r}") from error
+                time.sleep(SETTLE_S)
 
     def unload(self):
+        """Asks the app to stop the server and waits for it to say it has, so the next load does not race the
+        teardown."""
         try:
-            self.post("/mb/unload", {}, timeout=120)
-        except (OSError, urllib.error.HTTPError):
+            self.post("/mb/unload", {}, timeout=300)
+        except (OSError, urllib.error.HTTPError, http.client.HTTPException):
             pass
+        for _ in range(60):
+            state = ((self.health() or {}).get("server") or {}).get("state")
+            if state in (None, "idle", "failed"):
+                return
+            time.sleep(1)
 
     def describe(self):
         """The hardware blob a run records: what phone answered, and the bandwidth its decode speed is bounded by."""

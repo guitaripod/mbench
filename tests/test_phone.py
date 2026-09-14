@@ -364,3 +364,43 @@ def test_two_runs_of_the_same_weights_open_the_same_way():
     assert doctor.agreement({"answer": "2 3 5"}, {"answer": "The first"}) == {"shared": 0, "of": 5}
     assert doctor.agreement({"answer": ""}, {"answer": "2 3"}) is None
     assert doctor.agreement(None, None) is None
+
+
+def test_a_dropped_connection_is_retried_not_reported_as_a_dead_phone(monkeypatch):
+    device = phone.Device("http://phone:1", "http://phone:2")
+    attempts = []
+    monkeypatch.setattr(phone.time, "sleep", lambda seconds: None)
+
+    def post(path, payload, timeout=None):
+        attempts.append(path)
+        if len(attempts) < 2:
+            raise phone.http.client.RemoteDisconnected("closed")
+        return {"state": "running", "load_seconds": 3.0}
+
+    monkeypatch.setattr(device, "post", post)
+    monkeypatch.setattr(device, "reachable", lambda: True)
+    assert device.load({"model": "m"})["load_seconds"] == 3.0
+    assert len(attempts) == 2
+
+
+def test_a_phone_that_really_is_gone_fails_the_run(monkeypatch):
+    device = phone.Device("http://phone:1", "http://phone:2")
+    monkeypatch.setattr(phone.time, "sleep", lambda seconds: None)
+    monkeypatch.setattr(device, "post", lambda *args, **kwargs: (_ for _ in ()).throw(OSError("no route")))
+    monkeypatch.setattr(device, "reachable", lambda: False)
+    try:
+        device.load({"model": "m"})
+    except phone.Unreachable as error:
+        assert "did not load" in str(error)
+    else:
+        raise AssertionError("a dead phone must fail the run")
+
+
+def test_unload_waits_for_the_server_to_actually_stop(monkeypatch):
+    device = phone.Device("http://phone:1", "http://phone:2")
+    states = ["stopping", "stopping", "idle"]
+    monkeypatch.setattr(phone.time, "sleep", lambda seconds: None)
+    monkeypatch.setattr(device, "post", lambda *args, **kwargs: {"ok": True})
+    monkeypatch.setattr(device, "health", lambda: {"server": {"state": states.pop(0) if states else "idle"}})
+    device.unload()
+    assert states == []
