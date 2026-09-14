@@ -321,7 +321,12 @@ class QualityRunner:
         return out_of_context(task, item, started)
 
     def note_failure(self, error):
-        """A server that has died answers nothing at all, so its failures arrive one after another."""
+        """A server that has died answers nothing at all, so its failures arrive one after another. A model whose own
+        template refuses a shape of conversation also fails every time, and that is the model answering, not the
+        server going away."""
+        if template_error(error):
+            self.streak = 0
+            return
         self.streak += 1
         if self.streak >= SERVER_GONE_STREAK:
             self.gone = repr(error)[:300]

@@ -682,3 +682,28 @@ def test_a_genuinely_missing_tool_still_says_so(monkeypatch):
         assert "not installed" in str(error)
     else:
         raise AssertionError("a missing tool must be reported")
+
+
+def test_a_template_refusal_never_counts_as_a_dead_server():
+    import openai
+    from mbench import engine
+
+    class Refused(openai.BadRequestError):
+        def __init__(self):
+            self.message = "Unable to generate parser for this template"
+
+        def __str__(self):
+            return self.message
+
+    class Runner(engine.QualityRunner):
+        def __init__(self):
+            self.streak = 0
+            self.gone = None
+
+    runner = Runner()
+    for _ in range(20):
+        runner.note_failure(Refused())
+    assert runner.gone is None and runner.streak == 0
+    for _ in range(engine.SERVER_GONE_STREAK):
+        runner.note_failure(RuntimeError("connection reset"))
+    assert runner.gone is not None
