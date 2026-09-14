@@ -182,7 +182,7 @@ function strip(left, right, y) {
   const phones = classOf(left) === "phone";
   const items = phones ? [
     ["Decode once hot", model => model.speed.decode_steady, value => Math.round(value) + " tok/s", "high"],
-    ["Share of the run hot", model => model.thermal && model.thermal.share_hot, value => Math.round(value) + "%", "low"],
+    ["Tokens at full speed", model => model.speed.tokens_to_knee, value => Math.round(value) + " tok", "high"],
     ["Battery an hour costs", model => model.battery && model.battery.per_hour, value => Math.round(value) + "%", "low"],
   ] : [
     ["Decode, one request", model => model.speed.decode, value => Math.round(value) + " tok/s", "high"],

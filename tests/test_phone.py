@@ -87,7 +87,8 @@ def test_the_sampler_reports_the_worst_thermal_state_a_request_ran_under():
 
 
 def test_sustained_decode_reports_what_it_settles_at():
-    rows = [{"index": index, "decode_tps": tps, "start": 100 + index * 10, "thermal": thermal}
+    rows = [{"index": index, "decode_tps": tps, "start": 100 + index * 10, "thermal": thermal,
+             "completion_tokens": 512}
             for index, (tps, thermal) in enumerate(
                 [(40.0, "nominal"), (39.0, "nominal"), (30.0, "fair"), (24.0, "fair"),
                  (23.0, "serious"), (22.0, "serious"), (22.5, "serious"), (22.0, "serious"), (22.0, "serious")])]
@@ -98,6 +99,7 @@ def test_sustained_decode_reports_what_it_settles_at():
     assert found["speed.throttle_s"]["value"] == 20.0
     assert found["speed.sustain.02"]["value"] == 30.0
     assert found["speed.sustain_state.04"]["value"] == 2
+    assert found["speed.tokens_to_knee"]["value"] == 1024
 
 
 def test_a_short_sustain_run_reports_nothing():
@@ -174,18 +176,24 @@ def test_a_desktop_run_has_no_thermal_story():
     assert metrics.thermal_metrics(None) == {}
 
 
-def test_the_verdict_disqualifies_a_model_that_runs_hot_or_crawls():
-    def judge(steady, ratio, worst, hot):
+def test_the_verdict_reads_only_what_the_model_produced():
+    def judge(steady, ratio, knee):
         return metrics.verdict({"speed.decode_steady": {"value": steady}, "speed.sustain_ratio": {"value": ratio},
-                                "thermal.worst": {"value": worst}, "thermal.share_hot": {"value": hot}})
+                                "speed.tokens_to_knee": {"value": knee}})
 
-    assert judge(24.0, 0.92, 1, 0.0) == "holds"
-    assert judge(18.0, 0.70, 1, 0.0) == "fades"
-    assert judge(18.0, 0.85, 2, 10.0) == "fades"
-    assert judge(6.0, 0.95, 0, 0.0) == "barely"
-    assert judge(18.0, 0.40, 1, 0.0) == "barely"
-    assert judge(18.0, 0.90, 1, 80.0) == "barely"
-    assert judge(18.0, 0.90, 3, 0.0) == "barely"
+    assert judge(24.0, 0.92, 4096) == "holds"
+    assert judge(18.0, 0.70, 4096) == "fades"
+    assert judge(18.0, 0.85, 1024) == "fades"
+    assert judge(6.0, 0.95, 4096) == "barely"
+    assert judge(18.0, 0.40, 4096) == "barely"
+    assert judge(18.0, 0.90, 256) == "barely"
+
+
+def test_a_hot_phone_alone_never_decides_the_verdict():
+    hot = {"thermal.worst": {"value": 3}, "thermal.share_hot": {"value": 90.0}}
+    assert metrics.verdict({**hot, "speed.decode_steady": {"value": 24.0},
+                            "speed.sustain_ratio": {"value": 0.92}}) == "holds"
+    assert metrics.verdict(hot) is None
 
 
 def test_a_run_with_no_thermal_numbers_gets_no_verdict():
@@ -198,6 +206,7 @@ def test_the_board_carries_the_verdict(tmp_path, monkeypatch):
     phone_run(db, "air", "qwen3-4b-air", {})
     store.set_metrics(db, "air", {"speed.decode_steady": {"value": 5.0, "unit": "tok/s", "n": 7},
                                   "speed.sustain_ratio": {"value": 0.4, "unit": "x", "n": 20},
+                                  "speed.tokens_to_knee": {"value": 512.0, "unit": "tokens", "n": 1},
                                   "thermal.share_hot": {"value": 70.0, "unit": "%", "n": 20},
                                   "battery.per_hour": {"value": 31.0, "unit": "%/h", "n": 20}})
     entry = board.collect(db)["rankings"]["max"][0]

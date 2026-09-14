@@ -202,9 +202,9 @@ const state = { sortKey: "index", sortDir: "desc", selected: null, effort: "medi
 const CLASS_LABELS = { gpu: "GPU", phone: "Phone" };
 const THERMAL_NAMES = ["nominal", "fair", "serious", "critical"];
 const VERDICTS = {
-  holds: { label: "holds up", rank: 2, note: "Keeps at least four fifths of its cold speed and never runs hot for long." },
-  fades: { label: "fades", rank: 1, note: "Loses a fifth or more of its speed, or spends part of the run at serious." },
-  barely: { label: "barely runs", rank: 0, note: "Under 8 tok/s once settled, or hot for over half the run — not a model you would keep installed." },
+  holds: { label: "holds up", rank: 2, note: "Keeps at least four fifths of its cold speed, and delivers 2k tokens before giving any of it up." },
+  fades: { label: "fades", rank: 1, note: "Loses a fifth or more of its speed, or gives it up inside 2k tokens." },
+  barely: { label: "barely runs", rank: 0, note: "Under 8 tok/s once settled, under half its cold speed, or slowing inside 512 tokens — not a model you would keep installed." },
 };
 const EFFORT_LABELS = { medium: "Medium effort", max: "Max effort", min: "Min effort", none: "No thinking" };
 const COUNT_NOUNS = { math: "problems", aime: "problems", lcb: "problems", tools: "episodes", mrcr: "conversations", graphwalks: "graphs", niah: "prompts" };
@@ -309,7 +309,12 @@ function columns() {
         get: m => m.verdict ? VERDICTS[m.verdict].rank : null, better: "high",
         render: m => h("td", { className: "num" }, [h("span", { className: "chip verdict " + (m.verdict || ""),
           text: m.verdict ? VERDICTS[m.verdict].label : "–", title: m.verdict ? VERDICTS[m.verdict].note : null })]) },
-      { key: "hot", label: "Ran hot", note: "Share of the run spent at serious or critical thermal state",
+      { key: "knee", label: "Full-speed tokens", note: "Tokens delivered before throughput fell under 90% of its cold speed",
+        get: m => m.speed.tokens_to_knee && m.speed.tokens_to_knee.value, better: "high",
+        render: m => numCell(m.speed.tokens_to_knee && m.speed.tokens_to_knee.value,
+          value => value == null ? "–" : value >= 1000 ? (value / 1000).toFixed(1) + "k" : String(Math.round(value))) },
+      { key: "hot", label: "Ran hot", note: "Share of the run spent at serious or critical thermal state. Context only — "
+          + "a charger or a warm room moves this, so it stays out of the verdict",
         get: m => m.thermal && m.thermal.share_hot && m.thermal.share_hot.value, better: "low",
         render: m => numCell(m.thermal && m.thermal.share_hot && m.thermal.share_hot.value,
           value => value == null ? "–" : Math.round(value) + "%",
@@ -803,6 +808,7 @@ function renderDetail(host) {
     ["Decode, cold", speed.decode_peak && fmt.int(speed.decode_peak.value) + " tok/s"],
     ["Decode, once hot", speed.decode_steady && fmt.int(speed.decode_steady.value) + " tok/s"],
     ["Held the cold speed for", speed.throttle_s && Math.round(speed.throttle_s.value) + " s"],
+    ["Tokens at full speed", speed.tokens_to_knee && fmt.int(speed.tokens_to_knee.value)],
     ["Peak memory held", speed.footprint && (speed.footprint.value / 1024).toFixed(1) + " GB"],
     ["Hottest it got", model.thermal && model.thermal.worst && THERMAL_NAMES[Math.round(model.thermal.worst.value)]],
     ["Cool for", model.thermal && model.thermal.to_fair_s && Math.round(model.thermal.to_fair_s.value) + " s"],
@@ -911,9 +917,10 @@ function render() {
   }
   if (showingPhones()) {
     host.appendChild(h("p", { className: "notice", text: "A phone is judged on whether it can live with a model: "
-      + "holds up keeps four fifths of its cold speed and stays cool, fades loses a fifth or reaches serious, "
-      + "barely runs is under 8 tok/s once settled or hot for over half the run. Quality is measured off the device "
-      + "on the same weights." }));
+      + "holds up keeps four fifths of its cold speed and delivers 2k tokens before giving any of it up, fades loses "
+      + "a fifth or slows sooner, barely runs is under 8 tok/s once settled. The verdict reads only the tokens the "
+      + "model produced, never the phone's thermal state, so a charger or a warm room cannot move it. Quality is "
+      + "measured off the device on the same weights." }));
   }
   if (setups().length > 1) {
     host.appendChild(h("p", { className: "notice", text: `Measured on ${setups().length} setups — `

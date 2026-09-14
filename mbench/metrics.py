@@ -13,7 +13,8 @@ THERMAL_STATES = ("nominal", "fair", "serious", "critical")
 HOLDS_RATIO = 0.8
 BARELY_RATIO = 0.55
 BARELY_TOKENS_PER_SECOND = 8.0
-HOT_SHARE = 50.0
+HOLDS_TOKENS_TO_KNEE = 2048
+BARELY_TOKENS_TO_KNEE = 512
 THROTTLE_SHARE = 0.9
 BOOTSTRAP_DRAWS = 4000
 
@@ -235,9 +236,13 @@ def sustain_metrics(rows):
     out["speed.decode_steady"] = spread(tail, "tok/s")
     out["speed.sustain_ratio"] = {"value": statistics.median(tail) / peak, "unit": "x", "n": len(values)}
     started = paired[0][2]["start"]
-    dropped = next((row for _, value, row in paired if value < THROTTLE_SHARE * peak), None)
-    if dropped:
-        out["speed.throttle_s"] = {"value": round(dropped["start"] - started, 1), "unit": "s", "n": 1}
+    delivered = 0
+    for _, value, row in paired:
+        if value < THROTTLE_SHARE * peak:
+            out["speed.throttle_s"] = {"value": round(row["start"] - started, 1), "unit": "s", "n": 1}
+            out["speed.tokens_to_knee"] = {"value": delivered, "unit": "tokens", "n": 1}
+            break
+        delivered += row.get("completion_tokens") or 0
     return out
 
 
@@ -350,22 +355,21 @@ def speed_metrics(result):
 
 
 def verdict(entry):
-    """Whether a phone can live with a model. Heat disqualifies: a model that pins the phone at serious for half the
-    run, or that has fallen under 8 tok/s by the time it settles, is not something you would keep installed."""
+    """Whether a phone can live with a model, decided only on tokens the model itself produced: what it settles at,
+    how much of its cold speed that is, and how many tokens it delivered before it gave any of it up. The phone's
+    own thermal state stays out of it — a charger, a warm room or a different phone move that number, and none of
+    them move this one."""
     speed = {key.removeprefix("speed."): value for key, value in entry.items() if key.startswith("speed.")}
-    thermal = {key.removeprefix("thermal."): value for key, value in entry.items() if key.startswith("thermal.")}
     steady = (speed.get("decode_steady") or {}).get("value")
     ratio = (speed.get("sustain_ratio") or {}).get("value")
-    worst = (thermal.get("worst") or {}).get("value")
-    hot = (thermal.get("share_hot") or {}).get("value")
-    if steady is None and ratio is None and worst is None:
+    knee = (speed.get("tokens_to_knee") or {}).get("value")
+    if steady is None and ratio is None:
         return None
     if ((steady is not None and steady < BARELY_TOKENS_PER_SECOND)
             or (ratio is not None and ratio < BARELY_RATIO)
-            or (worst is not None and worst >= THERMAL_STATES.index("critical"))
-            or (hot is not None and hot > HOT_SHARE)):
+            or (knee is not None and knee < BARELY_TOKENS_TO_KNEE)):
         return "barely"
     if ((ratio is not None and ratio < HOLDS_RATIO)
-            or (worst is not None and worst >= THERMAL_STATES.index("serious"))):
+            or (knee is not None and knee < HOLDS_TOKENS_TO_KNEE)):
         return "fades"
     return "holds"
