@@ -6,6 +6,17 @@ import time
 from . import paths, store
 
 ACTIVE = ("queued", "running")
+GPU_CLASS = "gpu"
+
+
+def device_class(run):
+    return ((run or {}).get("hardware") or {}).get("class") or GPU_CLASS
+
+
+def busy(runs, klass=GPU_CLASS):
+    """Runs competing for the same device. A phone and the card are separate machines, so a run on one never has
+    to wait for a run on the other."""
+    return [run for run in runs if run["status"] in ACTIVE and device_class(run) == klass]
 
 
 def unit_name(run_id):

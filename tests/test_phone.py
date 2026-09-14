@@ -1,6 +1,6 @@
 import json
 
-from mbench import board, hosts, metrics, phone, profiles, stack, store, suite
+from mbench import board, hosts, metrics, phone, profiles, stack, store, suite, units
 
 HEALTH = {
     "app": {"version": "0.1.0", "llama_commit": "5266f24", "llama_build": 50},
@@ -229,3 +229,21 @@ def test_a_phone_row_only_takes_quality_from_a_full_question_set(tmp_path, monke
     phone_run(db, "air", "qwen3-0.6b-air", {"quality_from": "small"})
     entry = board.collect(db)["rankings"]["max"][0]
     assert entry["index"] is None and entry["qualityFrom"] is None
+
+
+def running(run_id, klass):
+    return {"id": run_id, "status": "running", "hardware": {"class": klass} if klass else {}}
+
+
+def test_a_phone_run_and_a_card_run_do_not_wait_for_each_other():
+    runs = [running("air", "phone"), {"id": "queued-gpu", "status": "scheduled", "hardware": {}}]
+    assert [run["id"] for run in units.busy(runs, "phone")] == ["air"]
+    assert units.busy(runs, "gpu") == []
+    assert units.device_class({"hardware": {}}) == "gpu"
+    assert units.device_class({"hardware": {"class": "phone"}}) == "phone"
+
+
+def test_two_runs_on_the_same_device_still_queue():
+    runs = [running("one", "gpu"), running("two", "phone")]
+    assert [run["id"] for run in units.busy(runs, "gpu")] == ["one"]
+    assert [run["id"] for run in units.busy(runs, "phone")] == ["two"]

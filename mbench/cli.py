@@ -11,7 +11,7 @@ from typing import NoReturn
 
 from . import __version__, board, doctor, hosts, lmx, metrics, paths, phone, profiles, schedule, sources, stack, store, suite, swap
 from .engine import resolve_effort
-from .units import ACTIVE, reconcile, spawn, unit_active, unit_name
+from .units import ACTIVE, busy, reconcile, spawn, unit_active, unit_name
 
 DURATIONS = {"full": "2–5 hours", "quick": "45–90 minutes", "phone": "30–60 minutes", "smoke": "about 10 minutes"}
 REUSE_FILES = {"speed": ("speed.json",), "lcb": ("lcb.jsonl", "lcb.graded.jsonl")}
@@ -251,7 +251,7 @@ def cmd_run(args):
             fail(f"--submit needs {', '.join(lmx.missing_fields(profile))} for {profile.id} in {paths.PROFILES}")
     db = store.connect()
     reconcile(db)
-    active = [run for run in store.list_runs(db) if run["status"] in ACTIVE]
+    active = busy(store.list_runs(db), "phone" if on_phone else "gpu")
     suite_name = "smoke" if args.smoke else "phone" if on_phone else "quick" if args.quick else "full"
     now = datetime.now()
     begins = schedule.first_start(now, window, at).timestamp() if window else now.timestamp()
@@ -447,8 +447,8 @@ def cmd_resume(args):
     run = latest_run(db, args.run)
     if run["status"] in ACTIVE:
         fail(f"{run['id']} is already running")
-    if any(other["status"] in ACTIVE for other in store.list_runs(db)) and not args.at:
-        fail("another run is in progress; add --at to schedule this one")
+    if busy(store.list_runs(db), (run.get("hardware") or {}).get("class") or "gpu") and not args.at:
+        fail("another run is using the same device; add --at to schedule this one")
     if run["status"] == "complete":
         fail(f"{run['id']} already finished")
     if suite.version_of(run["suite"]) != suite.VERSION:

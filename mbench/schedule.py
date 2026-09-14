@@ -140,7 +140,8 @@ def due(run, moment):
 
 
 def tick(db, moment=None):
-    """Pauses runs whose window has closed, then starts the first due scheduled run if nothing is running; returns its id."""
+    """Pauses runs whose window has closed, then starts every due scheduled run whose device is free; returns the
+    first one it started. A phone and the card are separate machines, so one never waits for the other."""
     moment = moment or datetime.now()
     units.reconcile(db)
     for run in store.list_runs(db):
@@ -148,24 +149,25 @@ def tick(db, moment=None):
             pause(db, run, moment)
     runs = store.list_runs(db)
     started = None
-    if not any(run["status"] in units.ACTIVE for run in runs):
-        waiting = sorted((run for run in runs if run["status"] == "scheduled" and due(run, moment)),
-                         key=lambda run: ((run.get("flags") or {}).get("not_before") or 0, run.get("created") or 0))
-        contended = None
-        for run in waiting:
-            flags = run.get("flags") or {}
-            if not in_window(moment, flags.get("window")):
-                later = next_start(moment, flags["window"]["start"]).timestamp()
-                store.update_run(db, run["id"], flags={**flags, "not_before": later})
+    waiting = sorted((run for run in runs if run["status"] == "scheduled" and due(run, moment)),
+                     key=lambda run: ((run.get("flags") or {}).get("not_before") or 0, run.get("created") or 0))
+    contended = None
+    for run in waiting:
+        if units.busy(runs, units.device_class(run)):
+            continue
+        flags = run.get("flags") or {}
+        if not in_window(moment, flags.get("window")):
+            later = next_start(moment, flags["window"]["start"]).timestamp()
+            store.update_run(db, run["id"], flags={**flags, "not_before": later})
+            continue
+        if gives_way(flags) and units.device_class(run) == units.GPU_CLASS:
+            contended = gpu.contention() if contended is None else contended
+            if contended:
                 continue
-            if gives_way(flags):
-                contended = gpu.contention() if contended is None else contended
-                if contended:
-                    continue
-            store.update_run(db, run["id"], status="queued", error=None)
-            units.spawn(run["id"], False)
-            started = run["id"]
-            break
+        store.update_run(db, run["id"], status="queued", error=None)
+        units.spawn(run["id"], False)
+        runs = store.list_runs(db)
+        started = started or run["id"]
     if not any(run["status"] == "scheduled" for run in store.list_runs(db)):
         remove_timer()
     return started
