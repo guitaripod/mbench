@@ -11,7 +11,7 @@ from . import phone
 from .profiles import Profile
 
 RAM_FLOOR_GB = 8.0
-RAM_PER_RUN_GB = 8.0
+RAM_PER_RUN_GB = 4.0
 RAM_WAIT_S = 1800
 GPU_WAIT_S = 1800
 CARD_CHECK_S = 15
@@ -308,8 +308,8 @@ def execute(run_id):
         elif host.kind == "gpu":
             contention += wait_for_gpu(host, events)
         if host.kind == "gpu" and not wait_for_memory(events, halt):
-            raise RuntimeError(f"only {gpu.mem_available_gb():.1f} GB of RAM free; a run needs "
-                               f"{RAM_FLOOR_GB + RAM_PER_RUN_GB:.0f} GB of room to finish")
+            give_way(db, run, events, [{"name": f"a box with only {gpu.mem_available_gb():.1f} GB free"}], host)
+            return
         seconds = host.ensure_loaded()
         info = host.server_info()
         (run_dir / "server_info.json").write_text(json.dumps(info, indent=1))
