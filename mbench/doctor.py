@@ -115,6 +115,21 @@ def check_stack(moved):
                    + "; its earlier speed and energy numbers no longer compare")
 
 
+METAL_OOM_WORDS = ("compute error", "ggml_metal", "command buffer")
+
+
+def name_memory_failures(checks, phone=False):
+    """A phone whose Metal backend fails with a compute error has run out of unified memory for the context it was
+    given. It reads like a server fault and is not one: the model does not fit, which is the most useful thing a
+    phone row can say."""
+    if not phone:
+        return checks
+    return [{**check, "detail": check["detail"] + " — the phone's Metal backend ran out of memory, so this model "
+                                                  "does not fit at this context"}
+            if check["status"] == "fail" and any(word in check["detail"].lower() for word in METAL_OOM_WORDS) else check
+            for check in checks]
+
+
 def soften_template_refusals(checks):
     """A template that refuses a conversation fails every item of that shape, which is a score of zero, not a reason
     to abandon the run before it starts."""
@@ -134,7 +149,7 @@ async def run(profile, effort, context, capacity, moved=()):
     tool, message = await check_tool_call(client, profile, effort)
     checks += [tool, await check_tool_result(client, profile, effort, message)]
     checks.append(await check_long_prompt(client, profile, effort, context))
-    return soften_template_refusals(checks)
+    return name_memory_failures(soften_template_refusals(checks), phone=bool(profile.phone))
 
 
 def failures(checks):

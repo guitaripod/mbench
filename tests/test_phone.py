@@ -627,3 +627,11 @@ def test_only_one_run_reads_a_question_set_at_a_time(tmp_path, monkeypatch):
     for worker in workers:
         worker.join()
     assert [entry.rstrip("0123456789") for entry in order] == ["in", "out"] * 3
+
+
+def test_a_metal_compute_error_is_named_as_the_model_not_fitting():
+    from mbench import doctor
+    checks = [{"check": "long prompt", "status": "fail", "detail": "failed: InternalServerError('Compute error.')"}]
+    named = doctor.name_memory_failures(checks, phone=True)
+    assert "does not fit at this context" in named[0]["detail"]
+    assert doctor.name_memory_failures(checks, phone=False) == checks
