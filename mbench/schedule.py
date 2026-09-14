@@ -153,7 +153,7 @@ def tick(db, moment=None):
                      key=lambda run: ((run.get("flags") or {}).get("not_before") or 0, run.get("created") or 0))
     contended = None
     for run in waiting:
-        if units.busy(runs, units.device_class(run)):
+        if units.busy(runs, units.device_class(run), speed=units.measures_speed(run)):
             continue
         flags = run.get("flags") or {}
         if not in_window(moment, flags.get("window")):

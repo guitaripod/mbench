@@ -11,6 +11,7 @@ from openai import AsyncOpenAI
 from . import gpu, paths, scoring, suite, tool_cases
 
 CONTEXT_ERROR_WORDS = ("context", "too long", "maximum", "exceeds", "max_tokens")
+TEMPLATE_ERROR_WORDS = ("template", "parser", "alternate", "role")
 MIN_ANSWER_TOKENS = 2048
 ANSWER_RESERVE = 16384
 POOL_HEADROOM = 0.9
@@ -72,6 +73,14 @@ def injection(profile, effort):
     return {**kwargs, **extra}
 
 
+def template_error(error):
+    """A conversation the model's own chat template refuses — Gemma's insists on strict user/model alternation, and
+    llama.cpp cannot build a parser for anything else. Every item of that shape will be refused the same way, so it
+    is a zero the model earned, not a server that broke."""
+    return (isinstance(error, openai.BadRequestError) and not context_error(error)
+            and any(word in str(error).lower() for word in TEMPLATE_ERROR_WORDS))
+
+
 def context_error(error):
     """A request the server refused because prompt plus answer don't fit its window, which scores zero rather than failing."""
     return isinstance(error, openai.BadRequestError) and any(word in str(error).lower() for word in CONTEXT_ERROR_WORDS)
@@ -106,6 +115,10 @@ def base_record(task, item, finish, started):
 
 def out_of_context(task, item, started):
     return {**base_record(task, item, "context", started), "prediction": None, "score": 0.0}
+
+
+def refused(task, item, started):
+    return {**base_record(task, item, "template", started), "prediction": None, "score": 0.0}
 
 
 def build_record(task, item, response, started):
@@ -296,6 +309,8 @@ class QualityRunner:
 
     async def retry_fitted(self, task, item, error, started):
         """A request refused for its length gets one more try with a smaller answer budget, then scores zero."""
+        if template_error(error):
+            return refused(task, item, started)
         fitted = refit(error, item)
         if fitted is not None:
             try:

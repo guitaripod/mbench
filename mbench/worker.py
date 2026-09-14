@@ -271,7 +271,7 @@ def execute(run_id):
         seconds = host.ensure_loaded()
         info = host.server_info()
         (run_dir / "server_info.json").write_text(json.dumps(info, indent=1))
-        capacity = swap.capacity(info)
+        capacity = swap.capacity(info, unified=host.kv_unified())
         profile.context = profile.context or capacity["context"]
         context = swap.positive(profile.context, capacity["context"])
         hardware, build = host.describe(), host.build(info)

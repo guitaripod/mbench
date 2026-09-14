@@ -115,6 +115,16 @@ def check_stack(moved):
                    + "; its earlier speed and energy numbers no longer compare")
 
 
+def soften_template_refusals(checks):
+    """A template that refuses a conversation fails every item of that shape, which is a score of zero, not a reason
+    to abandon the run before it starts."""
+    return [{**check, "status": "warn",
+             "detail": check["detail"] + " — the model's chat template refuses this conversation, so items of this "
+                                         "shape score zero rather than stopping the run"}
+            if check["status"] == "fail" and "template" in check["detail"].lower() else check
+            for check in checks]
+
+
 async def run(profile, effort, context, capacity, moved=()):
     """The checks that decide whether a run can be worth anything, fast enough to go before every run."""
     client = AsyncOpenAI(base_url=(profile.base_url or paths.SWAP_URL) + "/v1", api_key="none", timeout=900,
@@ -124,7 +134,7 @@ async def run(profile, effort, context, capacity, moved=()):
     tool, message = await check_tool_call(client, profile, effort)
     checks += [tool, await check_tool_result(client, profile, effort, message)]
     checks.append(await check_long_prompt(client, profile, effort, context))
-    return checks
+    return soften_template_refusals(checks)
 
 
 def failures(checks):

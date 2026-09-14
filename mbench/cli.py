@@ -251,11 +251,11 @@ def cmd_run(args):
             fail(f"--submit needs {', '.join(lmx.missing_fields(profile))} for {profile.id} in {paths.PROFILES}")
     db = store.connect()
     reconcile(db)
-    active = busy(store.list_runs(db), "phone" if on_phone else "gpu")
+    active = busy(store.list_runs(db), "phone" if on_phone else "gpu", speed="speed" in tasks)
     suite_name = "smoke" if args.smoke else "phone" if on_phone else "quick" if args.quick else "full"
     now = datetime.now()
     begins = schedule.first_start(now, window, at).timestamp() if window else now.timestamp()
-    immediate = None
+    starting = []
     for position, profile in enumerate(chosen):
         level = levels[profile.id]
         source = reuse_source(db, args.reuse, profile, level, suite_name, tasks) if args.reuse else None
@@ -267,7 +267,7 @@ def cmd_run(args):
             flags["quality_from"] = args.quality_from or {"twin": profile.twin}
         if carried:
             flags["reused"] = {"run": source["id"], "tasks": carried}
-        starts_now = window is None and not active and position == 0
+        starts_now = window is None and not active and (position == 0 or "speed" not in tasks)
         if not starts_now:
             flags.update(not_before=begins, window=window)
         store.insert_run(db, {
@@ -277,7 +277,9 @@ def cmd_run(args):
             "hardware": hosts.for_profile(profile).describe(), "flags": flags,
             "note": args.note,
         })
-        if position:
+        if starts_now and position:
+            when = "alongside the ones before it"
+        elif position:
             when = "after the one before it"
         elif window:
             when = f"at {schedule.describe(begins)}"
@@ -288,18 +290,23 @@ def cmd_run(args):
         if args.reuse:
             print(f"  Carrying over {', '.join(carried)} from {source['id']}." if carried
                   else "  Nothing earlier still applies; measuring everything.")
-        immediate = immediate or (run_id if starts_now else None)
+        if starts_now:
+            starting.append(run_id)
     if window and window["end"]:
         print(f"Runs only between {window['start']} and {window['end']}; whatever is unfinished at {window['end']} "
               f"stops, frees the GPU and continues at {window['start']} the next day.")
-    if len(chosen) > 1 or not immediate:
+    immediate = starting[0] if starting else None
+    if len(chosen) > len(starting) or not immediate:
         schedule.install_timer()
     if not immediate:
         print("`mbench status` lists the schedule; `mbench cancel <run>` takes a run off it.")
         return
-    others = [] if on_phone else [entry["model"] for entry in swap.running() if entry["model"] != chosen[0].id]
+    started = {profile.id for profile in chosen}
+    others = [] if on_phone else [entry["model"] for entry in swap.running() if entry["model"] not in started]
     if others:
         print(f"llama-swap will unload {', '.join(others)} to make room.")
+    for run_id in starting[1:]:
+        spawn(run_id, False)
     spawn(immediate, args.foreground)
     if not args.foreground and not args.detach and len(chosen) == 1:
         follow(immediate)
@@ -617,7 +624,7 @@ def cmd_doctor(args):
     info = host.server_info()
     build = host.build(info)
     print(f"Loaded {profile.id} in {seconds} s" + (f", served by {stack.build_label(build)}" if stack.build_label(build) else "") + ".")
-    capacity = swap.capacity(info)
+    capacity = swap.capacity(info, unified=host.kv_unified())
     context = swap.positive(profile.context or capacity["context"], capacity["context"])
     moved = stack.changed(store.last_complete(db, profile.id), host.describe(), build)
     checks = asyncio.run(doctor.run(profile, level, context, capacity, moved))

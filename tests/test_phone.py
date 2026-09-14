@@ -485,3 +485,52 @@ def test_a_wedged_app_is_relaunched_before_the_run_is_given_up(monkeypatch):
     monkeypatch.setattr(host.device, "cooldown", lambda **kwargs: {})
     assert host.ensure_loaded() == 4.0
     assert calls["launched"] == 1
+
+
+def quality_only(run_id, klass="gpu"):
+    return {"id": run_id, "status": "running", "hardware": {"class": klass} if klass != "gpu" else {},
+            "flags": {"tasks": ["supergpqa", "math"]}}
+
+
+def test_runs_that_score_no_speed_may_share_the_card():
+    runs = [quality_only("one"), quality_only("two")]
+    assert units.busy(runs, "gpu", speed=False) == []
+    assert len(units.busy(runs, "gpu", speed=True)) == 2
+
+
+def test_a_speed_measurement_still_wants_the_device_to_itself():
+    runs = [running("timing", "gpu"), quality_only("scoring")]
+    assert [run["id"] for run in units.busy(runs, "gpu", speed=False)] == ["timing"]
+    assert units.measures_speed(running("timing", "gpu"))
+    assert not units.measures_speed(quality_only("scoring"))
+
+
+class Refusal(Exception):
+    pass
+
+
+def test_a_template_that_refuses_a_conversation_scores_zero(monkeypatch):
+    import openai
+    from mbench import engine
+
+    class Refused(openai.BadRequestError):
+        def __init__(self):
+            self.message = "Unable to generate parser for this template"
+
+        def __str__(self):
+            return self.message
+
+    error = Refused()
+    assert engine.template_error(error)
+    assert not engine.context_error(error)
+    record = engine.refused("mrcr", {"id": "x", "sample": 0, "gold": "", "meta": {}, "max_tokens": 4096}, 0.0)
+    assert record["score"] == 0.0 and record["finish"] == "template"
+
+
+def test_a_refused_template_warns_rather_than_abandoning_the_run():
+    from mbench import doctor
+    checks = [{"check": "long prompt", "status": "fail", "detail": "failed: Unable to generate parser for this template"},
+              {"check": "answer", "status": "ok", "detail": "answers"}]
+    softened = doctor.soften_template_refusals(checks)
+    assert softened[0]["status"] == "warn" and "score zero" in softened[0]["detail"]
+    assert doctor.failures(softened) == []

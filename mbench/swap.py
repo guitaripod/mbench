@@ -110,9 +110,10 @@ def positive(*values):
     return min(found) if found else None
 
 
-def capacity(info):
+def capacity(info, unified=True):
     """What the server can hold: requests at once, tokens one request may use, and tokens all requests in flight share.
-    llama.cpp's slots draw on one pool the size of a slot's context (a unified cache, or the tighter reading of a split one)."""
+    llama.cpp splits its cache across slots unless it was started with --kv-unified, so a split server's pool is every
+    slot's context together; reading it as one slot's worth lets a single long item block the whole card."""
     payload = info.get("info") or {}
     endpoint = info.get("endpoint")
     if endpoint in SGLANG_ENDPOINTS:
@@ -122,7 +123,9 @@ def capacity(info):
                 "context": positive(payload.get("context_length"), pool), "pool": pool}
     if endpoint == "/props":
         context = positive((payload.get("default_generation_settings") or {}).get("n_ctx"))
-        return {"slots": positive(payload.get("total_slots")), "context": context, "pool": context}
+        slots = positive(payload.get("total_slots"))
+        pool = context if unified or not (context and slots) else context * slots
+        return {"slots": slots, "context": context, "pool": pool}
     if endpoint == "/v1/models":
         entry = next((entry for entry in payload.get("data") or [] if "max_model_len" in entry), {})
         return {"slots": None, "context": positive(entry.get("max_model_len")), "pool": None}

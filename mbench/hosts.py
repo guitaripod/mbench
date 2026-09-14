@@ -24,6 +24,10 @@ class GpuHost:
     def server_info(self):
         return swap.server_info(self.profile.id)
 
+    def kv_unified(self):
+        """Whether the server shares one cache across its slots, which decides how much work can be in flight."""
+        return any(flag in (self.profile.cmd or "") for flag in ("-kvu", "--kv-unified"))
+
     def describe(self):
         return gpu.describe()
 
@@ -87,6 +91,9 @@ class PhoneHost:
 
     def server_info(self):
         return swap.direct_info(self.device.server_url)
+
+    def kv_unified(self):
+        return any(flag in ("-kvu", "--kv-unified") for flag in (self.profile.phone or {}).get("extra_args") or [])
 
     def describe(self):
         return self.device.describe()
