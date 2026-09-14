@@ -4,7 +4,7 @@ import time
 from . import metrics as scores
 from . import paths, stack, store, suite
 
-KINDS = ("full", "quick")
+KINDS = ("full", "quick", "phone")
 EFFORT_ORDER = ("medium", "max", "high", "xhigh", "low", "min", "minimal", "none")
 DEFAULT_EFFORT = "medium"
 TEMPLATE = paths.PACKAGE / "templates" / "leaderboard.html"
@@ -55,6 +55,21 @@ def warnings_for(tasks, capacity, labels):
                                               for task, share in out_of_reach.items())]
 
 
+def linked_quality(db, run, definition):
+    """A phone run measures speed on the device; its quality comes from a named desktop run of the same weights, so the
+    two numbers are never taken for one measurement."""
+    source_id = (run.get("flags") or {}).get("quality_from")
+    source = store.get_run(db, source_id) if source_id else None
+    if not source:
+        return None
+    metrics = store.metrics_of(db, source["id"])
+    tasks = {task: entry for task in definition["index_tasks"] if (entry := task_entry(metrics, task))}
+    if not tasks:
+        return None
+    return {"run": source["id"], "suite": source["suite"], "host": stack.of(source)["hostLabel"],
+            "index": metrics.get("index.quality"), "tasks": tasks}
+
+
 def model_entry(db, run, history, definition):
     metrics = store.metrics_of(db, run["id"])
     profile = run.get("profile") or {}
@@ -72,6 +87,7 @@ def model_entry(db, run, history, definition):
                 submissions.append({"kind": entry["kind"], "id": entry["remote_id"], "value": entry["value"],
                                     "run": candidate["id"], "verified": detail.get("verified")})
     tasks = {task: entry for task in definition["index_tasks"] if (entry := task_entry(metrics, task))}
+    linked = linked_quality(db, run, definition) if not tasks else None
     capacity = (run.get("server") or {}).get("capacity") or {}
     return {
         "id": run["model"],
@@ -88,8 +104,10 @@ def model_entry(db, run, history, definition):
             "failedItems": flags.get("failed_items") or 0, "notes": flags.get("notes"),
             "reused": flags.get("reused"), "stackChange": flags.get("stack_change") or [],
         },
-        "index": metrics.get("index.quality"),
-        "tasks": tasks,
+        "index": metrics.get("index.quality") or (linked or {}).get("index"),
+        "tasks": tasks or (linked or {}).get("tasks") or {},
+        "qualityFrom": {key: value for key, value in (linked or {}).items() if key in ("run", "suite", "host")} or None,
+        "deviceClass": (run.get("hardware") or {}).get("class") or "gpu",
         "capacity": capacity,
         "warnings": warnings_for(tasks, capacity, definition["labels"]),
         "energy": {"perCorrect": metrics.get("energy.per_correct"), "quality": metrics.get("energy.quality")},

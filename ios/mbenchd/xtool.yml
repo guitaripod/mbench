@@ -1,0 +1,4 @@
+version: 1
+bundleID: com.midgar.mbenchd
+product: mbenchd
+infoPath: Info.plist

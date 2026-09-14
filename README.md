@@ -123,9 +123,43 @@ mbench sources                        newer question sets, or pinned files that 
 mbench board --open                   the leaderboard page
 mbench export --out site              the page plus board.json, ready to publish
 mbench profile <id>                   what mbench knows about a model
+mbench phone [health|forward|push|logs]
+                                      the phone mbenchd runs on
 ```
 
 `mbench -h` and `mbench run -h` cover every option.
+
+## Benchmarking a phone
+
+The same llama.cpp that serves your card also runs on an iPhone, so a phone can be measured on the same terms as the desktop. `ios/mbenchd` is a small app that embeds llama-server built for arm64 iOS and reports what the driver reports on a desktop: the thermal state, the memory the process holds and the battery. It is built from Linux with [xtool](https://github.com/xtool-org/xtool) — no Mac, no Xcode — because Metal kernels are embedded as source and compiled by the phone itself at first load.
+
+```
+ios/mbenchd/scripts/build-llama.sh     cross-compile llama.cpp for arm64 iOS
+cd ios/mbenchd && xtool dev            build, sign and install the app
+mbench phone push model.gguf           copy the weights over the cable
+mbench phone forward                   llama-server on 18080, mbenchd on 18081
+mbench run <id> --quality-from <run>   measure the phone
+```
+
+The model is described in `models.toml` like any other, with a `phone` table in place of a llama-swap command. What that table says is the load request mbenchd sends, so changing the context or the KV type counts as a new configuration, the same way editing a launcher script does.
+
+```toml
+[qwen3-4b-thinking-air]
+name = "Qwen3 4B Thinking · llama.cpp · Q4_K_M · iPhone Air"
+thinking = "qwen"
+efforts = ["max"]
+quantization = "Q4_K_M"
+hf_id = "Qwen/Qwen3-4B-Thinking-2507"
+phone = { file = "qwen3-4b-thinking-q4km.gguf", n_ctx = 32768, parallel = 4, flash_attn = "on", cache_type_k = "q8_0", cache_type_v = "q8_0" }
+```
+
+A phone run measures speed, and what speed costs it:
+
+- **What it holds when it runs hot.** Twenty answers back to back with no pause, each one carrying the thermal state it ran under. The board reports the cold speed, the speed it settles at, the ratio between them and how long it held the cold one. A desktop's two numbers are the same; a phone's are not.
+- **Where the context wall is.** The memory the app actually held, beside the context it managed to load. A model that loads at 32k and refuses at 64k says so.
+- **Quality, measured off the device.** A 4B model answering a 64k-token reasoning budget at phone speed takes days, so quality comes from a desktop run of *the same .gguf*, named with `--quality-from`. The board says so on the row, and never presents the two as one measurement.
+
+Phone rows sit on their own tab, ranked against each other and never mixed with the card's — the quality index compares across stacks, but tokens per second only ever compare within one.
 
 ## Runs that fit around you
 

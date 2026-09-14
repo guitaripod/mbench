@@ -194,7 +194,9 @@ const NS = "http://www.w3.org/2000/svg";
 const SUITES = DATA.suites || { [DATA.current || "1"]: { indexTasks: DATA.indexTasks, taskLabels: DATA.taskLabels, taskNotes: {}, groups: null, efforts: DATA.efforts, rankings: DATA.rankings } };
 const CURRENT = DATA.current || Object.keys(SUITES)[0];
 const WITH_RUNS = Object.keys(SUITES).filter(name => SUITES[name].efforts.length).sort((a, b) => Number(b) - Number(a));
-const state = { sortKey: "index", sortDir: "desc", selected: null, effort: "medium", suite: SUITES[CURRENT].efforts.length ? CURRENT : (WITH_RUNS[0] || CURRENT) };
+const state = { sortKey: "index", sortDir: "desc", selected: null, effort: "medium", deviceClass: null, suite: SUITES[CURRENT].efforts.length ? CURRENT : (WITH_RUNS[0] || CURRENT) };
+const CLASS_LABELS = { gpu: "GPU", phone: "Phone" };
+const THERMAL_NAMES = ["nominal", "fair", "serious", "critical"];
 const EFFORT_LABELS = { medium: "Medium effort", max: "Max effort", min: "Min effort", none: "No thinking" };
 const COUNT_NOUNS = { math: "problems", aime: "problems", lcb: "problems", tools: "episodes", mrcr: "conversations", graphwalks: "graphs", niah: "prompts" };
 
@@ -210,8 +212,32 @@ function label(task) {
   return view().taskLabels[task] || task;
 }
 
-function current() {
+function ranked() {
   return view().rankings[state.effort] || [];
+}
+
+function deviceClasses() {
+  return [...new Set(ranked().map(model => model.deviceClass || "gpu"))].sort();
+}
+
+function current() {
+  const classes = deviceClasses();
+  if (classes.length < 2) return ranked();
+  const chosen = classes.includes(state.deviceClass) ? state.deviceClass : classes[0];
+  return ranked().filter(model => (model.deviceClass || "gpu") === chosen);
+}
+
+function showingPhones() {
+  return current().some(model => model.deviceClass === "phone");
+}
+
+function decodeOf(model) {
+  const entry = showingPhones() && model.speed.decode_steady ? model.speed.decode_steady : model.speed.decode;
+  return entry && entry.value != null ? entry.value : null;
+}
+
+function decodeAxis() {
+  return showingPhones() ? "Decode after throttle (tok/s)" : "Decode, one request (tok/s)";
 }
 
 function h(tag, attrs, children) {
@@ -262,6 +288,18 @@ function columns() {
       note: health()[task] ? `Not separating these models: ${health()[task]}` : null, get: m => m.tasks[task] && m.tasks[task].value,
       better: "high", render: m => pctCell(m.tasks[task], true) })),
     { key: "decode", label: "Decode tok/s", get: m => m.speed.decode && m.speed.decode.value, better: "high", render: m => numCell(m.speed.decode && m.speed.decode.value, fmt.int) },
+    ...(showingPhones() ? [
+      { key: "steady", label: "Steady tok/s", note: "Decode speed after the phone has throttled, measured back to back",
+        get: m => m.speed.decode_steady && m.speed.decode_steady.value, better: "high",
+        render: m => numCell(m.speed.decode_steady && m.speed.decode_steady.value, fmt.int) },
+      { key: "sustain", label: "Holds", note: "Steady speed as a share of the cold speed",
+        get: m => m.speed.sustain_ratio && m.speed.sustain_ratio.value, better: "high",
+        render: m => numCell(m.speed.sustain_ratio && m.speed.sustain_ratio.value, value => value == null ? "–" : value.toFixed(2) + "×",
+          m.speed.throttle_s ? `throttled after ${Math.round(m.speed.throttle_s.value)} s` : null) },
+      { key: "footprint", label: "Peak RAM", note: "The most memory the app held while measuring",
+        get: m => m.speed.footprint && m.speed.footprint.value, better: "low",
+        render: m => numCell(m.speed.footprint && m.speed.footprint.value, value => value == null ? "–" : (value / 1024).toFixed(1) + " GB") },
+    ] : []),
     { key: "peak", label: "Peak tok/s", note: "Most tokens per second across all requests, at the best number of requests at once", get: m => m.speed.peak && m.speed.peak.value, better: "high",
       render: m => numCell(m.speed.peak && m.speed.peak.value, fmt.int, m.speed.peak_at ? `${m.speed.peak_at.value} requests at once` : null) },
     { key: "energy", label: "Wh/correct", note: "Board energy over the quality tasks per correct answer, idle draw included", get: m => m.energy && m.energy.perCorrect && m.energy.perCorrect.value, better: "low",
@@ -387,10 +425,10 @@ function legendRow(model) {
 function frontierOf(points) {
   const frontier = [];
   let best = -Infinity;
-  [...points].sort((a, b) => b.speed.decode.value - a.speed.decode.value).forEach(point => {
+  [...points].sort((a, b) => decodeOf(b) - decodeOf(a)).forEach(point => {
     if (point.index.value > best) { frontier.push(point); best = point.index.value; }
   });
-  return frontier.sort((a, b) => a.speed.decode.value - b.speed.decode.value);
+  return frontier.sort((a, b) => decodeOf(a) - decodeOf(b));
 }
 
 function modelRows(point) {
@@ -398,7 +436,7 @@ function modelRows(point) {
   const line = (value, text) => h("div", { className: "row" }, [h("b", { text: value }), " " + text]);
   const half = point.index && point.index.lo != null ? (point.index.hi - point.index.lo) / 2 : null;
   rows.push(line(fmt.pct(point.index.value) + "%" + (half != null ? ` ±${half.toFixed(1)}` : ""), "quality index"));
-  rows.push(line(fmt.int(point.speed.decode.value), "tok/s, one request"));
+  rows.push(line(fmt.int(decodeOf(point)), showingPhones() ? "tok/s once hot" : "tok/s, one request"));
   if (point.speed.peak) {
     rows.push(line(fmt.int(point.speed.peak.value), `tok/s at ${point.speed.peak_at ? point.speed.peak_at.value : "?"} requests`));
   }
@@ -409,7 +447,7 @@ function modelRows(point) {
 }
 
 function renderFrontier(host) {
-  const points = current().filter(m => m.index && m.index.value != null && m.speed.decode && m.speed.decode.value != null);
+  const points = current().filter(m => m.index && m.index.value != null && decodeOf(m) != null);
   const missing = current().length - points.length;
   const figure = h("figure", { className: "panel frontier" });
   figure.style.margin = "0";
@@ -423,7 +461,7 @@ function renderFrontier(host) {
     return;
   }
   const width = 760, height = 320, left = 62, right = 150, top = 16, bottom = 44;
-  const maxX = niceCeil(Math.max(...points.map(p => p.speed.decode.value)) * 1.12, 50);
+  const maxX = niceCeil(Math.max(...points.map(decodeOf)) * 1.12, 50);
   const ys = points.flatMap(p => [p.index.value, p.index.lo, p.index.hi].filter(value => value != null));
   const minY = Math.max(0, Math.floor((Math.min(...ys) - 4) / 5) * 5);
   const maxY = Math.min(100, Math.ceil((Math.max(...ys) + 3) / 5) * 5);
@@ -441,12 +479,12 @@ function renderFrontier(host) {
     s("text", { x: x(t), y: height - bottom + 17, "text-anchor": "middle", class: "tick" }, svgNode, t);
   }
   s("line", { x1: left, x2: width - right, y1: height - bottom, y2: height - bottom, class: "axis" }, svgNode);
-  s("text", { x: (left + width - right) / 2, y: height - 6, "text-anchor": "middle", class: "axis-title" }, svgNode, "Decode, one request (tok/s)");
+  s("text", { x: (left + width - right) / 2, y: height - 6, "text-anchor": "middle", class: "axis-title" }, svgNode, decodeAxis());
   const yTitle = s("text", { x: 14, y: (top + height - bottom) / 2, "text-anchor": "middle", class: "axis-title",
     transform: `rotate(-90 14 ${(top + height - bottom) / 2})` }, svgNode, "Quality index");
   const frontier = frontierOf(points);
   if (frontier.length > 1) {
-    const path = frontier.map((point, index) => `${index ? "L" : "M"}${x(point.speed.decode.value).toFixed(1)},${y(point.index.value).toFixed(1)}`).join("");
+    const path = frontier.map((point, index) => `${index ? "L" : "M"}${x(decodeOf(point)).toFixed(1)},${y(point.index.value).toFixed(1)}`).join("");
     s("path", { d: path, class: "frontier-line" }, svgNode);
   }
   const overlay = s("rect", { x: left, y: top, width: width - left - right, height: height - top - bottom, fill: "transparent" }, svgNode);
@@ -463,7 +501,7 @@ function renderFrontier(host) {
     return candidate;
   };
   for (const point of [...points].sort((a, b) => b.index.value - a.index.value)) {
-    const px = x(point.speed.decode.value), py = y(point.index.value);
+    const px = x(decodeOf(point)), py = y(point.index.value);
     const selected = point.id === state.selected;
     if (point.index.lo != null && point.index.hi != null) {
       s("line", { x1: px, x2: px, y1: y(point.index.hi), y2: y(point.index.lo), class: selected ? "ci-bar" : "ci-other" }, svgNode);
@@ -473,7 +511,7 @@ function renderFrontier(host) {
       s("text", { x: px + 11, y: labelY(px, py), class: "pt-label" + (selected ? " selected" : "") }, svgNode, shortName(point));
     }
     const hit = s("circle", { cx: px, cy: py, r: 16, class: "hit", tabindex: "0", role: "button",
-      "aria-label": `${shortName(point)}: quality ${fmt.pct(point.index.value)}%, ${fmt.int(point.speed.decode.value)} tok/s` }, svgNode);
+      "aria-label": `${shortName(point)}: quality ${fmt.pct(point.index.value)}%, ${fmt.int(decodeOf(point))} tok/s` }, svgNode);
     hit.addEventListener("pointermove", event => showTooltip(event, modelRows(point)));
     hit.addEventListener("focus", event => showTooltip(event, modelRows(point)));
     hit.addEventListener("blur", hideTooltip);
@@ -487,7 +525,7 @@ function renderFrontier(host) {
     const py = (event.clientY - bounds.top) * height / bounds.height;
     let nearest = points[0], best = Infinity;
     for (const point of points) {
-      const distance = Math.hypot(x(point.speed.decode.value) - px, y(point.index.value) - py);
+      const distance = Math.hypot(x(decodeOf(point)) - px, y(point.index.value) - py);
       if (distance < best) { best = distance; nearest = point; }
     }
     showTooltip(event, modelRows(nearest));
@@ -559,6 +597,19 @@ function concurrencyPoints() {
   for (const model of current()) for (const key of Object.keys(model.speed)) if (key.startsWith("conc.")) set.add(Number(key.slice(5)));
   return [...set].filter(Number.isFinite).sort((a, b) => a - b)
     .map(level => ({ key: level, label: String(level), read: model => model.speed["conc." + level] ? model.speed["conc." + level].value : null }));
+}
+
+function sustainPoints() {
+  const set = new Set();
+  for (const model of current()) for (const key of Object.keys(model.speed)) if (key.startsWith("sustain.")) set.add(Number(key.slice(8)));
+  return [...set].filter(Number.isFinite).sort((a, b) => a - b)
+    .map(index => ({ key: index, label: String(index + 1), read: model => model.speed["sustain." + String(index).padStart(2, "0")]
+      ? model.speed["sustain." + String(index).padStart(2, "0")].value : null }));
+}
+
+function thermalAt(model, index) {
+  const entry = model.speed["sustain_state." + String(index).padStart(2, "0")];
+  return entry ? THERMAL_NAMES[Math.round(entry.value)] : null;
 }
 
 function lengthPoints(task) {
@@ -682,6 +733,9 @@ function renderDetail(host) {
       : null,
     model.run.notes ? h("p", { className: "lede", text: model.run.notes }) : null,
     model.run.reused ? h("p", { className: "strip-note", text: `Answers for ${model.run.reused.tasks.join(", ")} carried over from ${model.run.reused.run}.` }) : null,
+    model.qualityFrom ? h("p", { className: "strip-note", text: `Quality measured off the device, on ${model.qualityFrom.host} `
+      + `(run ${model.qualityFrom.run}, ${model.qualityFrom.suite}), from the same weights this phone loads. `
+      + "Speed, memory and thermals on this page were measured on the phone." }) : null,
     ...(model.warnings || []).map(text => h("p", { className: "strip-note", text })),
   ]));
   panel.appendChild(tiles(model));
@@ -697,6 +751,13 @@ function renderDetail(host) {
       log: false, tick: t => String(t), value: value => fmt.int(value) + " tok/s", xTitle: "prompt length",
       at: point => `${point.label}-token prompt` }),
   ];
+  const decay = sustainPoints();
+  if (decay.length > 3) {
+    charts.unshift(lineChart(model, decay, { title: "What it holds when it runs hot",
+      caption: "Decode speed of back-to-back answers, in the order they ran.",
+      log: false, tick: t => String(t), value: value => fmt.int(value) + " tok/s", xTitle: "answer",
+      at: point => `answer ${point.label}` + (thermalAt(model, point.key) ? `, ${thermalAt(model, point.key)}` : "") }));
+  }
   for (const task of tasks()) {
     const points = lengthPoints(task);
     if (points.length > 1) {
@@ -713,6 +774,10 @@ function renderDetail(host) {
     ["Decode, prose prompt", speed["decode.prose-v1"] && fmt.int(speed["decode.prose-v1"].value) + " tok/s"],
     ["Drafter acceptance, code", speed["accept.code-v1"] && speed["accept.code-v1"].value.toFixed(2) + " tokens/step"],
     ["First token, short prompt", speed["ttft.short"] && Math.round(speed["ttft.short"].value) + " ms"],
+    ["Decode, cold", speed.decode_peak && fmt.int(speed.decode_peak.value) + " tok/s"],
+    ["Decode, once hot", speed.decode_steady && fmt.int(speed.decode_steady.value) + " tok/s"],
+    ["Held the cold speed for", speed.throttle_s && Math.round(speed.throttle_s.value) + " s"],
+    ["Peak memory held", speed.footprint && (speed.footprint.value / 1024).toFixed(1) + " GB"],
     ...(() => {
       const levels = Object.keys(speed).filter(key => key.startsWith("conc.")).map(key => Number(key.slice(5))).sort((a, b) => a - b);
       return levels.length ? [[`${levels.join(" / ")} at once`, levels.map(level => fmt.int(speed["conc." + level].value)).join(" / ") + " tok/s"]] : [];
@@ -799,6 +864,14 @@ function render() {
     return;
   }
   if (!efforts.includes(state.effort)) state.effort = efforts[0];
+  const classes = deviceClasses();
+  if (classes.length > 1) {
+    if (!classes.includes(state.deviceClass)) state.deviceClass = classes[0];
+    host.appendChild(h("div", { className: "tabs", role: "group", "aria-label": "Where it ran" }, classes.map(name => h("button", {
+      type: "button", text: CLASS_LABELS[name] || name, "aria-pressed": name === state.deviceClass ? "true" : "false",
+      onclick: () => { state.deviceClass = name; state.selected = null; render(); },
+    }))));
+  }
   if (efforts.length > 1) {
     host.appendChild(h("div", { className: "tabs", role: "group", "aria-label": "Reasoning effort" }, efforts.map(effort => h("button", {
       type: "button", text: EFFORT_LABELS[effort] || `Effort ${effort}`, "aria-pressed": effort === state.effort ? "true" : "false",

@@ -9,6 +9,8 @@ import numpy as np
 from . import suite
 
 BINARY_TASKS = ("supergpqa", "math", "lcb", "tools")
+THERMAL_STATES = ("nominal", "fair", "serious", "critical")
+THROTTLE_SHARE = 0.9
 BOOTSTRAP_DRAWS = 4000
 
 
@@ -211,8 +213,41 @@ def spread(values, unit):
     return {"value": statistics.median(values), "unit": unit, "n": len(values), "lo": min(values), "hi": max(values)}
 
 
+def sustain_metrics(rows):
+    """What back-to-back decoding costs: the cold speed, the speed it settles at, the ratio between them and how long
+    the phone held the cold one. On a desktop the two are the same number."""
+    paired = [(row["index"], row["decode_tps"], row) for row in rows if row.get("decode_tps")]
+    if len(paired) < 4:
+        return {}
+    out = {}
+    for index, value, row in paired:
+        out[f"speed.sustain.{index:02d}"] = {"value": value, "unit": "tok/s", "n": 1}
+        if row.get("thermal") in THERMAL_STATES:
+            out[f"speed.sustain_state.{index:02d}"] = {"value": THERMAL_STATES.index(row["thermal"]), "unit": "state", "n": 1}
+    values = [value for _, value, _ in paired]
+    peak = max(values[:2])
+    tail = values[len(values) * 2 // 3:]
+    out["speed.decode_peak"] = {"value": peak, "unit": "tok/s", "n": min(2, len(values))}
+    out["speed.decode_steady"] = spread(tail, "tok/s")
+    out["speed.sustain_ratio"] = {"value": statistics.median(tail) / peak, "unit": "x", "n": len(values)}
+    started = paired[0][2]["start"]
+    dropped = next((row for _, value, row in paired if value < THROTTLE_SHARE * peak), None)
+    if dropped:
+        out["speed.throttle_s"] = {"value": round(dropped["start"] - started, 1), "unit": "s", "n": 1}
+    return out
+
+
+def footprint_metrics(result):
+    """The most memory the phone's process held while measuring, which is what decides whether a model fits at all."""
+    rows = [row for key in ("single", "concurrency", "depth", "sustain") for row in result.get(key, [])]
+    peaks = [row["footprint_mib"] for row in rows if row.get("footprint_mib")]
+    return {"speed.footprint": {"value": max(peaks), "unit": "MiB", "n": len(peaks)}} if peaks else {}
+
+
 def speed_metrics(result):
     out = {}
+    out.update(sustain_metrics(result.get("sustain", [])))
+    out.update(footprint_metrics(result))
     single = defaultdict(list)
     for row in result.get("single", []):
         if row.get("decode_tps"):

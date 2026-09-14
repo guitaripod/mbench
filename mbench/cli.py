@@ -9,11 +9,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import NoReturn
 
-from . import __version__, board, doctor, gpu, lmx, metrics, paths, profiles, schedule, sources, stack, store, suite, swap
+from . import __version__, board, doctor, hosts, lmx, metrics, paths, phone, profiles, schedule, sources, stack, store, suite, swap
 from .engine import resolve_effort
 from .units import ACTIVE, reconcile, spawn, unit_active, unit_name
 
-DURATIONS = {"full": "2–5 hours", "quick": "45–90 minutes", "smoke": "about 10 minutes"}
+DURATIONS = {"full": "2–5 hours", "quick": "45–90 minutes", "phone": "30–60 minutes", "smoke": "about 10 minutes"}
 REUSE_FILES = {"speed": ("speed.json",), "lcb": ("lcb.jsonl", "lcb.graded.jsonl")}
 REUSE_STATUSES = ("complete", "failed", "cancelled")
 
@@ -214,15 +214,29 @@ def selected_tasks(args):
     return [task for task in tasks if task in chosen and task not in skipped]
 
 
+def phone_run(chosen):
+    """Phone models and desktop models can't share a run: they answer on different servers and are measured under
+    different suites."""
+    phones = [profile for profile in chosen if profile.phone]
+    if phones and len(phones) != len(chosen):
+        fail("a phone model and a desktop model can't be queued together; run them separately")
+    return bool(phones)
+
+
 def cmd_run(args):
     models = list(dict.fromkeys(args.model))
     if len(models) > 1 and args.reuse not in (None, "latest"):
         fail("--reuse with a run id works for one model; with several, --reuse picks each model's newest run")
     at, window = window_of(args)
     chosen = [resolve_profile(model) for model in models]
-    if not swap.reachable():
-        fail(f"llama-swap is not answering at {paths.SWAP_URL}")
+    on_phone = phone_run(chosen)
+    for profile in chosen:
+        host = hosts.for_profile(profile)
+        if not host.reachable():
+            fail(f"{'mbenchd' if on_phone else 'llama-swap'} is not answering at {host.base_url()}")
     tasks = selected_tasks(args)
+    if on_phone and not args.only:
+        tasks = [task for task in tasks if task in suite.PHONE_TASKS]
     levels = {}
     for profile in chosen:
         try:
@@ -234,7 +248,7 @@ def cmd_run(args):
     db = store.connect()
     reconcile(db)
     active = [run for run in store.list_runs(db) if run["status"] in ACTIVE]
-    suite_name = "smoke" if args.smoke else "quick" if args.quick else "full"
+    suite_name = "smoke" if args.smoke else "phone" if on_phone else "quick" if args.quick else "full"
     now = datetime.now()
     begins = schedule.first_start(now, window, at).timestamp() if window else now.timestamp()
     immediate = None
@@ -245,6 +259,8 @@ def cmd_run(args):
         (paths.RUNS / run_id).mkdir(parents=True, exist_ok=True)
         carried = carry_over(source, run_id, tasks) if source else []
         flags = {"tasks": tasks, "submit": args.submit, "effort_level": level, "yield": not args.keep_gpu}
+        if args.quality_from:
+            flags["quality_from"] = args.quality_from
         if carried:
             flags["reused"] = {"run": source["id"], "tasks": carried}
         starts_now = window is None and not active and position == 0
@@ -253,7 +269,8 @@ def cmd_run(args):
         store.insert_run(db, {
             "id": run_id, "model": profile.id, "name": profile.name, "suite": suite.label(suite_name),
             "effort": args.effort, "status": "queued" if starts_now else "scheduled", "harness": stack.harness(),
-            "fingerprint": profile.fingerprint, "profile": profile.to_dict(), "hardware": gpu.describe(), "flags": flags,
+            "fingerprint": profile.fingerprint, "profile": profile.to_dict(),
+            "hardware": hosts.for_profile(profile).describe(), "flags": flags,
             "note": args.note,
         })
         if position:
@@ -276,12 +293,63 @@ def cmd_run(args):
     if not immediate:
         print("`mbench status` lists the schedule; `mbench cancel <run>` takes a run off it.")
         return
-    others = [entry["model"] for entry in swap.running() if entry["model"] != chosen[0].id]
+    others = [] if on_phone else [entry["model"] for entry in swap.running() if entry["model"] != chosen[0].id]
     if others:
         print(f"llama-swap will unload {', '.join(others)} to make room.")
     spawn(immediate, args.foreground)
     if not args.foreground and not args.detach and len(chosen) == 1:
         follow(immediate)
+
+
+def cmd_phone(args):
+    device = phone.Device()
+    if args.action == "forward":
+        processes = [phone.forward(18080, phone.SERVER_PORT), phone.forward(18081, phone.CONTROL_PORT)]
+        print(f"Forwarding {phone.SERVER_URL} → llama-server and {phone.CONTROL_URL} → mbenchd. Ctrl-C to stop.")
+        try:
+            while all(process.poll() is None for process in processes):
+                time.sleep(1)
+        except KeyboardInterrupt:
+            pass
+        finally:
+            for process in processes:
+                process.terminate()
+        return
+    if args.action == "push":
+        for path in args.files:
+            source = Path(path)
+            if not source.exists():
+                fail(f"no file {source}")
+            print(f"Pushing {source.name} ({source.stat().st_size / 2**30:.2f} GB) to the phone…")
+            print("  " + phone.push(source))
+        return
+    if args.action == "logs":
+        target = Path(args.into or ".")
+        target.mkdir(parents=True, exist_ok=True)
+        health = device.health() or {}
+        app = health.get("app") or {}
+        for remote in filter(None, [app.get("log_path"), app.get("server_log_path")]):
+            name = remote.rsplit("/", 1)[-1]
+            local = target / name
+            relative = remote.split("/Data/Application/", 1)[-1].split("/", 1)[-1] if "/Data/Application/" in remote else remote
+            try:
+                print(phone.pull(relative, local))
+            except RuntimeError as error:
+                print(f"  {name}: {error}")
+        return
+    health = device.health()
+    if not health:
+        fail(f"mbenchd is not answering at {device.control_url}; `mbench phone forward` and open the app")
+    telemetry, server = health["telemetry"], health["server"]
+    described = device.describe()
+    print(f"{described['device']} · {described['soc'] or '?'} · {described['os']} · mbenchd {described['app']} · "
+          f"llama.cpp {device.build()['version']}")
+    print(f"  thermal   {telemetry['thermal_state']} for {telemetry['thermal_since']:.0f} s")
+    print(f"  memory    {telemetry['footprint_mib']:.0f} MiB held, {telemetry['available_mib']:.0f} MiB still available")
+    print(f"  battery   {telemetry['battery_level'] * 100:.0f}% {telemetry['battery_state']}")
+    print(f"  server    {server['state']}" + (f" · {server['model']}" if server.get("model") else ""))
+    for entry in device.models():
+        print(f"  model     {entry['id']} ({entry['bytes'] / 2**30:.2f} GB)")
 
 
 def latest_run(db, run_id=None):
@@ -522,23 +590,24 @@ def cmd_doctor(args):
         level = resolve_effort(profile, args.effort)
     except ValueError as error:
         fail(str(error))
-    if not swap.reachable():
-        fail(f"llama-swap is not answering at {paths.SWAP_URL}")
+    host = hosts.for_profile(profile)
+    if not host.reachable():
+        fail(f"{'mbenchd' if profile.phone else 'llama-swap'} is not answering at {host.base_url()}")
     db = store.connect()
     reconcile(db)
     active = [run for run in store.list_runs(db) if run["status"] in ACTIVE]
     if active:
         fail(f"{active[0]['id']} is running; the checks would compete with it")
-    others = [entry["model"] for entry in swap.running() if entry["model"] != profile.id]
+    others = [] if profile.phone else [entry["model"] for entry in swap.running() if entry["model"] != profile.id]
     if others:
         print(f"llama-swap will unload {', '.join(others)} to make room.")
-    seconds = swap.ensure_loaded(profile.id)
-    info = swap.server_info(profile.id)
-    build = stack.build(profile.engine, info)
+    seconds = host.ensure_loaded()
+    info = host.server_info()
+    build = host.build(info)
     print(f"Loaded {profile.id} in {seconds} s" + (f", served by {stack.build_label(build)}" if stack.build_label(build) else "") + ".")
     capacity = swap.capacity(info)
     context = swap.positive(profile.context or capacity["context"], capacity["context"])
-    moved = stack.changed(store.last_complete(db, profile.id), gpu.describe(), build)
+    moved = stack.changed(store.last_complete(db, profile.id), host.describe(), build)
     checks = asyncio.run(doctor.run(profile, level, context, capacity, moved))
     for check in checks:
         print(f"  {check['status'].upper():<4}  {check['check']:<12} {check['detail']}")
@@ -710,6 +779,8 @@ def parser():
                      help="reasoning effort: max, min, none, or a level the model declares (default medium); ranked per effort")
     run.add_argument("--only", metavar="TASKS", help="comma-separated tasks to run, e.g. speed or math,tools")
     run.add_argument("--skip", metavar="TASKS", help="comma-separated tasks to leave out, e.g. lcb")
+    run.add_argument("--quality-from", metavar="RUN",
+                     help="for a phone run: the desktop run of the same weights whose quality the board shows")
     run.add_argument("--reuse", nargs="?", const="latest", metavar="RUN",
                      help="carry over answers that still apply from an earlier run (default: the newest that qualifies)")
     run.add_argument("--submit", nargs="?", const="all", choices=lmx.SUBMIT_CHOICES, metavar="{all,speed,evals}",
@@ -765,6 +836,11 @@ def parser():
     profile = commands.add_parser("profile", help="what mbench knows about a model and where each fact came from")
     profile.add_argument("model", help="llama-swap model id or alias")
     profile.set_defaults(handler=cmd_profile)
+    phone_parser = commands.add_parser("phone", help="the phone mbenchd runs on: forward its ports, push models, read its logs")
+    phone_parser.add_argument("action", choices=("health", "forward", "push", "logs"), nargs="?", default="health")
+    phone_parser.add_argument("files", nargs="*", help="for push: the .gguf files to copy into the app")
+    phone_parser.add_argument("--into", help="for logs: where to write them (default: here)")
+    phone_parser.set_defaults(handler=cmd_phone)
     commands.add_parser("tick").set_defaults(handler=cmd_tick)
     worker = commands.add_parser("worker")
     worker.add_argument("run_id")

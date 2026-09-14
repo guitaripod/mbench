@@ -215,7 +215,8 @@ class QualityRunner:
         self.gone = None
         self.streak = 0
         self.latencies = {}
-        self.client = AsyncOpenAI(base_url=paths.SWAP_URL + "/v1", api_key="none", timeout=7200, max_retries=0)
+        self.client = AsyncOpenAI(base_url=(profile.base_url or paths.SWAP_URL) + "/v1", api_key="none", timeout=7200,
+                                  max_retries=0)
 
     def done(self, task):
         path = self.run_dir / f"{task}.jsonl"

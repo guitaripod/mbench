@@ -34,6 +34,7 @@ TASK_NOTES = {
     "graphwalks": "OpenAI's multi-hop graph test: BFS and parent queries over edge lists of 8k to 64k tokens.",
     "tools": "Multi-step episodes against a simulated workspace, graded by the end state rather than the exact calls.",
 }
+PHONE_TASKS = ("speed",)
 TASK_VERSIONS = {"speed": 1, "supergpqa": 1, "math": 1, "lcb": 1, "mrcr": 1, "graphwalks": 1, "tools": 1}
 DEFINITIONS = {
     VERSION: {
@@ -71,6 +72,17 @@ SUITES = {
         "mrcr": {"bins": (16384, 32768, 65536, 131072), "per_bin": 5, "max_tokens": 32768},
         "graphwalks": {"bins": (8192, 16384, 32768, 65536), "per_bin": 2, "max_tokens": 32768},
         "tools": {"repeats": 1, "max_tokens": 8192, "max_steps": 10},
+    },
+    "phone": {
+        "speed": {"reps": 3, "max_tokens": 512, "concurrency": (1, 2, 4, 8), "rounds": 2,
+                  "depths": (1000, 4000, 16000, 32000), "depth_reps": 2, "depth_max_tokens": 256,
+                  "sustain": {"reps": 20, "max_tokens": 512}},
+        "supergpqa": {"questions": 156, "max_tokens": 4096},
+        "math": {"samples": 1, "max_tokens": 4096},
+        "lcb": {"limit": 40, "max_tokens": 4096},
+        "mrcr": {"bins": (8192, 16384), "per_bin": 5, "max_tokens": 4096},
+        "graphwalks": {"bins": (8192, 16384), "per_bin": 2, "max_tokens": 4096},
+        "tools": {"repeats": 1, "max_tokens": 4096, "max_steps": 10},
     },
     "smoke": {
         "speed": {"reps": 1, "max_tokens": 256, "concurrency": (1,), "rounds": 1,

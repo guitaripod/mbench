@@ -117,11 +117,16 @@ def build_label(found):
 
 def host_key(hardware):
     hardware = hardware or {}
+    if hardware.get("class") == "phone":
+        return f"{hardware.get('device') or '?'}|{hardware.get('os') or '?'}"
     return f"{hardware.get('gpu') or '?'}|{hardware.get('driver') or '?'}"
 
 
 def host_label(hardware):
     hardware = hardware or {}
+    if hardware.get("class") == "phone":
+        parts = [hardware.get("device") or "unknown phone", hardware.get("soc"), hardware.get("os")]
+        return " · ".join(part for part in parts if part)
     parts = [hardware.get("gpu") or "unknown GPU"]
     if hardware.get("driver"):
         parts.append(f"driver {hardware['driver']}")
@@ -135,6 +140,8 @@ def of(run):
     found = as_build(((run or {}).get("server") or {}).get("build"))
     return {"host": host_key(hardware), "hostLabel": host_label(hardware), "gpu": hardware.get("gpu"),
             "driver": hardware.get("driver"), "vramMib": hardware.get("vram_mib"),
+            "deviceClass": hardware.get("class") or "gpu", "device": hardware.get("device"),
+            "soc": hardware.get("soc"), "bandwidthGbs": hardware.get("bandwidth_gbs"), "ramGb": hardware.get("ram_gb"),
             "engine": found.get("engine"), "build": build_label(found), "source": found.get("source")}
 
 

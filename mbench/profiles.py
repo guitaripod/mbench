@@ -1,4 +1,5 @@
 import hashlib
+import json
 import shlex
 import tomllib
 from dataclasses import asdict, dataclass, field
@@ -6,7 +7,7 @@ from pathlib import Path
 
 import yaml
 
-from . import paths
+from . import paths, phone
 
 
 @dataclass
@@ -24,6 +25,8 @@ class Profile:
     cmd: str = ""
     fingerprint: str = ""
     sources: dict = field(default_factory=dict)
+    phone: dict = field(default_factory=dict)
+    base_url: str | None = None
 
     def to_dict(self):
         return asdict(self)
@@ -110,7 +113,43 @@ def engine_of(cmd):
     return "other"
 
 
+def phone_request(model_id, settings):
+    """What mbenchd is asked to load: the phone table minus the addresses, which say where to send it rather than what
+    to run. `file` names the .gguf on the phone when it differs from the model id."""
+    request = {key: value for key, value in settings.items() if key not in ("control_url", "server_url")}
+    request["model"] = request.pop("file", None) or request.get("model") or model_id
+    return {key: value for key, value in request.items() if value is not None}
+
+
+def phone_profile(model_id, user):
+    """A model that runs on a phone has no llama-swap entry: models.toml says everything, and the load request sent
+    to mbenchd stands in for the launch command, so changing the context or the KV type counts as a new configuration."""
+    settings = dict(user["phone"])
+    request = phone_request(model_id, settings)
+    body = json.dumps(request, sort_keys=True)
+    return Profile(
+        id=model_id,
+        name=user.get("name") or model_id,
+        engine=user.get("engine_kind") or "llama.cpp",
+        thinking=user.get("thinking") or "none",
+        context=user.get("context") or request.get("n_ctx"),
+        efforts=list(user.get("efforts") or []),
+        hf_id=user.get("hf_id"),
+        quantization=user.get("quantization"),
+        spec=user.get("spec") or {},
+        engine_meta=user.get("engine") or {},
+        cmd=body,
+        fingerprint=hashlib.sha256(body.encode()).hexdigest()[:16],
+        sources={key: "models.toml" for key in ("name", "thinking", "context", "efforts", "hf_id")},
+        phone=settings,
+        base_url=settings.get("server_url") or phone.SERVER_URL,
+    )
+
+
 def resolve(model_id):
+    declared = user_profiles().get(model_id, {})
+    if declared.get("phone"):
+        return phone_profile(model_id, declared)
     config = swap_config()
     models = config.get("models") or {}
     entry = models.get(model_id)

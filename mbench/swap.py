@@ -60,11 +60,11 @@ def upstream(model, path, timeout=10):
         return None
 
 
-def server_info(model):
+def read_info(reader):
     """SGLang answers /server_info (or the older /get_server_info), llama.cpp /props and vLLM only /v1/models; each tells
     what the server really runs with."""
     for path in INFO_ENDPOINTS:
-        raw = upstream(model, path)
+        raw = reader(path)
         if not raw:
             continue
         try:
@@ -74,6 +74,23 @@ def server_info(model):
         if path != "/v1/models" or any("max_model_len" in entry for entry in payload.get("data") or []):
             return {"endpoint": path, "info": payload}
     return {}
+
+
+def server_info(model):
+    return read_info(lambda path: upstream(model, path))
+
+
+def direct_info(base_url):
+    """A server that answers for itself: a phone runs llama-server with no llama-swap in front of it, so its /props
+    is read straight off the server rather than through an /upstream prefix."""
+    def reader(path):
+        try:
+            with urllib.request.urlopen(base_url.rstrip("/") + path, timeout=10) as response:
+                return response.read()
+        except (OSError, urllib.error.HTTPError):
+            return None
+
+    return read_info(reader)
 
 
 def trimmed_info(info):

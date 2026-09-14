@@ -5,7 +5,7 @@ import time
 import pandas as pd
 from openai import AsyncOpenAI
 
-from . import datasets, gpu, paths, suite, swap
+from . import datasets, hosts, paths, suite, swap
 from .engine import request_kwargs
 
 
@@ -35,8 +35,9 @@ class Filler:
 class SpeedRun:
     """Greedy decoding throughout, so the same prompt produces the same tokens and drafter acceptance stays comparable between runs."""
 
-    def __init__(self, profile, spec, effort, run_id, report, abort, levels=None, context=None):
+    def __init__(self, profile, spec, effort, run_id, report, abort, levels=None, context=None, host=None):
         self.profile = profile
+        self.host = host or hosts.for_profile(profile)
         self.spec = spec
         self.levels = list(levels or spec["concurrency"])
         self.context = context or profile.context
@@ -44,7 +45,8 @@ class SpeedRun:
         self.run_id = run_id
         self.report = report
         self.abort = abort
-        self.client = AsyncOpenAI(base_url=paths.SWAP_URL + "/v1", api_key="none", timeout=3600, max_retries=0)
+        self.client = AsyncOpenAI(base_url=(profile.base_url or paths.SWAP_URL) + "/v1", api_key="none", timeout=3600,
+                                  max_retries=0)
         self.counter = 0
         self.contention = []
 
@@ -57,7 +59,7 @@ class SpeedRun:
         return swap.spec_counters(self.profile.id) if self.profile.engine == "sglang" else None
 
     def note_contention(self):
-        for process in gpu.contention(samples=1):
+        for process in self.host.contention(samples=1):
             if process["name"] not in [seen["name"] for seen in self.contention]:
                 self.contention.append(process)
 
@@ -100,6 +102,17 @@ class SpeedRun:
             "finish_reason": finish,
         }
 
+    async def sustained(self, text, spec, sampler, results, step):
+        """Decodes back to back with no pause between requests, which is how a phone's speed actually falls: the first
+        answers run at the cold clock and the rest at whatever the chassis can hold."""
+        for index in range(spec["reps"]):
+            if self.abort.is_set():
+                return
+            row = await self.stream_once(text, spec["max_tokens"])
+            row.update(index=index, **sampler.window(row["start"], row["end"]))
+            results["sustain"].append(row)
+            step()
+
     def depths(self):
         context = self.context
         limit = self.spec["depth_max_tokens"] + 1024
@@ -108,15 +121,18 @@ class SpeedRun:
     async def run(self):
         prompts = suite.canonical_prompts()
         depths = self.depths()
-        total = len(prompts) * self.spec["reps"] + len(self.levels) * self.spec["rounds"] + len(depths) * self.spec["depth_reps"]
+        sustain = self.spec.get("sustain")
+        total = (len(prompts) * self.spec["reps"] + len(self.levels) * self.spec["rounds"]
+                 + len(depths) * self.spec["depth_reps"] + (sustain["reps"] if sustain else 0))
         progress = {"done": 0}
-        results = {"single": [], "concurrency": [], "depth": [], "depths_skipped": sorted(set(self.spec["depths"]) - set(depths))}
+        results = {"single": [], "concurrency": [], "depth": [], "sustain": [],
+                   "depths_skipped": sorted(set(self.spec["depths"]) - set(depths))}
 
         def step():
             progress["done"] += 1
             self.report("speed", progress["done"], total)
 
-        sampler = gpu.Sampler()
+        sampler = self.host.sampler()
         try:
             await self.stream_once("Say hello in five words.", 64)
             await self.stream_once(prompts["code-v1"], 256)
@@ -132,6 +148,8 @@ class SpeedRun:
                     row["accept_length"] = swap.accept_length(before, self.counters())
                     results["single"].append(row)
                     step()
+            if sustain:
+                await self.sustained(prompts["prose-v1"], sustain, sampler, results, step)
             texts = list(prompts.values())
             for level in self.levels:
                 for round_index in range(self.spec["rounds"]):

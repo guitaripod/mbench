@@ -6,7 +6,8 @@ import time
 import traceback
 from datetime import datetime
 
-from . import board, datasets, doctor, engine, gpu, grader, lmx, metrics, notify, paths, schedule, speed, stack, store, suite, swap
+from . import board, datasets, doctor, engine, gpu, grader, hosts, lmx, metrics, notify, paths, schedule, speed, stack, store, suite, swap
+from . import phone
 from .profiles import Profile
 
 RAM_FLOOR_GB = 4.0
@@ -135,19 +136,19 @@ class GpuWatch(threading.Thread):
         self.stopped.set()
 
 
-def wait_for_gpu(events):
+def wait_for_gpu(host, events):
     """Waits up to 30 minutes while other GPU work runs (a game, ComfyUI) so it can't skew speed; returns what was still
     running when it had to go ahead anyway."""
     deadline = time.time() + GPU_WAIT_S
     announced = False
     while True:
-        found = gpu.contention()
+        found = host.contention()
         if not found:
             return []
         if time.time() > deadline:
             return [process["name"] for process in found]
         if not announced:
-            events.emit("waiting", reason=f"GPU busy: {gpu.describe_contention(found)}")
+            events.emit("waiting", reason=f"GPU busy: {host.describe_contention(found)}")
             announced = True
         time.sleep(30)
 
@@ -176,13 +177,14 @@ def submit(db, run_id, profile, effort, run_dir, events, which):
         store.set_metrics(db, run_id, extra)
 
 
-def measure_speed(db, run_id, profile, spec, level, run_dir, events, halt, levels, context):
+def measure_speed(db, run_id, profile, spec, level, run_dir, events, halt, levels, context, host):
     """Measures speed once; a speed.json already in the run (resumed, or carried over with --reuse) is scored instead."""
     speed_file = run_dir / "speed.json"
     if speed_file.exists():
         result = json.loads(speed_file.read_text())
     else:
-        result = asyncio.run(speed.SpeedRun(profile, spec, level, run_id, events.progress, halt, levels, context).run())
+        result = asyncio.run(speed.SpeedRun(profile, spec, level, run_id, events.progress, halt, levels, context,
+                                            host=host).run())
         if not halt.is_set():
             speed_file.write_text(json.dumps(result, indent=1))
     store.set_metrics(db, run_id, metrics.speed_metrics(result))
@@ -199,10 +201,10 @@ def add_energy(run_dir, task, watt_hours):
     path.write_text(json.dumps(energy, indent=1))
 
 
-def park_for_window(db, run, events, window):
+def park_for_window(db, run, events, window, host):
     """Ends this session before the window closes and frees the GPU; the run continues when the window next opens."""
     resumes = schedule.next_start(datetime.now(), window["start"]).timestamp()
-    swap.unload()
+    host.unload()
     count = schedule.park(db, run["id"], resumes, f"the {window['start']}–{window['end']} window was closing", "paused")
     events.emit("paused", until=schedule.describe(resumes))
     if count == 1:
@@ -210,11 +212,11 @@ def park_for_window(db, run, events, window):
                     run=run["id"], status="paused")
 
 
-def give_way(db, run, events, found):
+def give_way(db, run, events, found, host):
     """Frees the GPU for whatever else wants it and tries again in ten minutes, from the saved answers."""
     resumes = time.time() + YIELD_RETRY_S
     names = ", ".join(process["name"] for process in found) or "another program"
-    swap.unload()
+    host.unload()
     count = schedule.park(db, run["id"], resumes, f"gave the GPU to {names}", "yielded")
     schedule.install_timer()
     events.emit("yielded", to=names, retry=schedule.describe(resumes))
@@ -241,10 +243,12 @@ def execute(run_id):
     level = flags.get("effort_level") or run["effort"]
     window = flags.get("window")
     halt = Halt()
-    guard = MemoryGuard(halt, events)
-    guard.start()
-    card = CardGuard(halt, events)
-    card.start()
+    host = hosts.for_profile(profile)
+    guards = [MemoryGuard(halt, events), CardGuard(halt, events)] if host.kind == "gpu" else [host.guard(halt, events)]
+    guards = [each for each in guards if each]
+    for each in guards:
+        each.start()
+    card = next((each for each in guards if isinstance(each, (CardGuard, phone.Guard))), None)
     watch = sampler = None
     store.update_run(db, run_id, status="running", started=time.time(), error=None)
     events.emit("started", model=profile.id, suite=run["suite"], effort=f"{run['effort']} ({level})")
@@ -255,22 +259,22 @@ def execute(run_id):
                                f"v{suite.VERSION}; start a new run, with --reuse {run_id} to carry over what still applies")
         deadline = schedule.window_deadline(window, datetime.now())
         if deadline and deadline - time.time() < MIN_WINDOW_S:
-            park_for_window(db, run, events, window)
+            park_for_window(db, run, events, window, host)
             return
-        if schedule.gives_way(flags):
-            found = gpu.contention()
+        if schedule.gives_way(flags) and host.kind == "gpu":
+            found = host.contention()
             if found:
-                give_way(db, run, events, found)
+                give_way(db, run, events, found, host)
                 return
-        else:
-            contention += wait_for_gpu(events)
-        seconds = swap.ensure_loaded(profile.id)
-        info = swap.server_info(profile.id)
+        elif host.kind == "gpu":
+            contention += wait_for_gpu(host, events)
+        seconds = host.ensure_loaded()
+        info = host.server_info()
         (run_dir / "server_info.json").write_text(json.dumps(info, indent=1))
         capacity = swap.capacity(info)
         profile.context = profile.context or capacity["context"]
         context = swap.positive(profile.context, capacity["context"])
-        hardware, build = gpu.describe(), stack.build(profile.engine, info)
+        hardware, build = host.describe(), host.build(info)
         moved = stack.changed(store.last_complete(db, run["model"], run_id), hardware, build)
         if moved:
             flags["stack_change"] = moved
@@ -286,17 +290,18 @@ def execute(run_id):
                 events.emit("doctor", check=check["check"], status=check["status"], detail=check["detail"])
         if doctor.failures(checks):
             raise RuntimeError("doctor: " + "; ".join(f"{check['check']}: {check['detail']}" for check in doctor.failures(checks)))
-        if schedule.gives_way(flags):
+        if schedule.gives_way(flags) and host.kind == "gpu":
             watch = GpuWatch(halt, events)
             watch.start()
         if "speed" in tasks:
             if deadline and not (run_dir / "speed.json").exists() and deadline - time.time() < SPEED_WINDOW_S:
-                park_for_window(db, run, events, window)
+                park_for_window(db, run, events, window, host)
                 return
             slots = capacity["slots"] or suite.CONCURRENCY
             levels = [each for each in spec["speed"]["concurrency"] if each <= slots] or [1]
-            contention += measure_speed(db, run_id, profile, spec["speed"], level, run_dir, events, halt, levels, context)
-        sampler = gpu.Sampler(interval_ms=1000)
+            contention += measure_speed(db, run_id, profile, spec["speed"], level, run_dir, events, halt, levels,
+                                        context, host)
+        sampler = host.sampler(interval_ms=1000)
         runner = engine.QualityRunner(profile, run_dir, level, events.progress, halt, capacity["slots"], capacity["pool"],
                                       deadline)
         failed_items = 0
@@ -324,10 +329,12 @@ def execute(run_id):
                 raise RuntimeError(f"stopped because free RAM fell below {RAM_FLOOR_GB:.0f} GB")
             if halt.reason == "card":
                 raise RuntimeError(f"stopped because the GPU stopped answering: {card.fault}")
-            give_way(db, run, events, watch.found if watch else [])
+            if halt.reason == "device":
+                raise RuntimeError(f"stopped because the phone stopped answering: {card.fault if card else ''}")
+            give_way(db, run, events, watch.found if watch else [], host)
             return
         if runner.drained:
-            park_for_window(db, run, events, window)
+            park_for_window(db, run, events, window, host)
             return
         store.set_metrics(db, run_id, metrics.quality_index(store.metrics_of(db, run_id), run_dir))
         store.set_metrics(db, run_id, metrics.energy_metrics(run_dir))
@@ -346,8 +353,8 @@ def execute(run_id):
         events.log(traceback.format_exc())
         notify.send("mbench failed", f"{profile.id}: {str(error)[:200]}", run=run_id, status="failed")
     finally:
-        guard.stop()
-        card.stop()
+        for each in guards:
+            each.stop()
         if watch:
             watch.stop()
         if sampler:
