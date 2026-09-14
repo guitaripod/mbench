@@ -534,3 +534,15 @@ def test_a_refused_template_warns_rather_than_abandoning_the_run():
     softened = doctor.soften_template_refusals(checks)
     assert softened[0]["status"] == "warn" and "score zero" in softened[0]["detail"]
     assert doctor.failures(softened) == []
+
+
+def test_a_model_in_a_resident_group_does_not_unload_its_group_mates():
+    config = {"models": {"a": {}, "b": {}, "c": {}},
+              "groups": {"twins": {"swap": False, "members": ["a", "b"]}}}
+    assert profiles.group_of("a", config) == "twins"
+    assert profiles.group_of("c", config) is None
+
+
+def test_a_swapping_group_is_not_resident():
+    config = {"groups": {"one-at-a-time": {"swap": True, "members": ["a"]}}}
+    assert profiles.group_of("a", config) is None

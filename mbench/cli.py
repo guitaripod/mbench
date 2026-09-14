@@ -301,8 +301,12 @@ def cmd_run(args):
     if not immediate:
         print("`mbench status` lists the schedule; `mbench cancel <run>` takes a run off it.")
         return
-    started = {profile.id for profile in chosen}
-    others = [] if on_phone else [entry["model"] for entry in swap.running() if entry["model"] not in started]
+    config = {} if on_phone else profiles.swap_config()
+    resident = {profile.id for profile in chosen}
+    resident |= {model for model in (config.get("models") or {})
+                 if profiles.group_of(model, config)
+                 and profiles.group_of(model, config) in {profiles.group_of(profile.id, config) for profile in chosen}}
+    others = [] if on_phone else [entry["model"] for entry in swap.running() if entry["model"] not in resident]
     if others:
         print(f"llama-swap will unload {', '.join(others)} to make room.")
     for run_id in starting[1:]:

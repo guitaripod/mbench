@@ -187,3 +187,12 @@ def resolve(model_id):
         fingerprint=fingerprint(cmd),
         sources=sources,
     )
+
+
+def group_of(model_id, config=None):
+    """The llama-swap group a model belongs to, when it is in one that keeps its members loaded together."""
+    config = config if config is not None else swap_config()
+    for name, group in (config.get("groups") or {}).items():
+        if model_id in (group.get("members") or []) and group.get("swap") is False:
+            return name
+    return None
