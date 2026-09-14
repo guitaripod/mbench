@@ -291,6 +291,19 @@ def answered_tokens(result):
     return sum(stream.get("completion_tokens") or 0 for stream in streams) or None
 
 
+def cooldown_metrics(entries):
+    """Whether the device actually came back to its cold state before each block, and how long that took. A run that
+    had to start warm is still recorded, and says so, rather than quietly reading low."""
+    entries = [entry for entry in entries or [] if entry.get("waited_s") is not None]
+    if not entries:
+        return {}
+    return {
+        "speed.cooldown_s": {"value": sum(entry["waited_s"] for entry in entries), "unit": "s", "n": len(entries)},
+        "speed.cooled": {"value": 100.0 if all(entry.get("reached") for entry in entries) else 0.0,
+                         "unit": "%", "n": len(entries)},
+    }
+
+
 def footprint_metrics(result):
     """The most memory the phone's process held while measuring, which is what decides whether a model fits at all."""
     rows = [row for key in ("single", "concurrency", "depth", "sustain") for row in result.get(key, [])]
@@ -303,6 +316,7 @@ def speed_metrics(result):
     out.update(sustain_metrics(result.get("sustain", [])))
     out.update(footprint_metrics(result))
     out.update(thermal_metrics(result.get("telemetry"), answered_tokens(result)))
+    out.update(cooldown_metrics(result.get("cooldowns")))
     single = defaultdict(list)
     for row in result.get("single", []):
         if row.get("decode_tps"):

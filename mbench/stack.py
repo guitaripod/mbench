@@ -1,3 +1,4 @@
+import hashlib
 import json
 import re
 import subprocess
@@ -185,3 +186,29 @@ def harness():
     """The mbench that is measuring: a run records it when it starts, not when it was queued, because the code can move
     between the two."""
     return f"{VERSION}+{checkout_commit(paths.PACKAGE.parent) or installed_commit() or 'nogit'}"
+
+
+def digest_of(path):
+    """The sha256 of a weights file, cached against its size and modification time. It is what lets a phone run and a
+    desktop run prove they scored the same artifact rather than two files with the same name."""
+    try:
+        found = Path(path)
+        stat = found.stat()
+    except (OSError, TypeError):
+        return None
+    cache_file = paths.CACHE / "digests.json"
+    key = f"{found}:{stat.st_size}:{stat.st_mtime_ns}"
+    try:
+        cache = json.loads(cache_file.read_text())
+    except (OSError, json.JSONDecodeError):
+        cache = {}
+    if key in cache:
+        return cache[key]
+    digest = hashlib.sha256()
+    with found.open("rb") as handle:
+        for block in iter(lambda: handle.read(4 * 1024 * 1024), b""):
+            digest.update(block)
+    cache[key] = digest.hexdigest()
+    cache_file.parent.mkdir(parents=True, exist_ok=True)
+    cache_file.write_text(json.dumps(cache))
+    return cache[key]

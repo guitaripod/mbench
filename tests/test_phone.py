@@ -247,3 +247,80 @@ def test_two_runs_on_the_same_device_still_queue():
     runs = [running("one", "gpu"), running("two", "phone")]
     assert [run["id"] for run in units.busy(runs, "gpu")] == ["one"]
     assert [run["id"] for run in units.busy(runs, "phone")] == ["two"]
+
+
+def test_a_run_that_started_warm_says_so():
+    cooled = metrics.cooldown_metrics([{"waited_s": 62.0, "reached": True}, {"waited_s": 71.0, "reached": True}])
+    assert cooled["speed.cooldown_s"]["value"] == 133.0 and cooled["speed.cooled"]["value"] == 100.0
+    warm = metrics.cooldown_metrics([{"waited_s": 900.0, "reached": False}])
+    assert warm["speed.cooled"]["value"] == 0.0
+
+
+def test_a_card_never_waits_to_cool(monkeypatch):
+    monkeypatch.setattr(profiles, "swap_config", lambda: {"models": {"m": {"cmd": "llama-server -m x"}}})
+    monkeypatch.setattr(profiles, "user_profiles", lambda: {})
+    monkeypatch.setattr(profiles, "omp_overrides", lambda: {})
+    assert hosts.for_profile(profiles.resolve("m")).cooldown() == {}
+    assert metrics.cooldown_metrics([]) == {}
+
+
+def test_the_phone_waits_until_it_is_cold_again(monkeypatch):
+    states = ["serious", "serious", "fair", "nominal"]
+    device = FakeDevice()
+    monkeypatch.setattr(phone.time, "sleep", lambda seconds: None)
+    monkeypatch.setattr(device, "health", lambda: {"telemetry": {"thermal_state": states.pop(0) if states else "nominal",
+                                                                "battery_level": 0.9, "battery_state": "charging"}})
+    found = device.cooldown(floor=0)
+    assert found["reached"] and found["exit"] == "nominal" and found["entry"] == "serious"
+
+
+def test_the_phone_gives_up_cooling_and_records_that_it_did(monkeypatch):
+    device = FakeDevice()
+    clock = iter([0, 0, 0, 10_000])
+    monkeypatch.setattr(phone.time, "sleep", lambda seconds: None)
+    monkeypatch.setattr(phone.time, "time", lambda: next(clock, 10_000))
+    monkeypatch.setattr(device, "health", lambda: {"telemetry": {"thermal_state": "serious"}})
+    found = device.cooldown(floor=0, cap=60)
+    assert not found["reached"] and found["exit"] == "serious"
+
+
+def test_quality_is_not_inherited_across_two_different_files(tmp_path, monkeypatch):
+    monkeypatch.setattr("mbench.paths.DB", tmp_path / "bench.db")
+    db = store.connect()
+    store.insert_run(db, {"id": "desktop", "model": "m", "name": "m", "suite": suite.label("full"), "effort": "max",
+                          "status": "complete", "finished": 1, "hardware": {"gpu": "RTX PRO 6000"}, "profile": {},
+                          "server": {"weights": "aaa"}})
+    store.set_metrics(db, "desktop", {"index.quality": {"value": 58.4, "unit": "%", "n": 6},
+                                      "math.score": {"value": 71.0, "unit": "%", "n": 30}})
+    store.insert_run(db, {"id": "other", "model": "m-air", "name": "m-air", "suite": suite.label("phone"),
+                          "effort": "max", "status": "complete", "finished": 2, "profile": {},
+                          "hardware": {"class": "phone", "device": "iPhone Air"},
+                          "server": {"weights": "bbb"}, "flags": {"quality_from": "desktop"}})
+    assert board.collect(db)["rankings"]["max"][0]["index"] is None
+
+
+def test_matching_weights_are_marked_verified(tmp_path, monkeypatch):
+    monkeypatch.setattr("mbench.paths.DB", tmp_path / "bench.db")
+    db = store.connect()
+    store.insert_run(db, {"id": "desktop", "model": "m", "name": "m", "suite": suite.label("full"), "effort": "max",
+                          "status": "complete", "finished": 1, "hardware": {"gpu": "RTX PRO 6000"}, "profile": {},
+                          "server": {"weights": "aaa"}})
+    store.set_metrics(db, "desktop", {"index.quality": {"value": 58.4, "unit": "%", "n": 6},
+                                      "math.score": {"value": 71.0, "unit": "%", "n": 30}})
+    store.insert_run(db, {"id": "air", "model": "m-air", "name": "m-air", "suite": suite.label("phone"),
+                          "effort": "max", "status": "complete", "finished": 2, "profile": {},
+                          "hardware": {"class": "phone", "device": "iPhone Air"},
+                          "server": {"weights": "aaa"}, "flags": {"quality_from": "desktop"}})
+    entry = board.collect(db)["rankings"]["max"][0]
+    assert entry["index"]["value"] == 58.4 and entry["qualityFrom"]["verified"] is True
+
+
+def test_a_digest_is_the_file_not_its_name(tmp_path, monkeypatch):
+    monkeypatch.setattr("mbench.paths.CACHE", tmp_path / "cache")
+    weights = tmp_path / "model.gguf"
+    weights.write_bytes(b"one")
+    first = stack.digest_of(weights)
+    assert first and stack.digest_of(weights) == first
+    weights.write_bytes(b"two")
+    assert stack.digest_of(weights) != first
+    assert stack.digest_of(tmp_path / "missing.gguf") is None

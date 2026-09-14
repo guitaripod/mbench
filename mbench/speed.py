@@ -102,6 +102,14 @@ class SpeedRun:
             "finish_reason": finish,
         }
 
+    def cool(self):
+        """Lets the device come back to its cold state so the next block is not measured on heat the block before it
+        made. A card returns at once."""
+        found = self.host.cooldown()
+        if found.get("waited_s"):
+            self.report("cooling", 0, 1)
+        return found
+
     async def sustained(self, text, spec, sampler, results, step):
         """Decodes back to back with no pause between requests, which is how a phone's speed actually falls: the first
         answers run at the cold clock and the rest at whatever the chassis can hold."""
@@ -125,7 +133,7 @@ class SpeedRun:
         total = (len(prompts) * self.spec["reps"] + len(self.levels) * self.spec["rounds"]
                  + len(depths) * self.spec["depth_reps"] + (sustain["reps"] if sustain else 0))
         progress = {"done": 0}
-        results = {"single": [], "concurrency": [], "depth": [], "sustain": [],
+        results = {"single": [], "concurrency": [], "depth": [], "sustain": [], "cooldowns": [],
                    "depths_skipped": sorted(set(self.spec["depths"]) - set(depths))}
 
         def step():
@@ -137,6 +145,10 @@ class SpeedRun:
             await self.stream_once("Say hello in five words.", 64)
             await self.stream_once(prompts["code-v1"], 256)
             self.report("speed", 0, total)
+            if sustain:
+                results["cooldowns"].append({"before": "sustain", **self.cool()})
+                await self.sustained(prompts["prose-v1"], sustain, sampler, results, step)
+                results["cooldowns"].append({"before": "throughput", **self.cool()})
             for name, text in prompts.items():
                 for rep in range(self.spec["reps"]):
                     if self.abort.is_set():
@@ -148,8 +160,6 @@ class SpeedRun:
                     row["accept_length"] = swap.accept_length(before, self.counters())
                     results["single"].append(row)
                     step()
-            if sustain:
-                await self.sustained(prompts["prose-v1"], sustain, sampler, results, step)
             texts = list(prompts.values())
             for level in self.levels:
                 for round_index in range(self.spec["rounds"]):

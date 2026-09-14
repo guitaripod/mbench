@@ -30,6 +30,11 @@ class GpuHost:
     def build(self, info):
         return stack.build(self.profile.engine, info)
 
+    def digest(self, info):
+        """The weights llama-swap actually served, read off /props and hashed here."""
+        payload = (info or {}).get("info") or {}
+        return stack.digest_of(payload.get("model_path"))
+
     def sampler(self, interval_ms=1000):
         return gpu.Sampler(interval_ms=interval_ms)
 
@@ -38,6 +43,10 @@ class GpuHost:
 
     def describe_contention(self, found):
         return gpu.describe_contention(found)
+
+    def cooldown(self, report=None):
+        """A card measures the same whether it just finished a run or not; a phone does not."""
+        return {}
 
     def guard(self, halt, events):
         return None
@@ -77,6 +86,10 @@ class PhoneHost:
     def build(self, info):
         return {**stack.build(self.profile.engine, info), **self.device.build()}
 
+    def digest(self, info):
+        """The phone hashes what it loaded and reports it; the file never leaves the device."""
+        return ((self.device.health() or {}).get("server") or {}).get("model_sha256")
+
     def sampler(self, interval_ms=1000):
         return phone.Sampler(self.device, interval_ms=interval_ms)
 
@@ -85,6 +98,9 @@ class PhoneHost:
 
     def describe_contention(self, found):
         return ""
+
+    def cooldown(self, report=None):
+        return self.device.cooldown(report=report)
 
     def guard(self, halt, events):
         return phone.Guard(self.device, halt, events)

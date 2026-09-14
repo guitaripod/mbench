@@ -62,11 +62,16 @@ def linked_quality(db, run, definition):
     source = store.get_run(db, source_id) if source_id else None
     if not source or suite.kind_of(source["suite"]) not in suite.QUALITY_SUITES:
         return None
+    theirs = (source.get("server") or {}).get("weights")
+    ours = (run.get("server") or {}).get("weights")
+    if ours and theirs and ours != theirs:
+        return None
     metrics = store.metrics_of(db, source["id"])
     tasks = {task: entry for task in definition["index_tasks"] if (entry := task_entry(metrics, task))}
     if not tasks:
         return None
     return {"run": source["id"], "suite": source["suite"], "host": stack.of(source)["hostLabel"],
+            "verified": bool(ours and theirs and ours == theirs),
             "index": metrics.get("index.quality"), "tasks": tasks}
 
 
@@ -106,7 +111,8 @@ def model_entry(db, run, history, definition):
         },
         "index": metrics.get("index.quality") or (linked or {}).get("index"),
         "tasks": tasks or (linked or {}).get("tasks") or {},
-        "qualityFrom": {key: value for key, value in (linked or {}).items() if key in ("run", "suite", "host")} or None,
+        "qualityFrom": {key: value for key, value in (linked or {}).items()
+                        if key in ("run", "suite", "host", "verified")} or None,
         "deviceClass": (run.get("hardware") or {}).get("class") or "gpu",
         "capacity": capacity,
         "warnings": warnings_for(tasks, capacity, definition["labels"]),

@@ -280,7 +280,8 @@ def execute(run_id):
             flags["stack_change"] = moved
             events.emit("stack", changed="; ".join(moved))
         store.update_run(db, run_id, hardware=hardware, flags=flags, profile=profile.to_dict(), harness=stack.harness(),
-                         server={"load_s": seconds, **swap.trimmed_info(info), "build": build, "capacity": capacity})
+                         server={"load_s": seconds, **swap.trimmed_info(info), "build": build, "capacity": capacity,
+                                 "weights": host.digest(info)})
         events.emit("loaded", seconds=seconds, context=context, slots=capacity["slots"], pool=capacity["pool"],
                     build=stack.build_label(build))
         checks = asyncio.run(doctor.run(profile, level, context, capacity, moved))

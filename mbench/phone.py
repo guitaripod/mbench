@@ -29,6 +29,9 @@ MODELS = {
 }
 
 THERMAL_ORDER = ("nominal", "fair", "serious", "critical")
+COOLDOWN_FLOOR_S = 60
+COOLDOWN_CAP_S = 900
+COOLDOWN_POLL_S = 10
 
 
 class Unreachable(RuntimeError):
@@ -94,6 +97,26 @@ class Device:
             "os": (health.get("device") or {}).get("system"),
             "app": (health.get("app") or {}).get("version"),
         }
+
+    def cooldown(self, target="nominal", floor=COOLDOWN_FLOOR_S, cap=COOLDOWN_CAP_S, report=None):
+        """Waits for the phone to come back to its cold state before a measurement starts. Without this, every run
+        after the first is measured on a phone the run before it warmed, and the batch reads as if the models got
+        worse down the list. Idle for at least `floor`, then until the thermal state is back to `target`, giving up
+        at `cap` and saying so."""
+        started = time.time()
+        entry = ((self.health() or {}).get("telemetry") or {}).get("thermal_state")
+        while True:
+            waited = time.time() - started
+            telemetry = (self.health() or {}).get("telemetry") or {}
+            state = telemetry.get("thermal_state")
+            cool = state is not None and THERMAL_ORDER.index(state) <= THERMAL_ORDER.index(target)
+            if waited >= cap or (waited >= floor and cool):
+                return {"waited_s": round(waited, 1), "entry": entry, "exit": state,
+                        "reached": bool(cool), "battery": telemetry.get("battery_level"),
+                        "battery_state": telemetry.get("battery_state")}
+            if report and int(waited) % 60 < COOLDOWN_POLL_S:
+                report(f"cooling: {state} after {int(waited)}s")
+            time.sleep(COOLDOWN_POLL_S)
 
     def build(self):
         """The stack a phone run's numbers come from: the llama.cpp the app embeds, not the desktop's."""

@@ -240,6 +240,12 @@ function showingPhones() {
   return current().some(model => model.deviceClass === "phone");
 }
 
+function phoneTtft(model) {
+  const depths = Object.keys(model.speed).filter(key => key.startsWith("ttft.") && /^\d+$/.test(key.slice(5)))
+    .map(key => Number(key.slice(5))).sort((a, b) => b - a);
+  return depths.length ? model.speed["ttft." + depths[0]].value : null;
+}
+
 function decodeOf(model) {
   const entry = showingPhones() && model.speed.decode_steady ? model.speed.decode_steady : model.speed.decode;
   return entry && entry.value != null ? entry.value : null;
@@ -312,17 +318,22 @@ function columns() {
       { key: "knee", label: "Full-speed tokens", note: "Tokens delivered before throughput fell under 90% of its cold speed",
         get: m => m.speed.tokens_to_knee && m.speed.tokens_to_knee.value, better: "high",
         render: m => numCell(m.speed.tokens_to_knee && m.speed.tokens_to_knee.value,
-          value => value == null ? "–" : value >= 1000 ? (value / 1000).toFixed(1) + "k" : String(Math.round(value))) },
+          value => value == null ? "–" : value >= 1000 ? (value / 1000).toFixed(1) + "k" : String(Math.round(value)),
+          m.speed.tokens_to_knee ? `about ${Math.max(1, Math.round(m.speed.tokens_to_knee.value / 500))} answers of 500 tokens` : null) },
       { key: "hot", label: "Ran hot", note: "Share of the run spent at serious or critical thermal state. Context only — "
           + "a charger or a warm room moves this, so it stays out of the verdict",
         get: m => m.thermal && m.thermal.share_hot && m.thermal.share_hot.value, better: "low",
         render: m => numCell(m.thermal && m.thermal.share_hot && m.thermal.share_hot.value,
           value => value == null ? "–" : Math.round(value) + "%",
           m.thermal && m.thermal.to_serious_s ? `hot after ${Math.round(m.thermal.to_serious_s.value)} s` : null) },
-      { key: "drain", label: "Battery %/h", note: "Measured only on a run that was not charging",
-        get: m => m.battery && m.battery.per_hour && m.battery.per_hour.value, better: "low",
-        render: m => numCell(m.battery && m.battery.per_hour && m.battery.per_hour.value,
-          value => value == null ? "–" : Math.round(value) + "%") },
+      ...(current().some(model => model.battery && model.battery.per_hour) ? [
+        { key: "drain", label: "Battery %/h", note: "Measured only on a run made off the charger",
+          get: m => m.battery && m.battery.per_hour && m.battery.per_hour.value, better: "low",
+          render: m => numCell(m.battery && m.battery.per_hour && m.battery.per_hour.value,
+            value => value == null ? "–" : Math.round(value) + "%") },
+      ] : []),
+      { key: "wait", label: "First token", note: "Seconds to the first token on the longest prompt every model was asked",
+        get: m => phoneTtft(m), better: "low", render: m => numCell(phoneTtft(m), fmt.secs) },
       { key: "footprint", label: "Peak RAM", note: "The most memory the app held while measuring",
         get: m => m.speed.footprint && m.speed.footprint.value, better: "low",
         render: m => numCell(m.speed.footprint && m.speed.footprint.value, value => value == null ? "–" : (value / 1024).toFixed(1) + " GB") },
@@ -384,6 +395,10 @@ function modelMeta(model) {
   if (model.run.contended && model.run.contended.length) chips.push(h("span", { className: "chip", text: "GPU was shared", title: "Other GPU work during the run: " + model.run.contended.join(", ") }));
   if (model.run.failedItems) chips.push(h("span", { className: "chip", text: `${model.run.failedItems} requests failed` }));
   if (model.warnings && model.warnings.length) chips.push(h("span", { className: "chip", text: "context-capped", title: model.warnings.join(" ") }));
+  if (model.speed && model.speed.cooled && model.speed.cooled.value < 100) {
+    chips.push(h("span", { className: "chip", text: "measured warm",
+      title: "The device had not returned to its cold state before a block started, so its speed reads low." }));
+  }
   if (model.verdict && VERDICTS[model.verdict]) {
     chips.unshift(h("span", { className: "chip verdict " + model.verdict, text: VERDICTS[model.verdict].label,
       title: VERDICTS[model.verdict].note }));
@@ -765,7 +780,9 @@ function renderDetail(host) {
     model.run.notes ? h("p", { className: "lede", text: model.run.notes }) : null,
     model.run.reused ? h("p", { className: "strip-note", text: `Answers for ${model.run.reused.tasks.join(", ")} carried over from ${model.run.reused.run}.` }) : null,
     model.qualityFrom ? h("p", { className: "strip-note", text: `Quality measured off the device, on ${model.qualityFrom.host} `
-      + `(run ${model.qualityFrom.run}, ${model.qualityFrom.suite}), from the same weights this phone loads. `
+      + `(run ${model.qualityFrom.run}, ${model.qualityFrom.suite}), from `
+      + (model.qualityFrom.verified ? "weights whose sha256 matches the file this phone loaded. "
+                                    : "the same weights by name — the two files were not both hashed. ")
       + "Speed, memory and thermals on this page were measured on the phone." }) : null,
     ...(model.warnings || []).map(text => h("p", { className: "strip-note", text })),
   ]));

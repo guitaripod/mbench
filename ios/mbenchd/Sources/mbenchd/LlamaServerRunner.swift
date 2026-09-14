@@ -24,6 +24,7 @@ struct ServerStatus: Codable, Sendable {
     var args: [String]
     var loadSeconds: Double?
     var startedAt: Double?
+    var modelSha256: String?
     var exitCode: Int32?
     var error: String?
 }
@@ -65,9 +66,10 @@ final class LlamaServerRunner: @unchecked Sendable {
         let arguments = LlamaServerRunner.arguments(for: request, model: model, port: port)
         let started = Date()
 
+        let digest = ModelDigest.of(model)
         lock.lock()
         status = ServerStatus(state: "loading", model: request.model, modelPath: model.path, port: port,
-                              args: arguments, startedAt: started.timeIntervalSince1970)
+                              args: arguments, startedAt: started.timeIntervalSince1970, modelSha256: digest)
         finished = DispatchSemaphore(value: 0)
         lock.unlock()
 
