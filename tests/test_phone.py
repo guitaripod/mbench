@@ -204,3 +204,19 @@ def test_the_board_carries_the_verdict(tmp_path, monkeypatch):
     assert entry["verdict"] == "barely"
     assert entry["thermal"]["share_hot"]["value"] == 70.0
     assert entry["battery"]["per_hour"]["value"] == 31.0
+
+
+def test_a_phone_suite_cannot_score_quality_at_all():
+    assert set(suite.SUITES["phone"]) == {"speed"}
+
+
+def test_a_phone_row_only_takes_quality_from_a_full_question_set(tmp_path, monkeypatch):
+    monkeypatch.setattr("mbench.paths.DB", tmp_path / "bench.db")
+    db = store.connect()
+    store.insert_run(db, {"id": "small", "model": "qwen3-0.6b", "name": "Qwen3 0.6B", "suite": suite.label("smoke"),
+                          "effort": "max", "status": "complete", "finished": 1, "hardware": {"gpu": "RTX PRO 6000"},
+                          "profile": {}})
+    store.set_metrics(db, "small", {"index.quality": {"value": 91.0, "unit": "%", "n": 6}})
+    phone_run(db, "air", "qwen3-0.6b-air", {"quality_from": "small"})
+    entry = board.collect(db)["rankings"]["max"][0]
+    assert entry["index"] is None and entry["qualityFrom"] is None

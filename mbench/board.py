@@ -60,7 +60,7 @@ def linked_quality(db, run, definition):
     two numbers are never taken for one measurement."""
     source_id = (run.get("flags") or {}).get("quality_from")
     source = store.get_run(db, source_id) if source_id else None
-    if not source:
+    if not source or suite.kind_of(source["suite"]) not in suite.QUALITY_SUITES:
         return None
     metrics = store.metrics_of(db, source["id"])
     tasks = {task: entry for task in definition["index_tasks"] if (entry := task_entry(metrics, task))}

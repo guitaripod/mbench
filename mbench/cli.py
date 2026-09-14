@@ -235,7 +235,11 @@ def cmd_run(args):
         if not host.reachable():
             fail(f"{'mbenchd' if on_phone else 'llama-swap'} is not answering at {host.base_url()}")
     tasks = selected_tasks(args)
-    if on_phone and not args.only:
+    if on_phone:
+        asked = [task for task in tasks if task not in suite.PHONE_TASKS]
+        if asked and args.only:
+            fail(f"a phone measures {', '.join(suite.PHONE_TASKS)}; {', '.join(asked)} would be scored on a smaller "
+                 "sample than every other row. Score the same .gguf on the desktop and name that run with --quality-from")
         tasks = [task for task in tasks if task in suite.PHONE_TASKS]
     levels = {}
     for profile in chosen:
