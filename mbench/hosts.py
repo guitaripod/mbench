@@ -75,10 +75,15 @@ class PhoneHost:
         return self.device.reachable()
 
     def ensure_loaded(self):
-        """Loads the model, restarting the app once if it will not answer. An app that was backgrounded mid-run comes
-        back with a server it can no longer stop, and a benchmark that gives up there loses a night of measurements
-        over something a relaunch fixes."""
+        """Starts the app fresh and loads the model. Memory a model held is not always given back when the next one
+        replaces it, and an app that has loaded three models in a row is killed part way through measuring the fourth
+        — so every run gets a process of its own, which is also the same starting state every time."""
         request = profiles.phone_request(self.profile.id, self.profile.phone or {})
+        try:
+            phone.launch()
+            self.device.cooldown(floor=3, hold=0, cap=60)
+        except RuntimeError:
+            pass
         try:
             return self.device.load(request).get("load_seconds")
         except phone.Unreachable as first:

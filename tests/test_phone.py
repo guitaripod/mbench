@@ -485,7 +485,7 @@ def test_a_wedged_app_is_relaunched_before_the_run_is_given_up(monkeypatch):
     monkeypatch.setattr(host.device, "load", load)
     monkeypatch.setattr(host.device, "cooldown", lambda **kwargs: {})
     assert host.ensure_loaded() == 4.0
-    assert calls["launched"] == 1
+    assert calls["launched"] == 2
 
 
 def quality_only(run_id, klass="gpu"):
