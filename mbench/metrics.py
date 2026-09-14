@@ -253,12 +253,15 @@ def sustain_metrics(rows):
 
 
 def measured_only(timeline, cooldowns):
-    """The samples taken while something was being measured. A cooldown is the opposite of a measurement, and
-    counting its minutes would say a model ran hot for a tenth of the time it did."""
+    """The samples taken while something was being measured. A cooldown is the opposite of a measurement, and so is
+    everything before the first one — the warm-up runs on a device still carrying the last run's heat, and counting
+    it says a model was hot from the first second of a test that had not started."""
     spans = [(entry["started"], entry["ended"]) for entry in cooldowns or []
              if entry.get("started") is not None and entry.get("ended") is not None]
+    begins = min((start for start, _ in spans), default=None)
     return [entry for entry in timeline or []
-            if not any(start <= entry.get("t", 0) <= end for start, end in spans)]
+            if (begins is None or entry.get("t", 0) >= begins)
+            and not any(start <= entry.get("t", 0) <= end for start, end in spans)]
 
 
 def thermal_metrics(timeline, tokens=None, cooldowns=None):

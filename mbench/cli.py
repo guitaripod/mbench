@@ -375,6 +375,30 @@ def cmd_phone(args):
         print(f"  model     {entry['id']} ({entry['bytes'] / 2**30:.2f} GB)")
 
 
+def cmd_rescore(args):
+    """Scores a finished run again from the answers it already kept. A scoring bug or a better reading of the same
+    measurements should not cost the hours it took to make them."""
+    db = store.connect()
+    run = latest_run(db, args.run)
+    run_dir = paths.RUNS / run["id"]
+    if not run_dir.exists():
+        fail(f"{run['id']} kept nothing to score again")
+    speed_file = run_dir / "speed.json"
+    if speed_file.exists():
+        store.set_metrics(db, run["id"], metrics.speed_metrics(json.loads(speed_file.read_text())))
+    for task in suite.QUALITY_TASKS:
+        records = metrics.load(run_dir, task)
+        if records:
+            graded = metrics.graded_of(run_dir) if task == "lcb" else None
+            store.set_metrics(db, run["id"], metrics.task_metrics(task, records, graded))
+    found = store.metrics_of(db, run["id"])
+    if any(key.endswith(".score") for key in found):
+        store.set_metrics(db, run["id"], metrics.quality_index(found, run_dir))
+    store.set_metrics(db, run["id"], metrics.energy_metrics(run_dir))
+    board.build()
+    print(f"{run['id']}: scored again from {run_dir}")
+
+
 def latest_run(db, run_id=None):
     if run_id:
         return store.get_run(db, run_id) or fail(f"no run {run_id}")
@@ -864,6 +888,9 @@ def parser():
     phone_parser.add_argument("files", nargs="*", help="for push: the .gguf files to copy into the app")
     phone_parser.add_argument("--into", help="for logs: where to write them (default: here)")
     phone_parser.set_defaults(handler=cmd_phone)
+    rescore = commands.add_parser("rescore", help="score a finished run again from the answers it kept")
+    rescore.add_argument("run", nargs="?")
+    rescore.set_defaults(handler=cmd_rescore)
     commands.add_parser("tick").set_defaults(handler=cmd_tick)
     worker = commands.add_parser("worker")
     worker.add_argument("run_id")

@@ -81,8 +81,11 @@ class PhoneHost:
         request = profiles.phone_request(self.profile.id, self.profile.phone or {})
         try:
             return self.device.load(request).get("load_seconds")
-        except phone.Unreachable:
-            phone.launch()
+        except phone.Unreachable as first:
+            try:
+                phone.launch()
+            except RuntimeError as error:
+                raise phone.Unreachable(f"{first}; could not relaunch the app: {error}") from first
             self.device.cooldown(floor=5, hold=0, cap=120)
             return self.device.load(request).get("load_seconds")
 
