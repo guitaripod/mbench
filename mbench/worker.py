@@ -11,6 +11,8 @@ from . import phone
 from .profiles import Profile
 
 RAM_FLOOR_GB = 4.0
+RAM_PER_RUN_GB = 6.0
+RAM_WAIT_S = 1800
 GPU_WAIT_S = 1800
 CARD_CHECK_S = 15
 GPU_CHECK_S = 30
@@ -62,6 +64,22 @@ class Halt:
 
     def is_set(self):
         return self.event.is_set()
+
+
+def wait_for_memory(events, halt):
+    """Holds a run at the door while the box is short of RAM. Several quality runs share the card happily and the
+    card has the room, but each one holds its question set in memory, and a run killed at question four hundred has
+    wasted more than the minutes it waited here."""
+    deadline = time.time() + RAM_WAIT_S
+    announced = False
+    while gpu.mem_available_gb() < RAM_FLOOR_GB + RAM_PER_RUN_GB:
+        if halt.is_set() or time.time() > deadline:
+            return False
+        if not announced:
+            events.emit("waiting", reason=f"{gpu.mem_available_gb():.1f} GB of RAM free, waiting for room")
+            announced = True
+        time.sleep(30)
+    return True
 
 
 class MemoryGuard(threading.Thread):
@@ -268,6 +286,9 @@ def execute(run_id):
                 return
         elif host.kind == "gpu":
             contention += wait_for_gpu(host, events)
+        if host.kind == "gpu" and not wait_for_memory(events, halt):
+            raise RuntimeError(f"only {gpu.mem_available_gb():.1f} GB of RAM free; a run needs "
+                               f"{RAM_FLOOR_GB + RAM_PER_RUN_GB:.0f} GB of room to finish")
         seconds = host.ensure_loaded()
         info = host.server_info()
         (run_dir / "server_info.json").write_text(json.dumps(info, indent=1))

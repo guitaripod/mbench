@@ -546,3 +546,43 @@ def test_a_model_in_a_resident_group_does_not_unload_its_group_mates():
 def test_a_swapping_group_is_not_resident():
     config = {"groups": {"one-at-a-time": {"swap": True, "members": ["a"]}}}
     assert profiles.group_of("a", config) is None
+
+
+def test_a_run_waits_for_room_rather_than_dying_at_question_four_hundred(monkeypatch):
+    from mbench import worker
+
+    class Events:
+        def __init__(self):
+            self.said = []
+
+        def emit(self, phase, **fields):
+            self.said.append(fields.get("reason"))
+
+    class Halt:
+        def __init__(self, stop=False):
+            self.stop = stop
+
+        def is_set(self):
+            return self.stop
+
+    free = iter([2.0, 3.0, 20.0])
+    monkeypatch.setattr(worker.time, "sleep", lambda seconds: None)
+    monkeypatch.setattr(worker.gpu, "mem_available_gb", lambda: next(free, 20.0))
+    events = Events()
+    assert worker.wait_for_memory(events, Halt())
+    assert "waiting for room" in events.said[0]
+
+
+def test_a_run_gives_up_waiting_if_the_box_never_frees_up(monkeypatch):
+    from mbench import worker
+
+    class Events:
+        def emit(self, phase, **fields):
+            pass
+
+    class Halt:
+        def is_set(self):
+            return True
+
+    monkeypatch.setattr(worker.gpu, "mem_available_gb", lambda: 1.0)
+    assert not worker.wait_for_memory(Events(), Halt())

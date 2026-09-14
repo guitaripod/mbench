@@ -1,3 +1,4 @@
+import gc
 import hashlib
 import json
 import random
@@ -252,5 +253,9 @@ BUILDERS = {"supergpqa": supergpqa, "math": math, "lcb": lcb, "mrcr": mrcr, "gra
 
 
 def build(task, spec, context=None):
+    """Builds a task's items and lets everything the builder read go: a worker that keeps a parquet alive for the
+    length of a run costs gigabytes that another run on the same box could have used."""
     items = BUILDERS[task](spec, context)
-    return items[: spec["max_items"]] if spec.get("max_items") else items
+    items = items[: spec["max_items"]] if spec.get("max_items") else items
+    gc.collect()
+    return items
