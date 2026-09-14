@@ -94,18 +94,28 @@ class MemoryGuard(threading.Thread):
         self.run_id = run_id
         self.stopped = threading.Event()
 
-    def youngest(self):
+    def answered_bytes(self, run_id):
+        """How much of its work a run has already written down, which is what it stands to lose."""
+        directory = paths.RUNS / run_id
+        return sum(path.stat().st_size for path in directory.glob("*.jsonl")) if directory.exists() else 0
+
+    def gives_way(self):
+        """Of the runs sharing the box, the one with the least written down yields. Comparing run ids instead would
+        pick whichever model sorts last, and a batch started in the same second shares its timestamp entirely."""
         if not self.run_id:
             return True
         db = store.connect()
         peers = [run["id"] for run in units.busy(store.list_runs(db), units.GPU_CLASS)]
-        return not peers or max(peers) == self.run_id
+        if len(peers) < 2:
+            return True
+        return min(peers, key=lambda peer: (self.answered_bytes(peer), peer)) == self.run_id
 
     def run(self):
         while not self.stopped.wait(5):
             available = gpu.mem_available_gb()
-            if available < RAM_FLOOR_GB and self.youngest():
-                self.events.emit("abort", reason=f"free RAM {available:.1f} GB; this run started last and gives way")
+            if available < RAM_FLOOR_GB and self.gives_way():
+                self.events.emit("abort", reason=f"free RAM {available:.1f} GB; this run has the least to lose "
+                                                 "and gives way")
                 swap.unload()
                 self.halt.set("memory")
                 return

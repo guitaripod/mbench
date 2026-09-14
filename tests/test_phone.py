@@ -589,24 +589,27 @@ def test_a_run_gives_up_waiting_if_the_box_never_frees_up(monkeypatch):
     assert not worker.wait_for_memory(Events(), Halt())
 
 
-def test_only_the_youngest_run_gives_way_when_the_box_runs_short(tmp_path, monkeypatch):
+def test_the_run_with_the_least_written_down_gives_way(tmp_path, monkeypatch):
     from mbench import worker
     monkeypatch.setattr("mbench.paths.DB", tmp_path / "bench.db")
+    monkeypatch.setattr("mbench.paths.RUNS", tmp_path / "runs")
     db = store.connect()
-    for run_id in ("20260914-100000-a", "20260914-110000-b"):
+    for run_id, written in (("20260914-183712-a-instruct", 9000), ("20260914-183712-z-thinking", 10)):
         store.insert_run(db, {"id": run_id, "model": run_id, "name": run_id, "suite": suite.label("full"),
                               "effort": "max", "status": "running", "profile": {}, "hardware": {}})
-    older = worker.MemoryGuard(None, None, "20260914-100000-a")
-    younger = worker.MemoryGuard(None, None, "20260914-110000-b")
-    assert younger.youngest() and not older.youngest()
+        directory = tmp_path / "runs" / run_id
+        directory.mkdir(parents=True)
+        (directory / "supergpqa.jsonl").write_text("x" * written)
+    assert worker.MemoryGuard(None, None, "20260914-183712-z-thinking").gives_way()
+    assert not worker.MemoryGuard(None, None, "20260914-183712-a-instruct").gives_way()
 
 
 def test_a_lone_run_always_gives_way(tmp_path, monkeypatch):
     from mbench import worker
     monkeypatch.setattr("mbench.paths.DB", tmp_path / "bench.db")
     store.connect()
-    assert worker.MemoryGuard(None, None, "20260914-100000-a").youngest()
-    assert worker.MemoryGuard(None, None, None).youngest()
+    assert worker.MemoryGuard(None, None, "20260914-100000-a").gives_way()
+    assert worker.MemoryGuard(None, None, None).gives_way()
 
 
 def test_only_one_run_reads_a_question_set_at_a_time(tmp_path, monkeypatch):

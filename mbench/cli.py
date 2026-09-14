@@ -233,7 +233,8 @@ def cmd_run(args):
     for profile in chosen:
         host = hosts.for_profile(profile)
         if not host.reachable():
-            fail(f"{'mbenchd' if on_phone else 'llama-swap'} is not answering at {host.base_url()}")
+            where = host.device.control_url if on_phone else host.base_url()
+            fail(f"{'mbenchd' if on_phone else 'llama-swap'} is not answering at {where}")
     tasks = selected_tasks(args)
     if on_phone:
         asked = [task for task in tasks if task not in suite.PHONE_TASKS]
