@@ -1,6 +1,7 @@
 import http.client
 import json
 import os
+from pathlib import Path
 import shutil
 import statistics
 import subprocess
@@ -251,9 +252,18 @@ class Guard(threading.Thread):
         self.stopped.set()
 
 
+TOOL_PATHS = ("~/.local/bin/pymobiledevice3", "~/.local/share/pmd-venv/bin/pymobiledevice3",
+              "~/.local/pipx/venvs/pymobiledevice3/bin/pymobiledevice3", "/usr/local/bin/pymobiledevice3")
+
+
 def tool():
-    """pymobiledevice3 is what carries files and ports over the cable; it is not a dependency of mbench itself."""
+    """pymobiledevice3 carries files and ports over the cable; it is not a dependency of mbench itself. A worker runs
+    as a systemd unit, whose PATH is the system's and not the shell's, so the usual places are searched by hand
+    rather than trusted to `which`."""
     found = os.environ.get("MBENCH_PMD") or shutil.which("pymobiledevice3")
+    if not found:
+        found = next((str(path) for candidate in TOOL_PATHS
+                      if (path := Path(candidate).expanduser()).exists()), None)
     if not found:
         raise RuntimeError("pymobiledevice3 is not installed; `pipx install pymobiledevice3`, or set MBENCH_PMD")
     return found

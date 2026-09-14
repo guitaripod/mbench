@@ -658,3 +658,24 @@ def test_a_wedged_model_server_is_not_a_healthy_run(monkeypatch):
 
 def test_an_idle_app_counts_as_answering():
     assert FakeDevice({**HEALTH, "server": {"state": "idle"}}).answering()
+
+
+def test_the_tool_is_found_without_a_shell_path(monkeypatch, tmp_path):
+    binary = tmp_path / "pymobiledevice3"
+    binary.write_text("#!/bin/sh\n")
+    monkeypatch.delenv("MBENCH_PMD", raising=False)
+    monkeypatch.setattr(phone.shutil, "which", lambda name: None)
+    monkeypatch.setattr(phone, "TOOL_PATHS", (str(binary),))
+    assert phone.tool() == str(binary)
+
+
+def test_a_genuinely_missing_tool_still_says_so(monkeypatch):
+    monkeypatch.delenv("MBENCH_PMD", raising=False)
+    monkeypatch.setattr(phone.shutil, "which", lambda name: None)
+    monkeypatch.setattr(phone, "TOOL_PATHS", ("/nowhere/pymobiledevice3",))
+    try:
+        phone.tool()
+    except RuntimeError as error:
+        assert "not installed" in str(error)
+    else:
+        raise AssertionError("a missing tool must be reported")
