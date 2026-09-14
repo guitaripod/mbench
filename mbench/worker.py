@@ -361,7 +361,8 @@ def execute(run_id):
             store.set_metrics(db, run_id, metrics.task_metrics(task, metrics.load(run_dir, task), graded))
         if halt.is_set():
             if halt.reason == "memory":
-                raise RuntimeError(f"stopped because free RAM fell below {RAM_FLOOR_GB:.0f} GB")
+                give_way(db, run, events, [{"name": f"a box with under {RAM_FLOOR_GB:.0f} GB free"}], host)
+                return
             if halt.reason == "card":
                 raise RuntimeError(f"stopped because the GPU stopped answering: {card.fault}")
             if halt.reason == "device":
