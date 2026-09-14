@@ -10,8 +10,8 @@ from . import board, datasets, doctor, engine, gpu, grader, hosts, lmx, metrics,
 from . import phone
 from .profiles import Profile
 
-RAM_FLOOR_GB = 4.0
-RAM_PER_RUN_GB = 6.0
+RAM_FLOOR_GB = 8.0
+RAM_PER_RUN_GB = 8.0
 RAM_WAIT_S = 1800
 GPU_WAIT_S = 1800
 CARD_CHECK_S = 15

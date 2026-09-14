@@ -635,3 +635,14 @@ def test_a_metal_compute_error_is_named_as_the_model_not_fitting():
     named = doctor.name_memory_failures(checks, phone=True)
     assert "does not fit at this context" in named[0]["detail"]
     assert doctor.name_memory_failures(checks, phone=False) == checks
+
+
+def test_only_three_quality_runs_share_the_box_at_once():
+    sharing = [quality_only(f"run{index}") for index in range(units.MAX_SHARED_RUNS)]
+    assert units.busy(sharing, "gpu", speed=False) == sharing
+    assert units.busy(sharing[:-1], "gpu", speed=False) == []
+
+
+def test_a_speed_run_blocks_sharing_runs_whatever_the_count():
+    runs = [quality_only("a"), running("timing", "gpu")]
+    assert [run["id"] for run in units.busy(runs, "gpu", speed=False)] == ["timing"]

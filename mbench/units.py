@@ -7,6 +7,7 @@ from . import paths, store
 
 ACTIVE = ("queued", "running")
 GPU_CLASS = "gpu"
+MAX_SHARED_RUNS = 3
 
 
 def device_class(run):
@@ -22,7 +23,11 @@ def busy(runs, klass=GPU_CLASS, speed=True):
     for a run on the other — and two runs that score no speed never have to wait either, because nothing they
     measure changes when they share the hardware. Only a speed measurement needs the device to itself."""
     active = [run for run in runs if run["status"] in ACTIVE and device_class(run) == klass]
-    return active if speed else [run for run in active if measures_speed(run)]
+    if speed:
+        return active
+    sharing = [run for run in active if not measures_speed(run)]
+    blocking = [run for run in active if measures_speed(run)]
+    return blocking or (sharing if len(sharing) >= MAX_SHARED_RUNS else [])
 
 
 def unit_name(run_id):

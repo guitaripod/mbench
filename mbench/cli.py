@@ -11,7 +11,7 @@ from typing import NoReturn
 
 from . import __version__, board, doctor, hosts, lmx, metrics, paths, phone, profiles, schedule, sources, stack, store, suite, swap
 from .engine import resolve_effort
-from .units import ACTIVE, busy, reconcile, spawn, unit_active, unit_name
+from .units import ACTIVE, MAX_SHARED_RUNS, busy, reconcile, spawn, unit_active, unit_name
 
 DURATIONS = {"full": "2–5 hours", "quick": "45–90 minutes", "phone": "30–60 minutes", "smoke": "about 10 minutes"}
 REUSE_FILES = {"speed": ("speed.json",), "lcb": ("lcb.jsonl", "lcb.graded.jsonl")}
@@ -267,7 +267,9 @@ def cmd_run(args):
             flags["quality_from"] = args.quality_from or {"twin": profile.twin}
         if carried:
             flags["reused"] = {"run": source["id"], "tasks": carried}
-        starts_now = window is None and not active and (position == 0 or "speed" not in tasks)
+        sharing = "speed" not in tasks and not on_phone
+        starts_now = (window is None and not active
+                      and (position == 0 or (sharing and position < MAX_SHARED_RUNS)))
         if not starts_now:
             flags.update(not_before=begins, window=window)
         store.insert_run(db, {
