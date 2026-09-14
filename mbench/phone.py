@@ -17,10 +17,10 @@ LOAD_TIMEOUT_S = 1800
 HEALTH_TIMEOUT_S = 10
 
 MODELS = {
-    "iPhone18,5": {"device": "iPhone Air", "soc": "A19 Pro", "ram_gb": 12, "bandwidth_gbs": 68.3},
     "iPhone18,1": {"device": "iPhone 17 Pro", "soc": "A19 Pro", "ram_gb": 12, "bandwidth_gbs": 76.8},
     "iPhone18,2": {"device": "iPhone 17 Pro Max", "soc": "A19 Pro", "ram_gb": 12, "bandwidth_gbs": 76.8},
     "iPhone18,3": {"device": "iPhone 17", "soc": "A19", "ram_gb": 8, "bandwidth_gbs": 68.3},
+    "iPhone18,4": {"device": "iPhone Air", "soc": "A19 Pro", "ram_gb": 12, "bandwidth_gbs": 68.3},
     "iPhone17,1": {"device": "iPhone 16 Pro", "soc": "A18 Pro", "ram_gb": 8, "bandwidth_gbs": 60.0},
     "iPhone17,2": {"device": "iPhone 16 Pro Max", "soc": "A18 Pro", "ram_gb": 8, "bandwidth_gbs": 60.0},
     "iPhone17,3": {"device": "iPhone 16", "soc": "A18", "ram_gb": 8, "bandwidth_gbs": 60.0},

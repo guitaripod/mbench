@@ -4,7 +4,7 @@ from mbench import board, hosts, metrics, phone, profiles, stack, store, suite
 
 HEALTH = {
     "app": {"version": "0.1.0", "llama_commit": "5266f24", "llama_build": 50},
-    "device": {"hardware": "iPhone18,5", "system": "iOS 27.0", "processors": 6},
+    "device": {"hardware": "iPhone18,4", "system": "iOS 27.0", "processors": 6},
     "telemetry": {"thermal_state": "fair", "footprint_mib": 4821.0, "battery_level": 0.97},
     "server": {"state": "running", "model": "qwen3-4b"},
 }
