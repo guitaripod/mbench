@@ -307,6 +307,12 @@ function columns() {
       { key: "steady", label: "Steady tok/s", note: "Decode speed after the phone has throttled, measured back to back",
         get: m => m.speed.decode_steady && m.speed.decode_steady.value, better: "high",
         render: m => numCell(m.speed.decode_steady && m.speed.decode_steady.value, fmt.int) },
+      { key: "stability", label: "Stability", note: "Slowest answer as a share of the fastest, the way a stress test "
+          + "reports it. 97% or better is the bar a device that is not throttling clears",
+        get: m => m.speed.stability && m.speed.stability.value, better: "high",
+        render: m => numCell(m.speed.stability && m.speed.stability.value,
+          value => value == null ? "–" : Math.round(value) + "%",
+          m.speed.degradation ? `${Math.round(m.speed.degradation.value)}% slower once settled` : null) },
       { key: "sustain", label: "Holds", note: "Steady speed as a share of the cold speed",
         get: m => m.speed.sustain_ratio && m.speed.sustain_ratio.value, better: "high",
         render: m => numCell(m.speed.sustain_ratio && m.speed.sustain_ratio.value, value => value == null ? "–" : value.toFixed(2) + "×",
@@ -326,11 +332,13 @@ function columns() {
         render: m => numCell(m.thermal && m.thermal.share_hot && m.thermal.share_hot.value,
           value => value == null ? "–" : Math.round(value) + "%",
           m.thermal && m.thermal.to_serious_s ? `hot after ${Math.round(m.thermal.to_serious_s.value)} s` : null) },
-      ...(current().some(model => model.battery && model.battery.per_hour) ? [
-        { key: "drain", label: "Battery %/h", note: "Measured only on a run made off the charger",
-          get: m => m.battery && m.battery.per_hour && m.battery.per_hour.value, better: "low",
-          render: m => numCell(m.battery && m.battery.per_hour && m.battery.per_hour.value,
-            value => value == null ? "–" : Math.round(value) + "%") },
+      ...(current().some(model => model.battery && model.battery.hours) ? [
+        { key: "drain", label: "Hours on a charge", note: "The measured discharge extrapolated across a full charge, "
+            + "the way a phone battery test reports it. Only a run made off the charger has one",
+          get: m => m.battery && m.battery.hours && m.battery.hours.value, better: "high",
+          render: m => numCell(m.battery && m.battery.hours && m.battery.hours.value,
+            value => value == null ? "–" : value.toFixed(1) + " h",
+            m.battery && m.battery.per_hour ? `${Math.round(m.battery.per_hour.value)}% an hour` : null) },
       ] : []),
       { key: "wait", label: "First token", note: "Seconds to the first token on the longest prompt every model was asked",
         get: m => phoneTtft(m), better: "low", render: m => numCell(phoneTtft(m), fmt.secs) },
@@ -781,8 +789,10 @@ function renderDetail(host) {
     model.run.reused ? h("p", { className: "strip-note", text: `Answers for ${model.run.reused.tasks.join(", ")} carried over from ${model.run.reused.run}.` }) : null,
     model.qualityFrom ? h("p", { className: "strip-note", text: `Quality measured off the device, on ${model.qualityFrom.host} `
       + `(run ${model.qualityFrom.run}, ${model.qualityFrom.suite}), from `
-      + (model.qualityFrom.verified ? "weights whose sha256 matches the file this phone loaded. "
-                                    : "the same weights by name — the two files were not both hashed. ")
+      + (model.qualityFrom.verified ? "weights whose sha256 matches the file this phone loaded"
+                                    : "the same weights by name — the two files were not both hashed")
+      + (model.qualityFrom.agreement ? `, answering a fixed question identically for ${model.qualityFrom.agreement.shared} `
+          + `of ${model.qualityFrom.agreement.of} characters. ` : ". ")
       + "Speed, memory and thermals on this page were measured on the phone." }) : null,
     ...(model.warnings || []).map(text => h("p", { className: "strip-note", text })),
   ]));
@@ -826,6 +836,10 @@ function renderDetail(host) {
     ["Decode, once hot", speed.decode_steady && fmt.int(speed.decode_steady.value) + " tok/s"],
     ["Held the cold speed for", speed.throttle_s && Math.round(speed.throttle_s.value) + " s"],
     ["Tokens at full speed", speed.tokens_to_knee && fmt.int(speed.tokens_to_knee.value)],
+    ["Stability", speed.stability && Math.round(speed.stability.value) + "%"
+      + (speed.stability.value >= 97 ? " (not throttling)" : "")],
+    ["Settled speed varies by", speed.plateau_cv && speed.plateau_cv.value.toFixed(1) + "%"],
+    ["Hours of this on a charge", model.battery && model.battery.hours && model.battery.hours.value.toFixed(1) + " h"],
     ["Peak memory held", speed.footprint && (speed.footprint.value / 1024).toFixed(1) + " GB"],
     ["Hottest it got", model.thermal && model.thermal.worst && THERMAL_NAMES[Math.round(model.thermal.worst.value)]],
     ["Cool for", model.thermal && model.thermal.to_fair_s && Math.round(model.thermal.to_fair_s.value) + " s"],

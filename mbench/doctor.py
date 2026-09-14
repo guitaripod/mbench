@@ -129,3 +129,36 @@ async def run(profile, effort, context, capacity, moved=()):
 
 def failures(checks):
     return [check for check in checks if check["status"] == "fail"]
+
+
+FINGERPRINT_PROMPT = "List the first eight prime numbers, separated by spaces, and nothing else."
+
+
+async def fingerprint(profile, effort):
+    """A greedy answer to a fixed question, kept with the run. Two runs of the same weights should open the same way;
+    a different chat template, a different quantisation or the wrong file diverges immediately. Backends do not agree
+    token for token — Metal and CUDA round differently — so this is read as how far two runs agreed, never as a gate."""
+    client = AsyncOpenAI(base_url=(profile.base_url or paths.SWAP_URL) + "/v1", api_key="none", timeout=900,
+                         max_retries=0)
+    try:
+        answer = await client.chat.completions.create(
+            model=profile.id, messages=[{"role": "user", "content": FINGERPRINT_PROMPT}], max_tokens=64,
+            **request_kwargs(profile, effort, greedy=True))
+    except Exception as error:
+        return {"error": repr(error)[:200]}
+    message = answer.choices[0].message
+    text = (getattr(message, "reasoning_content", None) or "") + (message.content or "")
+    return {"prompt": FINGERPRINT_PROMPT, "answer": text[:400]}
+
+
+def agreement(one, two):
+    """How many characters two runs' fingerprint answers shared before they diverged."""
+    first, second = (one or {}).get("answer") or "", (two or {}).get("answer") or ""
+    if not first or not second:
+        return None
+    shared = 0
+    for left, right in zip(first, second):
+        if left != right:
+            break
+        shared += 1
+    return {"shared": shared, "of": min(len(first), len(second))}

@@ -1,6 +1,6 @@
 import json
 
-from mbench import board, hosts, metrics, phone, profiles, stack, store, suite, units
+from mbench import board, doctor, hosts, metrics, phone, profiles, stack, store, suite, units
 
 HEALTH = {
     "app": {"version": "0.1.0", "llama_commit": "5266f24", "llama_build": 50},
@@ -270,8 +270,17 @@ def test_the_phone_waits_until_it_is_cold_again(monkeypatch):
     monkeypatch.setattr(phone.time, "sleep", lambda seconds: None)
     monkeypatch.setattr(device, "health", lambda: {"telemetry": {"thermal_state": states.pop(0) if states else "nominal",
                                                                 "battery_level": 0.9, "battery_state": "charging"}})
-    found = device.cooldown(floor=0)
+    found = device.cooldown(floor=0, hold=0)
     assert found["reached"] and found["exit"] == "nominal" and found["entry"] == "serious"
+
+
+def test_the_phone_must_hold_its_cold_state_not_just_touch_it(monkeypatch):
+    device = FakeDevice()
+    clock = iter([0, 0, 1, 2, 3, 200])
+    monkeypatch.setattr(phone.time, "sleep", lambda seconds: None)
+    monkeypatch.setattr(phone.time, "time", lambda: next(clock, 200))
+    monkeypatch.setattr(device, "health", lambda: {"telemetry": {"thermal_state": "nominal"}})
+    assert device.cooldown(floor=0, hold=60, cap=1000)["reached"]
 
 
 def test_the_phone_gives_up_cooling_and_records_that_it_did(monkeypatch):
@@ -280,7 +289,7 @@ def test_the_phone_gives_up_cooling_and_records_that_it_did(monkeypatch):
     monkeypatch.setattr(phone.time, "sleep", lambda seconds: None)
     monkeypatch.setattr(phone.time, "time", lambda: next(clock, 10_000))
     monkeypatch.setattr(device, "health", lambda: {"telemetry": {"thermal_state": "serious"}})
-    found = device.cooldown(floor=0, cap=60)
+    found = device.cooldown(floor=0, cap=60, hold=0)
     assert not found["reached"] and found["exit"] == "serious"
 
 
@@ -324,3 +333,34 @@ def test_a_digest_is_the_file_not_its_name(tmp_path, monkeypatch):
     weights.write_bytes(b"two")
     assert stack.digest_of(weights) != first
     assert stack.digest_of(tmp_path / "missing.gguf") is None
+
+
+def sustain_rows(speeds):
+    return [{"index": index, "decode_tps": tps, "start": 100 + index * 10, "completion_tokens": 512}
+            for index, tps in enumerate(speeds)]
+
+
+def test_stability_is_the_slowest_answer_over_the_fastest():
+    found = metrics.sustain_metrics(sustain_rows([40.0, 39.0, 30.0, 24.0, 22.0, 22.0, 22.0, 22.0, 22.0]))
+    assert round(found["speed.stability"]["value"], 1) == 55.0
+    assert round(found["speed.degradation"]["value"], 1) == 45.0
+    assert found["speed.plateau_cv"]["value"] == 0.0
+
+
+def test_a_device_that_never_throttles_clears_the_bar():
+    found = metrics.sustain_metrics(sustain_rows([200.0, 199.0, 200.0, 198.0, 199.0, 200.0, 199.0, 198.0, 199.0]))
+    assert found["speed.stability"]["value"] >= metrics.STABLE_PERCENT
+    assert found["speed.plateau_cv"]["value"] < 1.0
+
+
+def test_battery_reads_as_hours_on_a_charge():
+    found = metrics.battery_metrics(timeline([(0, "nominal", 1.0), (1800, "fair", 0.9)]))
+    assert round(found["battery.drain"]["value"], 1) == 10.0
+    assert round(found["battery.hours"]["value"], 2) == 4.75
+
+
+def test_two_runs_of_the_same_weights_open_the_same_way():
+    assert doctor.agreement({"answer": "2 3 5 7 11"}, {"answer": "2 3 5 7 13"}) == {"shared": 9, "of": 10}
+    assert doctor.agreement({"answer": "2 3 5"}, {"answer": "The first"}) == {"shared": 0, "of": 5}
+    assert doctor.agreement({"answer": ""}, {"answer": "2 3"}) is None
+    assert doctor.agreement(None, None) is None

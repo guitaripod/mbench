@@ -10,6 +10,7 @@ from . import suite
 
 BINARY_TASKS = ("supergpqa", "math", "lcb", "tools")
 THERMAL_STATES = ("nominal", "fair", "serious", "critical")
+STABLE_PERCENT = 97.0
 HOLDS_RATIO = 0.8
 BARELY_RATIO = 0.55
 BARELY_TOKENS_PER_SECOND = 8.0
@@ -235,6 +236,11 @@ def sustain_metrics(rows):
     out["speed.decode_peak"] = {"value": peak, "unit": "tok/s", "n": min(2, len(values))}
     out["speed.decode_steady"] = spread(tail, "tok/s")
     out["speed.sustain_ratio"] = {"value": statistics.median(tail) / peak, "unit": "x", "n": len(values)}
+    out["speed.stability"] = {"value": 100 * min(values) / max(values), "unit": "%", "n": len(values)}
+    out["speed.degradation"] = {"value": 100 * (1 - statistics.median(tail) / peak), "unit": "%", "n": len(values)}
+    if len(tail) > 1 and statistics.mean(tail) > 0:
+        out["speed.plateau_cv"] = {"value": 100 * statistics.stdev(tail) / statistics.mean(tail),
+                                   "unit": "%", "n": len(tail)}
     started = paired[0][2]["start"]
     delivered = 0
     for _, value, row in paired:
@@ -268,7 +274,9 @@ def thermal_metrics(timeline, tokens=None):
 
 
 def battery_metrics(samples, tokens=None):
-    """What a run cost the battery. Only a run on battery can say: charging hides the drain entirely."""
+    """What a run cost the battery, reported the way PCMark reports a phone's: the measured discharge slope
+    extrapolated to a 100%-to-5% cycle, so it reads as hours of this workload on a full charge. Only a run on
+    battery can say anything at all; charging hides the drain entirely."""
     levels = [entry["battery"] for entry in samples if entry.get("battery") is not None]
     on_battery = [entry for entry in samples if entry.get("battery_state") == "unplugged"]
     if len(levels) < 2 or len(on_battery) < len(samples):
@@ -280,6 +288,8 @@ def battery_metrics(samples, tokens=None):
     elapsed = samples[-1]["t"] - samples[0]["t"]
     if elapsed > 60:
         out["battery.per_hour"] = {"value": drop * 3600 / elapsed, "unit": "%/h", "n": len(levels)}
+    if elapsed > 60:
+        out["battery.hours"] = {"value": 0.95 * (elapsed / 3600) / (drop / 100), "unit": "h", "n": len(levels)}
     if tokens:
         out["battery.per_1k_tokens"] = {"value": 1000 * drop / tokens, "unit": "%/1k", "n": len(levels)}
     return out

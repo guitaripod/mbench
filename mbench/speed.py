@@ -111,11 +111,14 @@ class SpeedRun:
         return found
 
     async def sustained(self, text, spec, sampler, results, step):
-        """Decodes back to back with no pause between requests, which is how a phone's speed actually falls: the first
-        answers run at the cold clock and the rest at whatever the chassis can hold."""
+        """Decodes under near-continuous load, one second between answers, the protocol the published sustained-load
+        measurements of phone inference use. The first answers run at the cold clock and the rest at whatever the
+        chassis can hold."""
         for index in range(spec["reps"]):
             if self.abort.is_set():
                 return
+            if index:
+                await asyncio.sleep(spec.get("gap_s", 1))
             row = await self.stream_once(text, spec["max_tokens"])
             row.update(index=index, **sampler.window(row["start"], row["end"]))
             results["sustain"].append(row)

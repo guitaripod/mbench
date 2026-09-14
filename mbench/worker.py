@@ -286,6 +286,8 @@ def execute(run_id):
                     build=stack.build_label(build))
         checks = asyncio.run(doctor.run(profile, level, context, capacity, moved))
         (run_dir / "doctor.json").write_text(json.dumps(checks, indent=1))
+        server = (store.get_run(db, run_id) or {}).get("server") or {}
+        store.update_run(db, run_id, server={**server, "probe": asyncio.run(doctor.fingerprint(profile, level))})
         for check in checks:
             if check["status"] != "ok":
                 events.emit("doctor", check=check["check"], status=check["status"], detail=check["detail"])

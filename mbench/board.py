@@ -2,7 +2,7 @@ import json
 import time
 
 from . import metrics as scores
-from . import paths, stack, store, suite
+from . import doctor, paths, stack, store, suite
 
 KINDS = ("full", "quick", "phone")
 EFFORT_ORDER = ("medium", "max", "high", "xhigh", "low", "min", "minimal", "none")
@@ -72,6 +72,8 @@ def linked_quality(db, run, definition):
         return None
     return {"run": source["id"], "suite": source["suite"], "host": stack.of(source)["hostLabel"],
             "verified": bool(ours and theirs and ours == theirs),
+            "agreement": doctor.agreement((run.get("server") or {}).get("probe"),
+                                          (source.get("server") or {}).get("probe")),
             "index": metrics.get("index.quality"), "tasks": tasks}
 
 

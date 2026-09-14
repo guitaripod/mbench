@@ -32,6 +32,7 @@ THERMAL_ORDER = ("nominal", "fair", "serious", "critical")
 COOLDOWN_FLOOR_S = 60
 COOLDOWN_CAP_S = 900
 COOLDOWN_POLL_S = 10
+COOLDOWN_HOLD_S = 60
 
 
 class Unreachable(RuntimeError):
@@ -98,21 +99,25 @@ class Device:
             "app": (health.get("app") or {}).get("version"),
         }
 
-    def cooldown(self, target="nominal", floor=COOLDOWN_FLOOR_S, cap=COOLDOWN_CAP_S, report=None):
-        """Waits for the phone to come back to its cold state before a measurement starts. Without this, every run
-        after the first is measured on a phone the run before it warmed, and the batch reads as if the models got
-        worse down the list. Idle for at least `floor`, then until the thermal state is back to `target`, giving up
-        at `cap` and saying so."""
+    def cooldown(self, target="nominal", floor=COOLDOWN_FLOOR_S, cap=COOLDOWN_CAP_S, hold=COOLDOWN_HOLD_S, report=None):
+        """Waits for the phone to come back to its cold state, and to stay there, before a measurement starts. Without
+        this, every run after the first is measured on heat the run before it made, and a queue reads as if the models
+        got worse down the list. The device has to report `target` for `hold` seconds together — the readable stand-in
+        for the published rule of a temperature that has stopped moving — after idling at least `floor`, giving up at
+        `cap` and saying it gave up."""
         started = time.time()
         entry = ((self.health() or {}).get("telemetry") or {}).get("thermal_state")
+        cool_since = None
         while True:
             waited = time.time() - started
             telemetry = (self.health() or {}).get("telemetry") or {}
             state = telemetry.get("thermal_state")
             cool = state is not None and THERMAL_ORDER.index(state) <= THERMAL_ORDER.index(target)
-            if waited >= cap or (waited >= floor and cool):
+            cool_since = (cool_since or time.time()) if cool else None
+            settled = cool_since is not None and time.time() - cool_since >= hold
+            if waited >= cap or (waited >= floor and settled):
                 return {"waited_s": round(waited, 1), "entry": entry, "exit": state,
-                        "reached": bool(cool), "battery": telemetry.get("battery_level"),
+                        "reached": bool(settled), "battery": telemetry.get("battery_level"),
                         "battery_state": telemetry.get("battery_state")}
             if report and int(waited) % 60 < COOLDOWN_POLL_S:
                 report(f"cooling: {state} after {int(waited)}s")
