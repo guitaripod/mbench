@@ -315,6 +315,14 @@ def cmd_phone(args):
             for process in processes:
                 process.terminate()
         return
+    if args.action == "launch":
+        print(f"mbenchd running as pid {phone.launch()}")
+        for _ in range(30):
+            if device.reachable():
+                print(f"Answering at {device.control_url}.")
+                return
+            time.sleep(1)
+        fail("the app launched but never answered; `mbench phone logs` may say why")
     if args.action == "push":
         for path in args.files:
             source = Path(path)
@@ -837,7 +845,7 @@ def parser():
     profile.add_argument("model", help="llama-swap model id or alias")
     profile.set_defaults(handler=cmd_profile)
     phone_parser = commands.add_parser("phone", help="the phone mbenchd runs on: forward its ports, push models, read its logs")
-    phone_parser.add_argument("action", choices=("health", "forward", "push", "logs"), nargs="?", default="health")
+    phone_parser.add_argument("action", choices=("health", "launch", "forward", "push", "logs"), nargs="?", default="health")
     phone_parser.add_argument("files", nargs="*", help="for push: the .gguf files to copy into the app")
     phone_parser.add_argument("--into", help="for logs: where to write them (default: here)")
     phone_parser.set_defaults(handler=cmd_phone)

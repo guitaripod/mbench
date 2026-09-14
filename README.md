@@ -136,6 +136,7 @@ The same llama.cpp that serves your card also runs on an iPhone, so a phone can 
 ```
 ios/mbenchd/scripts/build-llama.sh     cross-compile llama.cpp for arm64 iOS
 cd ios/mbenchd && xtool dev            build, sign and install the app
+mbench phone launch                    start it on the device
 mbench phone push model.gguf           copy the weights over the cable
 mbench phone forward                   llama-server on 18080, mbenchd on 18081
 mbench run <id> --quality-from <run>   measure the phone

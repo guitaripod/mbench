@@ -16,14 +16,18 @@ No Mac and no Xcode. Metal is the usual obstacle — `xcrun metal` only exists o
 ```
 ./scripts/build-llama.sh     # cross-compiles llama.cpp into Vendor/lib (about four minutes)
 xtool dev                    # builds, signs and installs the app
-xtool launch XTL-<hash>.com.midgar.mbenchd
+mbench phone launch          # starts it on the device
 ```
+
+`xtool launch` cannot start the app on iOS 17 and later: it goes through a debugserver it has no tunnel to, so it resolves the bundle and stops there, leaving an app that was never run. `mbench phone launch` uses DVT process control instead, which pymobiledevice3 reaches over a userspace tunnel without root.
 
 `build-llama.sh` reads `LLAMA_DIR` (default `~/llama.cpp`) and builds the `llama-server-impl` target: the server, its context, mtmd, common and ggml, all static. `Package.swift` links every archive it finds in `Vendor/lib`, so the app is exactly the llama.cpp the checkout was on — recorded in `Vendor/llama-commit.txt` and reported by `/mb/health`, which is what a run's stack fingerprint uses.
 
 The first load of any model is slow: the Metal library is compiled from source on the phone. `/mb/load` waits for it, and the time it took comes back as `load_seconds`.
 
 ## Running a benchmark
+
+The app holds about 3.4 GB before iOS kills it. `com.apple.developer.kernel.increased-memory-limit` is what lifts that, and the provisioning profile xtool mints does not carry it, so the entitlements file is not applied — a 2.3 GB model leaves roughly a gigabyte for the KV cache, which is 8k tokens at `q8_0`. `/mb/health` reports what is left as `available_mib`.
 
 The app must be in the foreground with the screen on — iOS suspends a backgrounded app and its listening sockets go with it. Guided Access holds it there. Keep the phone plugged in and charged to full before starting, and record it: charging heat moves the steady-state number as much as the model does.
 

@@ -198,6 +198,17 @@ def bundle_id():
     return sorted(found, key=len)[0]
 
 
+def launch(kill_existing=True):
+    """Starts the app from the host. xtool's launch needs a debugserver it cannot attach to on iOS 17+, so this goes
+    through DVT process control, which pymobiledevice3 reaches over a userspace tunnel without root."""
+    args = ["developer", "dvt", "launch"] + (["--kill-existing"] if kill_existing else []) + [bundle_id()]
+    completed = run_tool(*args, timeout=300)
+    text = (completed.stdout or "") + (completed.stderr or "")
+    if "launched with pid" not in text:
+        raise RuntimeError(f"could not launch the app: {text.strip()[-300:]}")
+    return int(text.rsplit("pid", 1)[-1].split()[0])
+
+
 def push(path, name=None):
     """Copies a .gguf into the app's Documents/models over USB."""
     target = f"Documents/models/{name or path.name}"
