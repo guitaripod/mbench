@@ -646,3 +646,15 @@ def test_only_three_quality_runs_share_the_box_at_once():
 def test_a_speed_run_blocks_sharing_runs_whatever_the_count():
     runs = [quality_only("a"), running("timing", "gpu")]
     assert [run["id"] for run in units.busy(runs, "gpu", speed=False)] == ["timing"]
+
+
+def test_a_wedged_model_server_is_not_a_healthy_run(monkeypatch):
+    device = FakeDevice({**HEALTH, "server": {"state": "running", "model": "m"}})
+    monkeypatch.setattr(phone.urllib.request, "urlopen",
+                        lambda *args, **kwargs: (_ for _ in ()).throw(OSError("no answer")))
+    assert device.reachable()
+    assert not device.answering()
+
+
+def test_an_idle_app_counts_as_answering():
+    assert FakeDevice({**HEALTH, "server": {"state": "idle"}}).answering()

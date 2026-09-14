@@ -70,6 +70,21 @@ class Device:
     def reachable(self):
         return self.health() is not None
 
+    def answering(self):
+        """Whether the model server itself is alive, not just the app that started it. A wedged llama-server accepts
+        the connection and never replies, which the control port reports as a healthy run for as long as the request
+        hangs — which is forever."""
+        health = self.health()
+        if health is None:
+            return False
+        if ((health.get("server") or {}).get("state")) != "running":
+            return True
+        try:
+            with urllib.request.urlopen(self.server_url + "/health", timeout=HEALTH_TIMEOUT_S) as response:
+                return response.status == 200
+        except (OSError, urllib.error.HTTPError, http.client.HTTPException):
+            return False
+
     def models(self):
         return (self.get("/mb/models") or {}).get("data") or []
 
@@ -223,9 +238,11 @@ class Guard(threading.Thread):
                 self.halt.set("memory")
                 return
             seen = uptime if uptime is not None else seen
-            misses = misses + 1 if health is None else 0
-            if misses >= 2:
-                self.fault = f"mbenchd at {self.device.control_url} stopped answering"
+            misses = misses + 1 if not self.device.answering() else 0
+            if misses >= 4:
+                self.fault = (f"mbenchd at {self.device.control_url} stopped answering"
+                              if health is None else
+                              f"the model server at {self.device.server_url} stopped answering while the app kept running")
                 self.events.emit("abort", reason=self.fault)
                 self.halt.set("device")
                 return
