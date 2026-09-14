@@ -393,6 +393,9 @@ def execute(run_id):
         store.update_run(db, run_id, status="complete", finished=time.time(), flags=flags)
         events.emit("complete")
         notify.send("mbench finished", finished_note(db, run_id, profile.id), run=run_id, status="complete")
+    except engine.ServerGone as error:
+        events.emit("server gone", reason=str(error)[:200])
+        give_way(db, run, events, [{"name": "a server that stopped answering"}], host)
     except Exception as error:
         store.update_run(db, run_id, status="failed", finished=time.time(), error=str(error)[:500])
         events.emit("failed", error=str(error)[:300])
