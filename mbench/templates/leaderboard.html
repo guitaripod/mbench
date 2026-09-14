@@ -78,6 +78,10 @@ code, pre, .mono { font-family: var(--mono); }
 .frontier { padding: 1rem 1.1rem 0.6rem; display: grid; gap: 0.5rem; }
 .frontier-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.3rem 1.5rem; align-items: baseline; }
 .frontier-head span { color: var(--muted); font-size: 0.84rem; }
+.chip.verdict { border-color: transparent; font-weight: 600; }
+.chip.verdict.holds { background: color-mix(in srgb, #2f9e63 22%, transparent); color: #7fdcaa; }
+.chip.verdict.fades { background: color-mix(in srgb, #d79a1e 22%, transparent); color: #f0c265; }
+.chip.verdict.barely { background: color-mix(in srgb, #cc4340 22%, transparent); color: #ef9b99; }
 svg { display: block; width: 100%; height: auto; overflow: visible; }
 svg text { font-family: var(--mono); font-size: 11px; }
 .grid { stroke: var(--grid); stroke-width: 1; }
@@ -197,6 +201,11 @@ const WITH_RUNS = Object.keys(SUITES).filter(name => SUITES[name].efforts.length
 const state = { sortKey: "index", sortDir: "desc", selected: null, effort: "medium", deviceClass: null, suite: SUITES[CURRENT].efforts.length ? CURRENT : (WITH_RUNS[0] || CURRENT) };
 const CLASS_LABELS = { gpu: "GPU", phone: "Phone" };
 const THERMAL_NAMES = ["nominal", "fair", "serious", "critical"];
+const VERDICTS = {
+  holds: { label: "holds up", rank: 2, note: "Keeps at least four fifths of its cold speed and never runs hot for long." },
+  fades: { label: "fades", rank: 1, note: "Loses a fifth or more of its speed, or spends part of the run at serious." },
+  barely: { label: "barely runs", rank: 0, note: "Under 8 tok/s once settled, or hot for over half the run — not a model you would keep installed." },
+};
 const EFFORT_LABELS = { medium: "Medium effort", max: "Max effort", min: "Min effort", none: "No thinking" };
 const COUNT_NOUNS = { math: "problems", aime: "problems", lcb: "problems", tools: "episodes", mrcr: "conversations", graphwalks: "graphs", niah: "prompts" };
 
@@ -296,6 +305,19 @@ function columns() {
         get: m => m.speed.sustain_ratio && m.speed.sustain_ratio.value, better: "high",
         render: m => numCell(m.speed.sustain_ratio && m.speed.sustain_ratio.value, value => value == null ? "–" : value.toFixed(2) + "×",
           m.speed.throttle_s ? `throttled after ${Math.round(m.speed.throttle_s.value)} s` : null) },
+      { key: "verdict", label: "Verdict", note: "Whether a phone can live with it: speed once hot, and how much of the run it ran hot",
+        get: m => m.verdict ? VERDICTS[m.verdict].rank : null, better: "high",
+        render: m => h("td", { className: "num" }, [h("span", { className: "chip verdict " + (m.verdict || ""),
+          text: m.verdict ? VERDICTS[m.verdict].label : "–", title: m.verdict ? VERDICTS[m.verdict].note : null })]) },
+      { key: "hot", label: "Ran hot", note: "Share of the run spent at serious or critical thermal state",
+        get: m => m.thermal && m.thermal.share_hot && m.thermal.share_hot.value, better: "low",
+        render: m => numCell(m.thermal && m.thermal.share_hot && m.thermal.share_hot.value,
+          value => value == null ? "–" : Math.round(value) + "%",
+          m.thermal && m.thermal.to_serious_s ? `hot after ${Math.round(m.thermal.to_serious_s.value)} s` : null) },
+      { key: "drain", label: "Battery %/h", note: "Measured only on a run that was not charging",
+        get: m => m.battery && m.battery.per_hour && m.battery.per_hour.value, better: "low",
+        render: m => numCell(m.battery && m.battery.per_hour && m.battery.per_hour.value,
+          value => value == null ? "–" : Math.round(value) + "%") },
       { key: "footprint", label: "Peak RAM", note: "The most memory the app held while measuring",
         get: m => m.speed.footprint && m.speed.footprint.value, better: "low",
         render: m => numCell(m.speed.footprint && m.speed.footprint.value, value => value == null ? "–" : (value / 1024).toFixed(1) + " GB") },
@@ -357,6 +379,10 @@ function modelMeta(model) {
   if (model.run.contended && model.run.contended.length) chips.push(h("span", { className: "chip", text: "GPU was shared", title: "Other GPU work during the run: " + model.run.contended.join(", ") }));
   if (model.run.failedItems) chips.push(h("span", { className: "chip", text: `${model.run.failedItems} requests failed` }));
   if (model.warnings && model.warnings.length) chips.push(h("span", { className: "chip", text: "context-capped", title: model.warnings.join(" ") }));
+  if (model.verdict && VERDICTS[model.verdict]) {
+    chips.unshift(h("span", { className: "chip verdict " + model.verdict, text: VERDICTS[model.verdict].label,
+      title: VERDICTS[model.verdict].note }));
+  }
   return h("span", { className: "model-meta" }, [...parts.map(part => h("span", { text: part })), ...chips]);
 }
 
@@ -778,6 +804,11 @@ function renderDetail(host) {
     ["Decode, once hot", speed.decode_steady && fmt.int(speed.decode_steady.value) + " tok/s"],
     ["Held the cold speed for", speed.throttle_s && Math.round(speed.throttle_s.value) + " s"],
     ["Peak memory held", speed.footprint && (speed.footprint.value / 1024).toFixed(1) + " GB"],
+    ["Hottest it got", model.thermal && model.thermal.worst && THERMAL_NAMES[Math.round(model.thermal.worst.value)]],
+    ["Cool for", model.thermal && model.thermal.to_fair_s && Math.round(model.thermal.to_fair_s.value) + " s"],
+    ["Ran hot for", model.thermal && model.thermal.share_hot && Math.round(model.thermal.share_hot.value) + "% of the run"],
+    ["Battery an hour of this costs", model.battery && model.battery.per_hour && Math.round(model.battery.per_hour.value) + "%"],
+    ["Battery per 1k tokens", model.battery && model.battery.per_1k_tokens && model.battery.per_1k_tokens.value.toFixed(2) + "%"],
     ...(() => {
       const levels = Object.keys(speed).filter(key => key.startsWith("conc.")).map(key => Number(key.slice(5))).sort((a, b) => a - b);
       return levels.length ? [[`${levels.join(" / ")} at once`, levels.map(level => fmt.int(speed["conc." + level].value)).join(" / ") + " tok/s"]] : [];
@@ -877,6 +908,12 @@ function render() {
       type: "button", text: EFFORT_LABELS[effort] || `Effort ${effort}`, "aria-pressed": effort === state.effort ? "true" : "false",
       onclick: () => { state.effort = effort; render(); },
     }))));
+  }
+  if (showingPhones()) {
+    host.appendChild(h("p", { className: "notice", text: "A phone is judged on whether it can live with a model: "
+      + "holds up keeps four fifths of its cold speed and stays cool, fades loses a fifth or reaches serious, "
+      + "barely runs is under 8 tok/s once settled or hot for over half the run. Quality is measured off the device "
+      + "on the same weights." }));
   }
   if (setups().length > 1) {
     host.appendChild(h("p", { className: "notice", text: `Measured on ${setups().length} setups — `

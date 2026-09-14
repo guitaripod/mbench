@@ -140,6 +140,14 @@ class Sampler:
     def energy_wh(self, start, end):
         return None
 
+    def timeline(self):
+        """Every sample the run was measured under, so the board can show when the phone got hot and what the
+        answers cost the battery."""
+        return [{"t": round(stamp, 1), "thermal": entry.get("thermal_state"),
+                 "footprint_mib": entry.get("footprint_mib"), "battery": entry.get("battery_level"),
+                 "battery_state": entry.get("battery_state")}
+                for stamp, entry in self.samples]
+
     def close(self):
         self.stopped.set()
 

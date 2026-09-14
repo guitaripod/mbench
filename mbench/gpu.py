@@ -41,6 +41,10 @@ class Sampler:
                 "vram_mib": max(sample[2] for sample in inside),
                 "temp_c": round(max(sample[4] for sample in inside), 1)}
 
+    def timeline(self):
+        """A card reports power, not a thermal state; the phone's timeline has no counterpart here."""
+        return []
+
     def energy_wh(self, start, end):
         """Board energy between two moments from the power samples, idle draw included; None without enough samples."""
         points = [(sample[0], sample[1]) for sample in self.samples if start <= sample[0] <= end]

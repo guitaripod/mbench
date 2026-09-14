@@ -141,3 +141,66 @@ def test_a_phone_run_without_a_named_quality_run_shows_none(tmp_path, monkeypatc
     phone_run(db, "air", "qwen3-4b-air", {})
     entry = board.collect(db)["rankings"]["max"][0]
     assert entry["index"] is None and entry["tasks"] == {} and entry["qualityFrom"] is None
+
+
+def timeline(entries, plugged=False):
+    return [{"t": float(at), "thermal": state, "battery": level,
+             "battery_state": "charging" if plugged else "unplugged"}
+            for at, state, level in entries]
+
+
+def test_a_phone_run_says_how_long_it_stayed_cool_and_how_long_it_ran_hot():
+    found = metrics.thermal_metrics(timeline([
+        (0, "nominal", 1.0), (30, "nominal", 0.99), (60, "fair", 0.98),
+        (90, "serious", 0.97), (120, "serious", 0.96), (150, "serious", 0.95),
+    ]), tokens=4000)
+    assert found["thermal.worst"]["value"] == 2
+    assert found["thermal.to_fair_s"]["value"] == 60.0
+    assert found["thermal.to_serious_s"]["value"] == 90.0
+    assert round(found["thermal.share_hot"]["value"]) == 50
+    assert round(found["battery.drain"]["value"], 1) == 5.0
+    assert round(found["battery.per_hour"]["value"]) == 120
+    assert round(found["battery.per_1k_tokens"]["value"], 2) == 1.25
+
+
+def test_a_charging_run_reports_no_battery_cost():
+    found = metrics.thermal_metrics(timeline([
+        (0, "nominal", 1.0), (30, "fair", 1.0), (60, "fair", 1.0)], plugged=True))
+    assert "battery.drain" not in found and found["thermal.worst"]["value"] == 1
+
+
+def test_a_desktop_run_has_no_thermal_story():
+    assert metrics.thermal_metrics([]) == {}
+    assert metrics.thermal_metrics(None) == {}
+
+
+def test_the_verdict_disqualifies_a_model_that_runs_hot_or_crawls():
+    def judge(steady, ratio, worst, hot):
+        return metrics.verdict({"speed.decode_steady": {"value": steady}, "speed.sustain_ratio": {"value": ratio},
+                                "thermal.worst": {"value": worst}, "thermal.share_hot": {"value": hot}})
+
+    assert judge(24.0, 0.92, 1, 0.0) == "holds"
+    assert judge(18.0, 0.70, 1, 0.0) == "fades"
+    assert judge(18.0, 0.85, 2, 10.0) == "fades"
+    assert judge(6.0, 0.95, 0, 0.0) == "barely"
+    assert judge(18.0, 0.40, 1, 0.0) == "barely"
+    assert judge(18.0, 0.90, 1, 80.0) == "barely"
+    assert judge(18.0, 0.90, 3, 0.0) == "barely"
+
+
+def test_a_run_with_no_thermal_numbers_gets_no_verdict():
+    assert metrics.verdict({"index.quality": {"value": 50.0}}) is None
+
+
+def test_the_board_carries_the_verdict(tmp_path, monkeypatch):
+    monkeypatch.setattr("mbench.paths.DB", tmp_path / "bench.db")
+    db = store.connect()
+    phone_run(db, "air", "qwen3-4b-air", {})
+    store.set_metrics(db, "air", {"speed.decode_steady": {"value": 5.0, "unit": "tok/s", "n": 7},
+                                  "speed.sustain_ratio": {"value": 0.4, "unit": "x", "n": 20},
+                                  "thermal.share_hot": {"value": 70.0, "unit": "%", "n": 20},
+                                  "battery.per_hour": {"value": 31.0, "unit": "%/h", "n": 20}})
+    entry = board.collect(db)["rankings"]["max"][0]
+    assert entry["verdict"] == "barely"
+    assert entry["thermal"]["share_hot"]["value"] == 70.0
+    assert entry["battery"]["per_hour"]["value"] == 31.0

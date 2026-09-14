@@ -188,6 +188,7 @@ class SpeedRun:
                     results["depth"].append(row)
                     step()
         finally:
+            results["telemetry"] = sampler.timeline()
             sampler.close()
             results["contention"] = self.contention
         return results

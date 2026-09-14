@@ -10,6 +10,10 @@ from . import suite
 
 BINARY_TASKS = ("supergpqa", "math", "lcb", "tools")
 THERMAL_STATES = ("nominal", "fair", "serious", "critical")
+HOLDS_RATIO = 0.8
+BARELY_RATIO = 0.55
+BARELY_TOKENS_PER_SECOND = 8.0
+HOT_SHARE = 50.0
 THROTTLE_SHARE = 0.9
 BOOTSTRAP_DRAWS = 4000
 
@@ -237,6 +241,51 @@ def sustain_metrics(rows):
     return out
 
 
+def thermal_metrics(timeline, tokens=None):
+    """How a phone behaves under load: how long it stays cool, how much of the run it spends hot, and what the
+    answers cost the battery. A desktop has no timeline, so none of this appears for one."""
+    samples = [entry for entry in timeline or [] if entry.get("thermal") in THERMAL_STATES]
+    if len(samples) < 3:
+        return {}
+    started = samples[0]["t"]
+    worst = max(samples, key=lambda entry: THERMAL_STATES.index(entry["thermal"]))["thermal"]
+    hot = [entry for entry in samples if THERMAL_STATES.index(entry["thermal"]) >= 2]
+    out = {
+        "thermal.worst": {"value": THERMAL_STATES.index(worst), "unit": "state", "n": len(samples)},
+        "thermal.share_hot": {"value": 100 * len(hot) / len(samples), "unit": "%", "n": len(samples)},
+    }
+    for name in ("fair", "serious", "critical"):
+        reached = next((entry for entry in samples if THERMAL_STATES.index(entry["thermal"]) >= THERMAL_STATES.index(name)), None)
+        if reached:
+            out[f"thermal.to_{name}_s"] = {"value": round(reached["t"] - started, 1), "unit": "s", "n": 1}
+    out.update(battery_metrics(samples, tokens))
+    return out
+
+
+def battery_metrics(samples, tokens=None):
+    """What a run cost the battery. Only a run on battery can say: charging hides the drain entirely."""
+    levels = [entry["battery"] for entry in samples if entry.get("battery") is not None]
+    on_battery = [entry for entry in samples if entry.get("battery_state") == "unplugged"]
+    if len(levels) < 2 or len(on_battery) < len(samples):
+        return {}
+    drop = 100 * (levels[0] - levels[-1])
+    if drop <= 0:
+        return {}
+    out = {"battery.drain": {"value": drop, "unit": "%", "n": len(levels)}}
+    elapsed = samples[-1]["t"] - samples[0]["t"]
+    if elapsed > 60:
+        out["battery.per_hour"] = {"value": drop * 3600 / elapsed, "unit": "%/h", "n": len(levels)}
+    if tokens:
+        out["battery.per_1k_tokens"] = {"value": 1000 * drop / tokens, "unit": "%/1k", "n": len(levels)}
+    return out
+
+
+def answered_tokens(result):
+    rows = [row for key in ("single", "concurrency", "depth", "sustain") for row in result.get(key, [])]
+    streams = [stream for row in rows for stream in (row.get("streams") or [row])]
+    return sum(stream.get("completion_tokens") or 0 for stream in streams) or None
+
+
 def footprint_metrics(result):
     """The most memory the phone's process held while measuring, which is what decides whether a model fits at all."""
     rows = [row for key in ("single", "concurrency", "depth", "sustain") for row in result.get(key, [])]
@@ -248,6 +297,7 @@ def speed_metrics(result):
     out = {}
     out.update(sustain_metrics(result.get("sustain", [])))
     out.update(footprint_metrics(result))
+    out.update(thermal_metrics(result.get("telemetry"), answered_tokens(result)))
     single = defaultdict(list)
     for row in result.get("single", []):
         if row.get("decode_tps"):
@@ -297,3 +347,25 @@ def speed_metrics(result):
         if decode:
             out[f"speed.decode_at.{level}"] = spread(decode, "tok/s")
     return out
+
+
+def verdict(entry):
+    """Whether a phone can live with a model. Heat disqualifies: a model that pins the phone at serious for half the
+    run, or that has fallen under 8 tok/s by the time it settles, is not something you would keep installed."""
+    speed = {key.removeprefix("speed."): value for key, value in entry.items() if key.startswith("speed.")}
+    thermal = {key.removeprefix("thermal."): value for key, value in entry.items() if key.startswith("thermal.")}
+    steady = (speed.get("decode_steady") or {}).get("value")
+    ratio = (speed.get("sustain_ratio") or {}).get("value")
+    worst = (thermal.get("worst") or {}).get("value")
+    hot = (thermal.get("share_hot") or {}).get("value")
+    if steady is None and ratio is None and worst is None:
+        return None
+    if ((steady is not None and steady < BARELY_TOKENS_PER_SECOND)
+            or (ratio is not None and ratio < BARELY_RATIO)
+            or (worst is not None and worst >= THERMAL_STATES.index("critical"))
+            or (hot is not None and hot > HOT_SHARE)):
+        return "barely"
+    if ((ratio is not None and ratio < HOLDS_RATIO)
+            or (worst is not None and worst >= THERMAL_STATES.index("serious"))):
+        return "fades"
+    return "holds"

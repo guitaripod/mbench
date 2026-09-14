@@ -154,10 +154,13 @@ hf_id = "Qwen/Qwen3-4B-Thinking-2507"
 phone = { file = "qwen3-4b-thinking-q4km.gguf", n_ctx = 32768, parallel = 4, flash_attn = "on", cache_type_k = "q8_0", cache_type_v = "q8_0" }
 ```
 
-A phone run measures speed, and what speed costs it:
+A phone run measures speed, and what speed costs it — because on a phone the interesting question is not which model is cleverest but which one the device can live with. A model that pins the phone at `serious` dims the screen and empties the battery, and that disqualifies it however well it scores:
 
 - **What it holds when it runs hot.** Twenty answers back to back with no pause, each one carrying the thermal state it ran under. The board reports the cold speed, the speed it settles at, the ratio between them and how long it held the cold one. A desktop's two numbers are the same; a phone's are not.
 - **Where the context wall is.** The memory the app actually held, beside the context it managed to load. A model that loads at 32k and refuses at 64k says so.
+- **How hot, and how soon.** The thermal state is sampled through the whole run: how long it stayed cool, when it first went to `serious`, and what share of the run it spent hot.
+- **What an hour of it costs the battery.** Battery level is recorded alongside, so a run made on battery reports percent per hour and percent per thousand tokens. A charging run reports neither, and says so, rather than pretending the drain was zero.
+- **A verdict, not just a ranking.** Each phone row is marked *holds up* (keeps four fifths of its cold speed, never hot for long), *fades* (loses a fifth, or reaches `serious`), or *barely runs* (under 8 tok/s once settled, or hot for more than half the run). The last of those is a failure, not a low score.
 - **Quality, measured off the device.** A 4B model answering a 64k-token reasoning budget at phone speed takes days, so quality comes from a desktop run of *the same .gguf*, named with `--quality-from`. The board says so on the row, and never presents the two as one measurement.
 
 Phone rows sit on their own tab, ranked against each other and never mixed with the card's — the quality index compares across stacks, but tokens per second only ever compare within one.
