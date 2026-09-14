@@ -71,8 +71,16 @@ class PhoneHost:
         return self.device.reachable()
 
     def ensure_loaded(self):
-        status = self.device.load(profiles.phone_request(self.profile.id, self.profile.phone or {}))
-        return status.get("load_seconds")
+        """Loads the model, restarting the app once if it will not answer. An app that was backgrounded mid-run comes
+        back with a server it can no longer stop, and a benchmark that gives up there loses a night of measurements
+        over something a relaunch fixes."""
+        request = profiles.phone_request(self.profile.id, self.profile.phone or {})
+        try:
+            return self.device.load(request).get("load_seconds")
+        except phone.Unreachable:
+            phone.launch()
+            self.device.cooldown(floor=5, hold=0, cap=120)
+            return self.device.load(request).get("load_seconds")
 
     def unload(self):
         self.device.unload()

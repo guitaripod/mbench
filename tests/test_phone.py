@@ -467,3 +467,21 @@ def test_quality_follows_the_twin_without_naming_a_run(tmp_path, monkeypatch):
                           "server": {"weights": "aaa"}, "flags": {"quality_from": {"twin": "m-gguf"}}})
     entry = board.collect(db)["rankings"]["max"][0]
     assert entry["qualityFrom"]["model"] == "m-gguf" and entry["index"]["value"] == 41.0
+
+
+def test_a_wedged_app_is_relaunched_before_the_run_is_given_up(monkeypatch):
+    monkeypatch.setattr(profiles, "user_profiles", lambda: {"m": {"phone": {"n_ctx": 4096}}})
+    host = hosts.for_profile(profiles.resolve("m"))
+    calls = {"launched": 0, "loads": 0}
+
+    def load(request):
+        calls["loads"] += 1
+        if calls["loads"] == 1:
+            raise phone.Unreachable("closed")
+        return {"load_seconds": 4.0}
+
+    monkeypatch.setattr(phone, "launch", lambda: calls.__setitem__("launched", calls["launched"] + 1))
+    monkeypatch.setattr(host.device, "load", load)
+    monkeypatch.setattr(host.device, "cooldown", lambda **kwargs: {})
+    assert host.ensure_loaded() == 4.0
+    assert calls["launched"] == 1
