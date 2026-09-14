@@ -1,4 +1,5 @@
 import json
+import time
 
 from mbench import board, doctor, hosts, metrics, phone, profiles, stack, store, suite, units
 
@@ -606,3 +607,23 @@ def test_a_lone_run_always_gives_way(tmp_path, monkeypatch):
     store.connect()
     assert worker.MemoryGuard(None, None, "20260914-100000-a").youngest()
     assert worker.MemoryGuard(None, None, None).youngest()
+
+
+def test_only_one_run_reads_a_question_set_at_a_time(tmp_path, monkeypatch):
+    import multiprocessing
+    from mbench import datasets
+    monkeypatch.setattr("mbench.paths.CACHE", tmp_path)
+    order = multiprocessing.Manager().list()
+
+    def hold(index):
+        with datasets.one_builder_at_a_time():
+            order.append(f"in{index}")
+            time.sleep(0.2)
+            order.append(f"out{index}")
+
+    workers = [multiprocessing.Process(target=hold, args=(index,)) for index in range(3)]
+    for worker in workers:
+        worker.start()
+    for worker in workers:
+        worker.join()
+    assert [entry.rstrip("0123456789") for entry in order] == ["in", "out"] * 3

@@ -1,3 +1,5 @@
+import contextlib
+import fcntl
 import gc
 import hashlib
 import json
@@ -252,10 +254,24 @@ def tools(spec, _context=None):
 BUILDERS = {"supergpqa": supergpqa, "math": math, "lcb": lcb, "mrcr": mrcr, "graphwalks": graphwalks, "tools": tools}
 
 
+@contextlib.contextmanager
+def one_builder_at_a_time():
+    """Reading a question set costs several gigabytes for the minute it takes, and every run on the box wants to do it
+    the moment it starts. Six at once is what takes the machine under; one after another costs a minute each."""
+    paths.CACHE.mkdir(parents=True, exist_ok=True)
+    with (paths.CACHE / "build.lock").open("w") as handle:
+        fcntl.flock(handle, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(handle, fcntl.LOCK_UN)
+
+
 def build(task, spec, context=None):
     """Builds a task's items and lets everything the builder read go: a worker that keeps a parquet alive for the
     length of a run costs gigabytes that another run on the same box could have used."""
-    items = BUILDERS[task](spec, context)
-    items = items[: spec["max_items"]] if spec.get("max_items") else items
-    gc.collect()
+    with one_builder_at_a_time():
+        items = BUILDERS[task](spec, context)
+        items = items[: spec["max_items"]] if spec.get("max_items") else items
+        gc.collect()
     return items
