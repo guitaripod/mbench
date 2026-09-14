@@ -66,12 +66,20 @@ const PALETTE = {
 const SUITES = DATA.suites || {};
 const CURRENT = DATA.current || Object.keys(SUITES)[0];
 const view = SUITES[CURRENT] || { efforts: [], rankings: {}, indexTasks: [], taskShort: {} };
+const VERDICT_LABELS = { holds: "holds up", fades: "fades", barely: "barely runs" };
 const canvas = document.getElementById("card");
 const context = canvas.getContext("2d");
 const state = { effort: null, left: null, right: null, theme: matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light" };
 
+function classOf(model) {
+  return (model && model.deviceClass) || "gpu";
+}
+
 function models() {
-  return (view.rankings[state.effort] || []).slice().sort((one, two) => (two.index?.value ?? -1) - (one.index?.value ?? -1));
+  const ranked = (view.rankings[state.effort] || []).slice()
+    .sort((one, two) => (two.index?.value ?? -1) - (one.index?.value ?? -1));
+  const chosen = ranked.find(model => model.id === state.left) || ranked[0];
+  return ranked.filter(model => classOf(model) === classOf(chosen));
 }
 
 function shortName(model) {
@@ -124,8 +132,8 @@ function header(model, x, side, colour) {
   dot(x + 6, 132, colour);
   const size = fit(name, 440, 26, 600, "display");
   text(name, x + 22, 139, { size, weight: 600, family: "display" });
-  const facts = [model.engine, model.quantization, model.spec, model.context ? Math.round(model.context / 1024) + "k ctx" : null]
-    .filter(Boolean).join(" · ");
+  const facts = [model.engine, model.quantization, model.spec, model.context ? Math.round(model.context / 1024) + "k ctx" : null,
+    VERDICT_LABELS[model.verdict]].filter(Boolean).join(" · ");
   text(facts, x + 22, 160, { size: 13, family: "mono", color: "muted" });
   const index = model.index && model.index.value != null ? model.index.value.toFixed(1) : "–";
   const width = text(index, x, 218, { size: 54, weight: 700, family: "display" });
@@ -171,7 +179,12 @@ function pair(one, two) {
 }
 
 function strip(left, right, y) {
-  const items = [
+  const phones = classOf(left) === "phone";
+  const items = phones ? [
+    ["Decode once hot", model => model.speed.decode_steady, value => Math.round(value) + " tok/s", "high"],
+    ["Share of the run hot", model => model.thermal && model.thermal.share_hot, value => Math.round(value) + "%", "low"],
+    ["Battery an hour costs", model => model.battery && model.battery.per_hour, value => Math.round(value) + "%", "low"],
+  ] : [
     ["Decode, one request", model => model.speed.decode, value => Math.round(value) + " tok/s", "high"],
     ["Peak, all requests", model => model.speed.peak, value => Math.round(value) + " tok/s", "high"],
     ["Energy per correct answer", model => model.energy.perCorrect, value => value.toFixed(2) + " Wh", "low"],
