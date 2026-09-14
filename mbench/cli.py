@@ -263,8 +263,8 @@ def cmd_run(args):
         (paths.RUNS / run_id).mkdir(parents=True, exist_ok=True)
         carried = carry_over(source, run_id, tasks) if source else []
         flags = {"tasks": tasks, "submit": args.submit, "effort_level": level, "yield": not args.keep_gpu}
-        if args.quality_from:
-            flags["quality_from"] = args.quality_from
+        if args.quality_from or profile.twin:
+            flags["quality_from"] = args.quality_from or {"twin": profile.twin}
         if carried:
             flags["reused"] = {"run": source["id"], "tasks": carried}
         starts_now = window is None and not active and position == 0

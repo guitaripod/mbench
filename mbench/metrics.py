@@ -252,10 +252,19 @@ def sustain_metrics(rows):
     return out
 
 
-def thermal_metrics(timeline, tokens=None):
+def measured_only(timeline, cooldowns):
+    """The samples taken while something was being measured. A cooldown is the opposite of a measurement, and
+    counting its minutes would say a model ran hot for a tenth of the time it did."""
+    spans = [(entry["started"], entry["ended"]) for entry in cooldowns or []
+             if entry.get("started") is not None and entry.get("ended") is not None]
+    return [entry for entry in timeline or []
+            if not any(start <= entry.get("t", 0) <= end for start, end in spans)]
+
+
+def thermal_metrics(timeline, tokens=None, cooldowns=None):
     """How a phone behaves under load: how long it stays cool, how much of the run it spends hot, and what the
     answers cost the battery. A desktop has no timeline, so none of this appears for one."""
-    samples = [entry for entry in timeline or [] if entry.get("thermal") in THERMAL_STATES]
+    samples = [entry for entry in measured_only(timeline, cooldowns) if entry.get("thermal") in THERMAL_STATES]
     if len(samples) < 3:
         return {}
     started = samples[0]["t"]
@@ -315,17 +324,26 @@ def cooldown_metrics(entries):
 
 
 def footprint_metrics(result):
-    """The most memory the phone's process held while measuring, which is what decides whether a model fits at all."""
+    """The most memory the phone's process held, and the least it had left. A model that finishes with nothing to
+    spare ran, but it is one long prompt away from being killed, and the board should say so."""
     rows = [row for key in ("single", "concurrency", "depth", "sustain") for row in result.get(key, [])]
     peaks = [row["footprint_mib"] for row in rows if row.get("footprint_mib")]
-    return {"speed.footprint": {"value": max(peaks), "unit": "MiB", "n": len(peaks)}} if peaks else {}
+    spare = [entry["available_mib"] for entry in result.get("telemetry") or [] if entry.get("available_mib")]
+    out = {}
+    if peaks:
+        out["speed.footprint"] = {"value": max(peaks), "unit": "MiB", "n": len(peaks)}
+    if spare:
+        out["speed.headroom"] = {"value": min(spare), "unit": "MiB", "n": len(spare)}
+    if peaks and spare:
+        out["speed.memory_used"] = {"value": 100 * max(peaks) / (max(peaks) + min(spare)), "unit": "%", "n": len(spare)}
+    return out
 
 
 def speed_metrics(result):
     out = {}
     out.update(sustain_metrics(result.get("sustain", [])))
     out.update(footprint_metrics(result))
-    out.update(thermal_metrics(result.get("telemetry"), answered_tokens(result)))
+    out.update(thermal_metrics(result.get("telemetry"), answered_tokens(result), result.get("cooldowns")))
     out.update(cooldown_metrics(result.get("cooldowns")))
     single = defaultdict(list)
     for row in result.get("single", []):

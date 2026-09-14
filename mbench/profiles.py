@@ -27,6 +27,7 @@ class Profile:
     sources: dict = field(default_factory=dict)
     phone: dict = field(default_factory=dict)
     base_url: str | None = None
+    twin: str | None = None
 
     def to_dict(self):
         return asdict(self)
@@ -142,6 +143,7 @@ def phone_profile(model_id, user):
         fingerprint=hashlib.sha256(body.encode()).hexdigest()[:16],
         sources={key: "models.toml" for key in ("name", "thinking", "context", "efforts", "hf_id")},
         phone=settings,
+        twin=user.get("twin"),
         base_url=settings.get("server_url") or phone.SERVER_URL,
     )
 

@@ -404,3 +404,66 @@ def test_unload_waits_for_the_server_to_actually_stop(monkeypatch):
     monkeypatch.setattr(device, "health", lambda: {"server": {"state": states.pop(0) if states else "idle"}})
     device.unload()
     assert states == []
+
+
+def test_the_thermal_story_ignores_the_time_spent_cooling():
+    samples = timeline([(0, "serious", 1.0), (30, "fair", 1.0), (600, "nominal", 1.0),
+                        (630, "nominal", 1.0), (660, "fair", 1.0), (690, "serious", 1.0)])
+    found = metrics.thermal_metrics(samples, cooldowns=[{"started": 0, "ended": 620}])
+    assert found["thermal.to_serious_s"]["value"] == 60.0
+    assert round(found["thermal.share_hot"]["value"]) == 33
+
+
+def test_headroom_is_what_ios_had_left():
+    result = {"single": [{"footprint_mib": 3346}],
+              "telemetry": [{"t": 1, "available_mib": 900}, {"t": 2, "available_mib": 15}]}
+    found = metrics.footprint_metrics(result)
+    assert found["speed.headroom"]["value"] == 15
+    assert round(found["speed.memory_used"]["value"], 1) == 99.6
+
+
+def test_a_relaunched_app_means_the_model_was_too_big(monkeypatch):
+    class Events:
+        def __init__(self):
+            self.reasons = []
+
+        def emit(self, phase, **fields):
+            self.reasons.append(fields.get("reason"))
+
+    class Halt:
+        def __init__(self):
+            self.reason = None
+
+        def set(self, reason):
+            self.reason = reason
+
+    device = FakeDevice()
+    uptimes = iter([{"telemetry": {"uptime": 400.0}}, {"telemetry": {"uptime": 3.0}}])
+    monkeypatch.setattr(device, "health", lambda: next(uptimes, {"telemetry": {"uptime": 9.0}}))
+    halt, events = Halt(), Events()
+    guard = phone.Guard(device, halt, events, interval=0)
+    guard.run()
+    assert halt.reason == "memory" and "more memory" in events.reasons[0]
+
+
+def test_a_phone_model_can_name_its_desktop_twin(monkeypatch):
+    monkeypatch.setattr(profiles, "user_profiles", lambda: {
+        "m-air": {"twin": "m-gguf", "phone": {"n_ctx": 4096}}})
+    assert profiles.resolve("m-air").twin == "m-gguf"
+
+
+def test_quality_follows_the_twin_without_naming_a_run(tmp_path, monkeypatch):
+    monkeypatch.setattr("mbench.paths.DB", tmp_path / "bench.db")
+    db = store.connect()
+    for index, run_id in enumerate(("older", "newer")):
+        store.insert_run(db, {"id": run_id, "model": "m-gguf", "name": "m", "suite": suite.label("full"),
+                              "effort": "max", "status": "complete", "finished": index, "profile": {},
+                              "hardware": {"gpu": "RTX PRO 6000"}, "server": {"weights": "aaa"}})
+        store.set_metrics(db, run_id, {"index.quality": {"value": 40.0 + index, "unit": "%", "n": 6},
+                                       "math.score": {"value": 50.0, "unit": "%", "n": 30}})
+    store.insert_run(db, {"id": "air", "model": "m-air", "name": "m-air", "suite": suite.label("phone"),
+                          "effort": "max", "status": "complete", "finished": 3, "profile": {},
+                          "hardware": {"class": "phone", "device": "iPhone Air"},
+                          "server": {"weights": "aaa"}, "flags": {"quality_from": {"twin": "m-gguf"}}})
+    entry = board.collect(db)["rankings"]["max"][0]
+    assert entry["qualityFrom"]["model"] == "m-gguf" and entry["index"]["value"] == 41.0

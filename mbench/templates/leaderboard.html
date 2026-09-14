@@ -342,9 +342,10 @@ function columns() {
       ] : []),
       { key: "wait", label: "First token", note: "Seconds to the first token on the longest prompt every model was asked",
         get: m => phoneTtft(m), better: "low", render: m => numCell(phoneTtft(m), fmt.secs) },
-      { key: "footprint", label: "Peak RAM", note: "The most memory the app held while measuring",
+      { key: "footprint", label: "Peak RAM", note: "The most memory the app held, and how much iOS still had left",
         get: m => m.speed.footprint && m.speed.footprint.value, better: "low",
-        render: m => numCell(m.speed.footprint && m.speed.footprint.value, value => value == null ? "–" : (value / 1024).toFixed(1) + " GB") },
+        render: m => numCell(m.speed.footprint && m.speed.footprint.value, value => value == null ? "–" : (value / 1024).toFixed(1) + " GB",
+          m.speed.headroom ? `${Math.round(m.speed.headroom.value)} MiB to spare` : null) },
     ] : []),
     { key: "peak", label: "Peak tok/s", note: "Most tokens per second across all requests, at the best number of requests at once", get: m => m.speed.peak && m.speed.peak.value, better: "high",
       render: m => numCell(m.speed.peak && m.speed.peak.value, fmt.int, m.speed.peak_at ? `${m.speed.peak_at.value} requests at once` : null) },
@@ -403,6 +404,18 @@ function modelMeta(model) {
   if (model.run.contended && model.run.contended.length) chips.push(h("span", { className: "chip", text: "GPU was shared", title: "Other GPU work during the run: " + model.run.contended.join(", ") }));
   if (model.run.failedItems) chips.push(h("span", { className: "chip", text: `${model.run.failedItems} requests failed` }));
   if (model.warnings && model.warnings.length) chips.push(h("span", { className: "chip", text: "context-capped", title: model.warnings.join(" ") }));
+  if (model.repeats && model.repeats.runs < 2 && (model.deviceClass || "gpu") === "phone") {
+    chips.push(h("span", { className: "chip", text: "measured once",
+      title: "Only one run of this configuration, so its speed carries no run-to-run spread." }));
+  }
+  if (model.repeats && model.repeats.spread != null && model.repeats.spread > 5) {
+    chips.push(h("span", { className: "chip", text: `repeats differ ${Math.round(model.repeats.spread)}%`,
+      title: "Runs of the same configuration landed this far apart; five per cent is the bar a mobile suite uses." }));
+  }
+  if (model.speed && model.speed.memory_used && model.speed.memory_used.value > 95) {
+    chips.push(h("span", { className: "chip", text: "at the memory ceiling",
+      title: "It finished with almost nothing to spare: one longer prompt and iOS would kill it." }));
+  }
   if (model.speed && model.speed.cooled && model.speed.cooled.value < 100) {
     chips.push(h("span", { className: "chip", text: "measured warm",
       title: "The device had not returned to its cold state before a block started, so its speed reads low." }));

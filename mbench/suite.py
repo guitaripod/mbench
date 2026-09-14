@@ -76,7 +76,7 @@ SUITES = {
     },
     "phone": {
         "speed": {"reps": 3, "max_tokens": 512, "concurrency": (1, 2, 4, 8), "rounds": 2,
-                  "depths": (1000, 4000, 16000, 32000), "depth_reps": 2, "depth_max_tokens": 256,
+                  "depths": (1000, 4000, 8000, 12000), "depth_reps": 2, "depth_max_tokens": 256,
                   "sustain": {"reps": 20, "max_tokens": 512}},
     },
     "smoke": {

@@ -133,9 +133,9 @@ class Device:
             cool_since = (cool_since or time.time()) if cool else None
             settled = cool_since is not None and time.time() - cool_since >= hold
             if waited >= cap or (waited >= floor and settled):
-                return {"waited_s": round(waited, 1), "entry": entry, "exit": state,
-                        "reached": bool(settled), "battery": telemetry.get("battery_level"),
-                        "battery_state": telemetry.get("battery_state")}
+                return {"waited_s": round(waited, 1), "started": round(started, 1), "ended": round(time.time(), 1),
+                        "entry": entry, "exit": state, "reached": bool(settled),
+                        "battery": telemetry.get("battery_level"), "battery_state": telemetry.get("battery_state")}
             if report and int(waited) % 60 < COOLDOWN_POLL_S:
                 report(f"cooling: {state} after {int(waited)}s")
             time.sleep(COOLDOWN_POLL_S)
@@ -189,8 +189,8 @@ class Sampler:
         """Every sample the run was measured under, so the board can show when the phone got hot and what the
         answers cost the battery."""
         return [{"t": round(stamp, 1), "thermal": entry.get("thermal_state"),
-                 "footprint_mib": entry.get("footprint_mib"), "battery": entry.get("battery_level"),
-                 "battery_state": entry.get("battery_state")}
+                 "footprint_mib": entry.get("footprint_mib"), "available_mib": entry.get("available_mib"),
+                 "battery": entry.get("battery_level"), "battery_state": entry.get("battery_state")}
                 for stamp, entry in self.samples]
 
     def close(self):
@@ -212,8 +212,18 @@ class Guard(threading.Thread):
 
     def run(self):
         misses = 0
+        seen = None
         while not self.stopped.wait(self.interval):
-            misses = misses + 1 if not self.device.reachable() else 0
+            health = self.device.health()
+            uptime = ((health or {}).get("telemetry") or {}).get("uptime")
+            if uptime is not None and seen is not None and uptime < seen:
+                self.fault = ("iOS killed the app and it relaunched: the model needed more memory than the phone "
+                              "would give it")
+                self.events.emit("abort", reason=self.fault)
+                self.halt.set("memory")
+                return
+            seen = uptime if uptime is not None else seen
+            misses = misses + 1 if health is None else 0
             if misses >= 2:
                 self.fault = f"mbenchd at {self.device.control_url} stopped answering"
                 self.events.emit("abort", reason=self.fault)

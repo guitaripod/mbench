@@ -1,4 +1,5 @@
 import json
+import statistics
 import time
 
 from . import metrics as scores
@@ -58,8 +59,12 @@ def warnings_for(tasks, capacity, labels):
 def linked_quality(db, run, definition):
     """A phone run measures speed on the device; its quality comes from a named desktop run of the same weights, so the
     two numbers are never taken for one measurement."""
-    source_id = (run.get("flags") or {}).get("quality_from")
-    source = store.get_run(db, source_id) if source_id else None
+    named = (run.get("flags") or {}).get("quality_from")
+    if isinstance(named, dict):
+        twin = named.get("twin")
+        source = store.last_complete(db, twin) if twin else None
+    else:
+        source = store.get_run(db, named) if named else None
     if not source or suite.kind_of(source["suite"]) not in suite.QUALITY_SUITES:
         return None
     theirs = (source.get("server") or {}).get("weights")
@@ -70,11 +75,24 @@ def linked_quality(db, run, definition):
     tasks = {task: entry for task in definition["index_tasks"] if (entry := task_entry(metrics, task))}
     if not tasks:
         return None
-    return {"run": source["id"], "suite": source["suite"], "host": stack.of(source)["hostLabel"],
+    return {"run": source["id"], "model": source["model"], "suite": source["suite"],
+            "host": stack.of(source)["hostLabel"],
             "verified": bool(ours and theirs and ours == theirs),
             "agreement": doctor.agreement((run.get("server") or {}).get("probe"),
                                           (source.get("server") or {}).get("probe")),
             "index": metrics.get("index.quality"), "tasks": tasks}
+
+
+def repeatability(db, run, history):
+    """How far apart repeats of the same configuration landed. A benchmark that has only measured a thing once has
+    not measured its noise, and a phone is where that matters most."""
+    same = [entry for entry in history
+            if entry["status"] == "complete" and entry.get("fingerprint") == run.get("fingerprint")]
+    values = [value for entry in same
+              if (value := (store.metrics_of(db, entry["id"]).get("speed.decode_steady") or {}).get("value"))]
+    if len(values) < 2:
+        return {"runs": len(values) or 1, "spread": None}
+    return {"runs": len(values), "spread": 100 * (max(values) - min(values)) / statistics.mean(values)}
 
 
 def model_entry(db, run, history, definition):
@@ -114,7 +132,7 @@ def model_entry(db, run, history, definition):
         "index": metrics.get("index.quality") or (linked or {}).get("index"),
         "tasks": tasks or (linked or {}).get("tasks") or {},
         "qualityFrom": {key: value for key, value in (linked or {}).items()
-                        if key in ("run", "suite", "host", "verified")} or None,
+                        if key in ("run", "model", "suite", "host", "verified", "agreement")} or None,
         "deviceClass": (run.get("hardware") or {}).get("class") or "gpu",
         "capacity": capacity,
         "warnings": warnings_for(tasks, capacity, definition["labels"]),
@@ -123,6 +141,7 @@ def model_entry(db, run, history, definition):
         "thermal": {key.removeprefix("thermal."): entry for key, entry in metrics.items() if key.startswith("thermal.")},
         "battery": {key.removeprefix("battery."): entry for key, entry in metrics.items() if key.startswith("battery.")},
         "verdict": scores.verdict(metrics),
+        "repeats": repeatability(db, run, history),
         "lmx": lmx_scores,
         "submissions": submissions,
         "server": run.get("server") or {},
