@@ -6,7 +6,7 @@ import time
 import traceback
 from datetime import datetime
 
-from . import board, datasets, doctor, engine, gpu, grader, hosts, lmx, metrics, notify, paths, schedule, speed, stack, store, suite, swap
+from . import board, datasets, doctor, engine, gpu, grader, hosts, lmx, metrics, notify, paths, schedule, speed, stack, store, suite, swap, units
 from . import phone
 from .profiles import Profile
 
@@ -83,19 +83,29 @@ def wait_for_memory(events, halt):
 
 
 class MemoryGuard(threading.Thread):
-    """Unloads the model and stops the run if free RAM drops under 4 GB, so a benchmark can never take the desktop down."""
+    """Stops a run if free RAM drops under 4 GB, so a benchmark can never take the desktop down. When several runs
+    share the box only the youngest gives way: each one deciding for itself means they all stop at once, which costs
+    every run instead of the one that was least far along."""
 
-    def __init__(self, halt, events):
+    def __init__(self, halt, events, run_id=None):
         super().__init__(daemon=True)
         self.halt = halt
         self.events = events
+        self.run_id = run_id
         self.stopped = threading.Event()
+
+    def youngest(self):
+        if not self.run_id:
+            return True
+        db = store.connect()
+        peers = [run["id"] for run in units.busy(store.list_runs(db), units.GPU_CLASS)]
+        return not peers or max(peers) == self.run_id
 
     def run(self):
         while not self.stopped.wait(5):
             available = gpu.mem_available_gb()
-            if available < RAM_FLOOR_GB:
-                self.events.emit("abort", reason=f"free RAM {available:.1f} GB")
+            if available < RAM_FLOOR_GB and self.youngest():
+                self.events.emit("abort", reason=f"free RAM {available:.1f} GB; this run started last and gives way")
                 swap.unload()
                 self.halt.set("memory")
                 return
@@ -262,7 +272,8 @@ def execute(run_id):
     window = flags.get("window")
     halt = Halt()
     host = hosts.for_profile(profile)
-    guards = [MemoryGuard(halt, events), CardGuard(halt, events)] if host.kind == "gpu" else [host.guard(halt, events)]
+    guards = ([MemoryGuard(halt, events, run_id), CardGuard(halt, events)] if host.kind == "gpu"
+              else [host.guard(halt, events)])
     guards = [each for each in guards if each]
     for each in guards:
         each.start()

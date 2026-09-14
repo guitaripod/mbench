@@ -586,3 +586,23 @@ def test_a_run_gives_up_waiting_if_the_box_never_frees_up(monkeypatch):
 
     monkeypatch.setattr(worker.gpu, "mem_available_gb", lambda: 1.0)
     assert not worker.wait_for_memory(Events(), Halt())
+
+
+def test_only_the_youngest_run_gives_way_when_the_box_runs_short(tmp_path, monkeypatch):
+    from mbench import worker
+    monkeypatch.setattr("mbench.paths.DB", tmp_path / "bench.db")
+    db = store.connect()
+    for run_id in ("20260914-100000-a", "20260914-110000-b"):
+        store.insert_run(db, {"id": run_id, "model": run_id, "name": run_id, "suite": suite.label("full"),
+                              "effort": "max", "status": "running", "profile": {}, "hardware": {}})
+    older = worker.MemoryGuard(None, None, "20260914-100000-a")
+    younger = worker.MemoryGuard(None, None, "20260914-110000-b")
+    assert younger.youngest() and not older.youngest()
+
+
+def test_a_lone_run_always_gives_way(tmp_path, monkeypatch):
+    from mbench import worker
+    monkeypatch.setattr("mbench.paths.DB", tmp_path / "bench.db")
+    store.connect()
+    assert worker.MemoryGuard(None, None, "20260914-100000-a").youngest()
+    assert worker.MemoryGuard(None, None, None).youngest()
