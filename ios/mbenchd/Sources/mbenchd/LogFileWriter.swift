@@ -15,7 +15,8 @@ final class LogFileWriter: @unchecked Sendable {
         previous = logs.appendingPathComponent("\(name).previous.log")
         formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd HH:mm:ss.SSS"
-        formatter.timeZone = TimeZone(identifier: "UTC")
+        formatter.timeZone = TimeZone.current
+        formatter.locale = Locale(identifier: "en_US_POSIX")
         try? FileManager.default.createDirectory(at: logs, withIntermediateDirectories: true)
     }
 

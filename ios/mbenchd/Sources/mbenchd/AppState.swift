@@ -5,9 +5,13 @@ import UIKit
 @Observable
 final class AppState: @unchecked Sendable {
     static let shared = AppState()
+    static let historyLength = 60
 
     @MainActor var telemetry: TelemetrySnapshot?
     @MainActor var server: ServerStatus = ServerStatus(state: "idle", args: [])
+    @MainActor var metrics: ServerMetrics?
+    @MainActor var history: [Double] = []
+    @MainActor var lastDecode: Double?
     @MainActor var models: [StoredModel] = []
     @MainActor var logLines: [String] = []
     @MainActor var controlError: String?
@@ -58,11 +62,43 @@ final class AppState: @unchecked Sendable {
         telemetry = DeviceTelemetry.shared.snapshot()
         server = LlamaServerRunner.shared.snapshot()
         models = ModelStore.all()
-        logLines = LogFileWriter.shared.tail(lines: 14)
+        logLines = LogFileWriter.shared.tail(lines: 40)
+        guard server.state == "running", let port = server.port else {
+            metrics = nil
+            return
+        }
+        Task { [port] in
+            let reading = await MetricsReader.shared.read(port: port)
+            await MainActor.run { self.record(reading) }
+        }
+    }
+
+    @MainActor
+    func load(_ model: StoredModel) {
+        Task {
+            do {
+                _ = try await LlamaServerRunner.shared.load(LoadRequest(model: model.file, nCtx: 8192, parallel: 4,
+                                                                       flashAttn: "on", cacheTypeK: "q8_0",
+                                                                       cacheTypeV: "q8_0", extraArgs: ["-kvu"]))
+            } catch {
+                AppLogger.error(.server, "load from the screen failed: \(error)")
+            }
+        }
     }
 
     @MainActor
     func unload() {
         Task { await LlamaServerRunner.shared.unload() }
+    }
+
+    /// Keeps the last minute of decode speed so the screen can show the shape of the throttle, not just a number.
+    @MainActor
+    private func record(_ reading: ServerMetrics?) {
+        metrics = reading
+        guard let value = reading?.decodeTokensPerSecond, value > 0 else { return }
+        lastDecode = value
+        guard reading?.isBusy == true else { return }
+        history.append(value)
+        if history.count > AppState.historyLength { history.removeFirst(history.count - AppState.historyLength) }
     }
 }
