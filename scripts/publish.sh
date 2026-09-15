@@ -7,7 +7,16 @@ scripts/screenshots.sh site/index.html >/dev/null
 cp docs/leaderboard.png docs/leaderboard-dark.png docs/phone.png site/
 [[ -f docs/card.png ]] && cp docs/card.png site/
 mbench ls --effort "$effort" --markdown > /tmp/mbench-readme-table.md
-mbench ls --effort "$effort" --device phone --markdown > /tmp/mbench-phone-table.md 2>/dev/null || true
+: > /tmp/mbench-phone-table.md
+for phone_effort in "$effort" $(python -c "
+import json, pathlib
+board = json.loads(pathlib.Path('site/board.json').read_text())
+suite = board.get('current') or next(iter(board['suites']))
+print(' '.join(board['suites'][suite]['efforts']))
+"); do
+  mbench ls --effort "$phone_effort" --device phone --markdown > /tmp/mbench-phone-table.md 2>/dev/null || true
+  [[ -s /tmp/mbench-phone-table.md ]] && break
+done
 python - "$effort" <<'PYTHON'
 import pathlib, sys
 table = pathlib.Path("/tmp/mbench-readme-table.md").read_text().strip()
