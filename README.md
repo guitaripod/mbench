@@ -42,11 +42,10 @@ _3 models on NVIDIA RTX PRO 6000 Blackwell Workstation Edition, suite full/v1, m
 | Qwen3 0.6B · llama.cpp · Q4_K_M · iPhone Air | 15.4 | 19.8 | 5.6 | 14.9 | 2.2 | 5.0 | 33.3 | 42 | 122 | 27 | 3365 | holds up | 14 Sep phone |
 | LFM2 1.2B · llama.cpp · Q4_K_M · iPhone Air | 7.7 | 14.0 | 1.6 | 5.0 | 0.4 | 0.3 | 17.5 | 30 | 78 | 26 | 793 | holds up | 14 Sep phone |
 | Gemma 3 1B · llama.cpp · Q4_K_M · iPhone Air | 6.3 | 12.3 | 0.0 | 1.0 | 0.0 | 0.0 | 18.4 | 29 | 66 | 28 | 854 | holds up | 14 Sep phone |
-| Qwen3 4B Thinking · llama.cpp · Q4_K_M · iPhone Air | – | – | – | – | – | – | – | 9 | 21 | 29 | 2486 | fades | 14 Sep phone |
 
-_7 models on 2 setups, suite full/v1, medium effort, newest run 15 Sep 2026._
+_6 models on 2 setups, suite full/v1, medium effort, newest run 15 Sep 2026._
 
-_tok/s, Peak and Wh/correct come from 2 setups — iPhone Air · A19 Pro · iOS 27.0 (7), NVIDIA RTX PRO 6000 Blackwell Workstation Edition · driver 610.57.04 (6) — and only compare within one_
+_tok/s, Peak and Wh/correct come from 2 setups — NVIDIA RTX PRO 6000 Blackwell Workstation Edition · driver 610.57.04 (6), iPhone Air · A19 Pro · iOS 27.0 (6) — and only compare within one_
 <!--/LEADERBOARD-->
 
 Quality is the index; then one column per task, single-request decode speed, peak throughput across all requests, first-token wait on a 32k prompt, and board watt-hours per correct answer. The [live page](https://guitaripod.github.io/mbench/) adds 95% intervals, per-length breakdowns and every server setting behind each run. Those are one GPU's numbers — yours will differ with your hardware, quantization and server settings.
@@ -142,6 +141,7 @@ mbench board --open                   the leaderboard page
 mbench export --out site              the page plus board.json, ready to publish
 mbench profile <id>                   what mbench knows about a model
 mbench rescore [<run>]                score a finished run again from the answers it kept
+mbench rm <run|model> [--dry-run]     forget runs and everything they measured
 mbench phone [health|installed|launch|forward|push|logs]
                                       the phone mbench runs on
 ```

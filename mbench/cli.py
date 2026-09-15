@@ -491,6 +491,56 @@ def cmd_cancel(args):
         schedule.remove_timer()
 
 
+DEAD = ("failed", "cancelled")
+
+
+def depends_on(db, doomed):
+    """Runs whose quality is read off one of these. A phone run keeps no answers of its own, so removing the run it was
+    scored from would leave a row nothing stands behind — but a run named by its twin reads whichever run of that twin
+    finished last, so the others can go."""
+    ids = {run["id"] for run in doomed}
+
+    def source(run):
+        named = (run.get("flags") or {}).get("quality_from")
+        if not isinstance(named, dict):
+            return named
+        twin = store.last_complete(db, named.get("twin")) if named.get("twin") else None
+        return twin["id"] if twin else None
+
+    return [run for run in store.list_runs(db)
+            if run["id"] not in ids and run["status"] not in DEAD and source(run) in ids]
+
+
+def cmd_rm(args):
+    """Forgets runs: named ones, or every run of a model. A leaderboard is only worth what stands behind it, so a
+    result that was never finished should be removable without hand-editing the database."""
+    db = store.connect()
+    reconcile(db)
+    runs = store.list_runs(db)
+    wanted = [run for run in runs if run["id"] in args.targets or run["model"] in args.targets]
+    if not wanted:
+        fail(f"no run or model called {', '.join(args.targets)}")
+    live = [run for run in wanted if run["status"] in ("running", "scheduled")]
+    if live and not args.force:
+        fail(f"{live[0]['id']} is {live[0]['status']}; `mbench cancel {live[0]['id']}` first, or pass --force")
+    orphaned = depends_on(db, wanted)
+    if orphaned and not args.force:
+        fail(f"{orphaned[0]['id']} took its quality from one of these; pass --force to remove them anyway")
+    for run in live:
+        subprocess.run(["systemctl", "--user", "stop", unit_name(run["id"])], capture_output=True)
+    if args.dry_run:
+        for run in wanted:
+            print(f"would remove {run['id']} ({run['status']})")
+        return
+    store.delete_runs(db, [run["id"] for run in wanted])
+    for run in wanted:
+        shutil.rmtree(paths.RUNS / run["id"], ignore_errors=True)
+    print(f"Removed {len(wanted)} {'run' if len(wanted) == 1 else 'runs'}.")
+    if not [other for other in store.list_runs(db) if other["status"] == "scheduled"]:
+        schedule.remove_timer()
+    board.build()
+
+
 def cmd_resume(args):
     db = store.connect()
     reconcile(db)
@@ -926,6 +976,11 @@ def parser():
     rescore = commands.add_parser("rescore", help="score a finished run again from the answers it kept")
     rescore.add_argument("run", nargs="?")
     rescore.set_defaults(handler=cmd_rescore)
+    remove = commands.add_parser("rm", help="forget runs: named ones, or every run of a model")
+    remove.add_argument("targets", nargs="+", help="run ids or model ids")
+    remove.add_argument("--force", action="store_true", help="remove even a live run, or one another run was scored from")
+    remove.add_argument("--dry-run", action="store_true", help="say what would go and change nothing")
+    remove.set_defaults(handler=cmd_rm)
     commands.add_parser("tick").set_defaults(handler=cmd_tick)
     worker = commands.add_parser("worker")
     worker.add_argument("run_id")

@@ -98,6 +98,15 @@ def list_runs(db, model=None, status=None):
     return [decode(row) for row in db.execute(query + " ORDER BY created DESC", args)]
 
 
+def delete_runs(db, run_ids):
+    """Forgets runs and everything measured in them. The files each run wrote are the caller's to remove; the database
+    is the record, so it goes first and together."""
+    marks = ",".join("?" for _ in run_ids)
+    with db:
+        db.execute(f"DELETE FROM metrics WHERE run_id IN ({marks})", list(run_ids))
+        db.execute(f"DELETE FROM runs WHERE id IN ({marks})", list(run_ids))
+
+
 def last_complete(db, model, exclude=None):
     """The model's most recent finished run, the one a new run's stack is compared against."""
     row = db.execute("SELECT * FROM runs WHERE model = ? AND status = 'complete' AND id != ? ORDER BY created DESC LIMIT 1",
