@@ -64,7 +64,7 @@
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--page); color: var(--ink); font: 400 15px/1.55 var(--ui); }
-main { max-width: 78rem; margin: 0 auto; padding: clamp(1.25rem, 3vw, 2.75rem) clamp(1rem, 3vw, 2.25rem) 3.5rem; display: grid; gap: 2.25rem; }
+main { max-width: min(118rem, 100%); margin: 0 auto; padding: clamp(1.25rem, 3vw, 2.75rem) clamp(1rem, 3vw, 2.25rem) 3.5rem; display: grid; gap: 2.25rem; }
 h1, h2, h3 { margin: 0; text-wrap: balance; }
 h1 { font-family: var(--display); font-stretch: 118%; font-weight: 780; font-size: clamp(1.8rem, 1.2rem + 2vw, 2.6rem); line-height: 1.05; letter-spacing: -0.01em; }
 h2 { font-family: var(--display); font-stretch: 112%; font-weight: 700; font-size: 1.25rem; }
@@ -75,6 +75,8 @@ code, pre, .mono { font-family: var(--mono); }
 .masthead { display: grid; gap: 0.7rem; }
 .lede { color: var(--ink-2); }
 .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
+.split { display: grid; gap: 1.5rem; align-items: start; }
+@media (min-width: 1240px) { .split { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); } }
 .frontier { padding: 1rem 1.1rem 0.6rem; display: grid; gap: 0.5rem; }
 .frontier-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.3rem 1.5rem; align-items: baseline; }
 .frontier-head span { color: var(--muted); font-size: 0.84rem; }
@@ -96,7 +98,7 @@ svg text { font-family: var(--mono); font-size: 11px; }
 .hit { fill: transparent; cursor: pointer; }
 .hit:focus-visible { outline: none; stroke: var(--series); stroke-width: 2; }
 .table-wrap { overflow-x: auto; }
-table { border-collapse: collapse; width: 100%; min-width: 64rem; font-variant-numeric: tabular-nums; }
+table { border-collapse: collapse; width: 100%; min-width: 58rem; font-variant-numeric: tabular-nums; }
 th, td { padding: 0.55rem 0.7rem; border-bottom: 1px solid var(--grid); text-align: right; vertical-align: middle; white-space: nowrap; }
 th:first-child, td:first-child, th.model, td.model { text-align: left; }
 thead th { font-size: 0.74rem; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
@@ -110,7 +112,7 @@ tbody tr.selected { background: var(--select); box-shadow: inset 3px 0 0 var(--s
 tbody tr:focus-visible { outline: 2px solid var(--series); outline-offset: -2px; }
 tbody tr:last-child td { border-bottom: 0; }
 td.rank { color: var(--muted); font-family: var(--mono); width: 2.5rem; }
-td.model { white-space: normal; min-width: 17rem; }
+td.model { white-space: normal; min-width: 14rem; }
 .model-name { font-weight: 600; display: block; }
 .model-meta { color: var(--muted); font-size: 0.8rem; font-family: var(--mono); display: flex; flex-wrap: wrap; gap: 0.25rem 0.6rem; }
 .chip { display: inline-block; border: 1px solid var(--axis); color: var(--ink-2); border-radius: 999px; padding: 0 0.45rem; font-size: 0.72rem; font-family: var(--ui); letter-spacing: 0.02em; }
@@ -133,6 +135,8 @@ td.model { white-space: normal; min-width: 17rem; }
 .strip-note { color: var(--muted); font-size: 0.8rem; }
 .card-link { color: var(--series); text-decoration: none; }
 .card-link:hover { text-decoration: underline; }
+.notes { display: grid; gap: 0.9rem; align-items: start; }
+@media (min-width: 1100px) { .notes { grid-template-columns: repeat(auto-fit, minmax(28rem, 1fr)); gap: 0.9rem 2rem; } }
 .notice { border-left: 3px solid var(--axis); padding: 0.35rem 0 0.35rem 0.7rem; color: var(--ink-2); font-size: 0.85rem; }
 .dot-other { fill: var(--deemph); }
 .ci-bar { stroke: var(--series); stroke-width: 3; stroke-linecap: round; }
@@ -155,6 +159,9 @@ td.model { white-space: normal; min-width: 17rem; }
 .guide { stroke: var(--axis); stroke-width: 1; }
 .val { fill: var(--ink); }
 details { border-top: 1px solid var(--grid); padding-top: 0.8rem; }
+details.aside { border-top: 0; border-left: 3px solid var(--axis); padding: 0 0 0 0.7rem; font-size: 0.85rem; }
+details.aside p { margin: 0.45rem 0 0; color: var(--ink-2); max-width: 90ch; }
+details.aside summary { font-size: 0.85rem; font-weight: 400; }
 summary { cursor: pointer; color: var(--ink-2); font-weight: 600; }
 summary:focus-visible { outline: 2px solid var(--series); outline-offset: 2px; }
 .kv { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 0.2rem 1.6rem; margin-top: 0.7rem; font-size: 0.86rem; }
@@ -163,6 +170,9 @@ summary:focus-visible { outline: 2px solid var(--series); outline-offset: 2px; }
 .kv span:last-child { font-family: var(--mono); text-align: right; }
 .howto { display: grid; gap: 0.6rem; }
 pre { margin: 0; padding: 0.9rem 1rem; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow-x: auto; font-size: 0.85rem; line-height: 1.6; }
+.table-head { display: flex; flex-wrap: wrap; gap: 0.6rem 1rem; align-items: center; justify-content: space-between;
+  padding: 0.6rem 0.9rem; border-bottom: 1px solid var(--grid); }
+.tabs.small button { font-size: 0.78rem; padding: 0.2rem 0.6rem; }
 .tooltip { position: fixed; z-index: 10; pointer-events: none; background: var(--surface); color: var(--ink); border: 1px solid var(--border); border-radius: 6px; padding: 0.45rem 0.6rem; font-size: 0.8rem; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12); max-width: 20rem; }
 .tooltip b { font-family: var(--mono); font-weight: 600; }
 .tooltip .row { display: flex; align-items: center; gap: 0.45rem; }
@@ -199,7 +209,7 @@ const SUITES = DATA.suites || { [DATA.current || "1"]: { indexTasks: DATA.indexT
 const CURRENT = DATA.current || Object.keys(SUITES)[0];
 const WITH_RUNS = Object.keys(SUITES).filter(name => SUITES[name].efforts.length).sort((a, b) => Number(b) - Number(a));
 const WANTED_CLASS = (location.hash.match(/(?:^|[#&])(gpu|phone)\b/) || [])[1] || null;
-const state = { sortKey: "index", sortDir: "desc", selected: null, effort: "medium", deviceClass: WANTED_CLASS, suite: SUITES[CURRENT].efforts.length ? CURRENT : (WITH_RUNS[0] || CURRENT) };
+const state = { sortKey: "index", sortDir: "desc", columns: "scores", selected: null, effort: "medium", deviceClass: WANTED_CLASS, suite: SUITES[CURRENT].efforts.length ? CURRENT : (WITH_RUNS[0] || CURRENT) };
 const CLASS_LABELS = { gpu: "GPU", phone: "Phone" };
 const THERMAL_NAMES = ["nominal", "fair", "serious", "critical"];
 const VERDICTS = {
@@ -297,68 +307,95 @@ function avgTokens(model) {
   return values.length ? values.reduce((a, b) => a + b, 0) / values.length : null;
 }
 
-function columns() {
-  return [
-    { key: "index", label: "Quality", get: m => m.index && m.index.value, better: "high", render: m => pctCell(m.index) },
-    ...tasks().map(task => ({ key: task, label: label(task).replace(" v6", "").replace(" 2025", "").replace(" 2026", "") + (health()[task] ? " ⚠" : ""),
-      note: health()[task] ? `Not separating these models: ${health()[task]}` : null, get: m => m.tasks[task] && m.tasks[task].value,
-      better: "high", render: m => pctCell(m.tasks[task], true) })),
-    showingPhones()
+const COLUMN_SETS = { scores: "Scores", device: "What it cost" };
+
+function qualityColumn() {
+  return { key: "index", label: "Quality", get: m => m.index && m.index.value, better: "high", render: m => pctCell(m.index) };
+}
+
+function taskColumns() {
+  return tasks().map(task => ({ key: task, label: label(task).replace(" v6", "").replace(" 2025", "").replace(" 2026", "") + (health()[task] ? " ⚠" : ""),
+    note: health()[task] ? `Not separating these models: ${health()[task]}` : null, get: m => m.tasks[task] && m.tasks[task].value,
+    better: "high", render: m => pctCell(m.tasks[task], true) }));
+}
+
+function decodeColumn() {
+  return showingPhones()
       ? { key: "decode", label: "Settled tok/s", note: "What it decodes at once the phone has throttled, which is what you would live with",
           get: m => decodeOf(m), better: "high",
           render: m => numCell(decodeOf(m), fmt.int, m.speed.decode_peak ? `${fmt.int(m.speed.decode_peak.value)} tok/s cold` : null) }
-      : { key: "decode", label: "Decode tok/s", get: m => m.speed.decode && m.speed.decode.value, better: "high", render: m => numCell(m.speed.decode && m.speed.decode.value, fmt.int) },
-    ...(showingPhones() ? [
-      { key: "steady", label: "Steady tok/s", note: "Decode speed after the phone has throttled, measured back to back",
-        get: m => m.speed.decode_steady && m.speed.decode_steady.value, better: "high",
-        render: m => numCell(m.speed.decode_steady && m.speed.decode_steady.value, fmt.int) },
-      { key: "stability", label: "Stability", note: "Slowest answer as a share of the fastest, the way a stress test "
-          + "reports it. 97% or better is the bar a device that is not throttling clears",
-        get: m => m.speed.stability && m.speed.stability.value, better: "high",
-        render: m => numCell(m.speed.stability && m.speed.stability.value,
-          value => value == null ? "–" : Math.round(value) + "%",
-          m.speed.degradation ? `${Math.round(m.speed.degradation.value)}% slower once settled` : null) },
-      { key: "sustain", label: "Holds", note: "Steady speed as a share of the cold speed",
-        get: m => m.speed.sustain_ratio && m.speed.sustain_ratio.value, better: "high",
-        render: m => numCell(m.speed.sustain_ratio && m.speed.sustain_ratio.value, value => value == null ? "–" : value.toFixed(2) + "×",
-          m.speed.throttle_s ? `throttled after ${Math.round(m.speed.throttle_s.value)} s` : null) },
-      { key: "verdict", label: "Verdict", note: "Whether a phone can live with it: speed once hot, and how much of the run it ran hot",
-        get: m => m.verdict ? VERDICTS[m.verdict].rank : null, better: "high",
-        render: m => h("td", { className: "num" }, [h("span", { className: "chip verdict " + (m.verdict || ""),
-          text: m.verdict ? VERDICTS[m.verdict].label : "–", title: m.verdict ? VERDICTS[m.verdict].note : null })]) },
-      { key: "knee", label: "Full-speed tokens", note: "Tokens delivered before throughput fell under 90% of its cold speed",
-        get: m => m.speed.tokens_to_knee && m.speed.tokens_to_knee.value, better: "high",
-        render: m => numCell(m.speed.tokens_to_knee && m.speed.tokens_to_knee.value,
-          value => value == null ? "–" : value >= 1000 ? (value / 1000).toFixed(1) + "k" : String(Math.round(value)),
-          m.speed.tokens_to_knee ? `about ${Math.max(1, Math.round(m.speed.tokens_to_knee.value / 500))} answers of 500 tokens` : null) },
-      { key: "hot", label: "Ran hot", note: "Share of the run spent at serious or critical thermal state. Context only — "
-          + "a charger or a warm room moves this, so it stays out of the verdict",
-        get: m => m.thermal && m.thermal.share_hot && m.thermal.share_hot.value, better: "low",
-        render: m => numCell(m.thermal && m.thermal.share_hot && m.thermal.share_hot.value,
-          value => value == null ? "–" : Math.round(value) + "%",
-          m.thermal && m.thermal.to_serious_s ? `hot after ${Math.round(m.thermal.to_serious_s.value)} s` : null) },
-      ...(current().some(model => model.battery && model.battery.hours) ? [
-        { key: "drain", label: "Hours on a charge", note: "The measured discharge extrapolated across a full charge, "
-            + "the way a phone battery test reports it. Only a run made off the charger has one",
-          get: m => m.battery && m.battery.hours && m.battery.hours.value, better: "high",
-          render: m => numCell(m.battery && m.battery.hours && m.battery.hours.value,
-            value => value == null ? "–" : value.toFixed(1) + " h",
-            m.battery && m.battery.per_hour ? `${Math.round(m.battery.per_hour.value)}% an hour` : null) },
-      ] : []),
-      { key: "wait", label: "First token", note: "Seconds to the first token on the longest prompt every model was asked",
-        get: m => phoneTtft(m), better: "low", render: m => numCell(phoneTtft(m), fmt.secs) },
-      { key: "footprint", label: "Peak RAM", note: "The most memory the app held, and how much iOS still had left",
-        get: m => m.speed.footprint && m.speed.footprint.value, better: "low",
-        render: m => numCell(m.speed.footprint && m.speed.footprint.value, value => value == null ? "–" : (value / 1024).toFixed(1) + " GB",
-          m.speed.headroom ? `${Math.round(m.speed.headroom.value)} MiB to spare` : null) },
+      : { key: "decode", label: "Decode tok/s", get: m => m.speed.decode && m.speed.decode.value, better: "high",
+          render: m => numCell(m.speed.decode && m.speed.decode.value, fmt.int) };
+}
+
+function verdictColumn() {
+  return { key: "verdict", label: "Verdict", note: "Whether a phone can live with it: speed once hot, and how long it holds it",
+    get: m => m.verdict ? VERDICTS[m.verdict].rank : null, better: "high",
+    render: m => h("td", { className: "num" }, [h("span", { className: "chip verdict " + (m.verdict || ""),
+      text: m.verdict ? VERDICTS[m.verdict].label : "–", title: m.verdict ? VERDICTS[m.verdict].note : null })]) };
+}
+
+function costColumns() {
+  /* What running it cost the device, rather than what it scored: the pair of tables is how a table this wide stays
+     readable without a sideways scroll. */
+  if (!showingPhones()) {
+    return [
+      { key: "peak", label: "Peak tok/s", note: "Most tokens per second across all requests, at the best number of requests at once", get: m => m.speed.peak && m.speed.peak.value, better: "high",
+        render: m => numCell(m.speed.peak && m.speed.peak.value, fmt.int, m.speed.peak_at ? `${m.speed.peak_at.value} requests at once` : null) },
+      { key: "energy", label: "Wh/correct", note: "Board energy over the quality tasks per correct answer, idle draw included", get: m => m.energy && m.energy.perCorrect && m.energy.perCorrect.value, better: "low",
+        render: m => numCell(m.energy && m.energy.perCorrect && m.energy.perCorrect.value, value => value == null ? "–" : value.toFixed(2)) },
+      { key: "ttft", label: "First token 32k", get: m => m.speed["ttft.32000"] && m.speed["ttft.32000"].value, better: "low", render: m => numCell(m.speed["ttft.32000"] && m.speed["ttft.32000"].value, fmt.secs) },
+      { key: "tokens", label: "Tokens/answer", get: avgTokens, better: "low", render: m => numCell(avgTokens(m), fmt.int) },
+    ];
+  }
+  return [
+    { key: "stability", label: "Stability", note: "Slowest answer as a share of the fastest, the way a stress test "
+        + "reports it. 97% or better is the bar a device that is not throttling clears",
+      get: m => m.speed.stability && m.speed.stability.value, better: "high",
+      render: m => numCell(m.speed.stability && m.speed.stability.value,
+        value => value == null ? "–" : Math.round(value) + "%",
+        m.speed.degradation ? `${Math.round(m.speed.degradation.value)}% slower once settled` : null) },
+    { key: "sustain", label: "Holds", note: "Steady speed as a share of the cold speed",
+      get: m => m.speed.sustain_ratio && m.speed.sustain_ratio.value, better: "high",
+      render: m => numCell(m.speed.sustain_ratio && m.speed.sustain_ratio.value, value => value == null ? "–" : value.toFixed(2) + "×",
+        m.speed.throttle_s ? `throttled after ${Math.round(m.speed.throttle_s.value)} s` : null) },
+    { key: "knee", label: "Full-speed tokens", note: "Tokens delivered before throughput fell under 90% of its cold speed",
+      get: m => m.speed.tokens_to_knee && m.speed.tokens_to_knee.value, better: "high",
+      render: m => numCell(m.speed.tokens_to_knee && m.speed.tokens_to_knee.value,
+        value => value == null ? "–" : value >= 1000 ? (value / 1000).toFixed(1) + "k" : String(Math.round(value)),
+        m.speed.tokens_to_knee ? `about ${Math.max(1, Math.round(m.speed.tokens_to_knee.value / 500))} answers of 500 tokens` : null) },
+    { key: "hot", label: "Ran hot", note: "Share of the run spent at serious or critical thermal state. Context only — "
+        + "a charger or a warm room moves this, so it stays out of the verdict",
+      get: m => m.thermal && m.thermal.share_hot && m.thermal.share_hot.value, better: "low",
+      render: m => numCell(m.thermal && m.thermal.share_hot && m.thermal.share_hot.value,
+        value => value == null ? "–" : Math.round(value) + "%",
+        m.thermal && m.thermal.to_serious_s ? `hot after ${Math.round(m.thermal.to_serious_s.value)} s` : null) },
+    ...(current().some(model => model.battery && model.battery.hours) ? [
+      { key: "drain", label: "Hours on a charge", note: "The measured discharge extrapolated across a full charge, "
+          + "the way a phone battery test reports it. Only a run made off the charger has one",
+        get: m => m.battery && m.battery.hours && m.battery.hours.value, better: "high",
+        render: m => numCell(m.battery && m.battery.hours && m.battery.hours.value,
+          value => value == null ? "–" : value.toFixed(1) + " h",
+          m.battery && m.battery.per_hour ? `${Math.round(m.battery.per_hour.value)}% an hour` : null) },
     ] : []),
-    { key: "peak", label: "Peak tok/s", note: "Most tokens per second across all requests, at the best number of requests at once", get: m => m.speed.peak && m.speed.peak.value, better: "high",
-      render: m => numCell(m.speed.peak && m.speed.peak.value, fmt.int, m.speed.peak_at ? `${m.speed.peak_at.value} requests at once` : null) },
-    { key: "energy", label: "Wh/correct", note: "Board energy over the quality tasks per correct answer, idle draw included", get: m => m.energy && m.energy.perCorrect && m.energy.perCorrect.value, better: "low",
-      render: m => numCell(m.energy && m.energy.perCorrect && m.energy.perCorrect.value, value => value == null ? "–" : value.toFixed(2)) },
-    { key: "ttft", label: "First token 32k", get: m => m.speed["ttft.32000"] && m.speed["ttft.32000"].value, better: "low", render: m => numCell(m.speed["ttft.32000"] && m.speed["ttft.32000"].value, fmt.secs) },
-    { key: "tokens", label: "Tokens/answer", get: avgTokens, better: "low", render: m => numCell(avgTokens(m), fmt.int) },
+    { key: "wait", label: "First token", note: "Seconds to the first token on the longest prompt every model was asked",
+      get: m => phoneTtft(m), better: "low", render: m => numCell(phoneTtft(m), fmt.secs) },
+    { key: "footprint", label: "Peak RAM", note: "The most memory the app held, and how much iOS still had left",
+      get: m => m.speed.footprint && m.speed.footprint.value, better: "low",
+      render: m => numCell(m.speed.footprint && m.speed.footprint.value, value => value == null ? "–" : (value / 1024).toFixed(1) + " GB",
+        m.speed.headroom ? `${Math.round(m.speed.headroom.value)} MiB to spare` : null) },
   ];
+}
+
+function allColumns() {
+  return [qualityColumn(), ...taskColumns(), decodeColumn(), ...(showingPhones() ? [verdictColumn()] : []),
+          ...costColumns()];
+}
+
+function columns() {
+  const cost = state.columns === "device";
+  return [qualityColumn(), ...(cost ? costColumns() : taskColumns()), decodeColumn(),
+          ...(showingPhones() ? [verdictColumn()] : [])];
 }
 
 function pctCell(entry, meter) {
@@ -383,8 +420,30 @@ function cardLink(model) {
   return `card.html#effort=${encodeURIComponent(state.effort)}&a=${encodeURIComponent(model.id)}&b=${encodeURIComponent(other.id)}`;
 }
 
+function soloLink(model) {
+  return `card.html#effort=${encodeURIComponent(state.effort)}&m=${encodeURIComponent(model.id)}`;
+}
+
+function tableLink() {
+  const ids = sortedModels().slice(0, 8).map(model => model.id).join(",");
+  return `card.html#effort=${encodeURIComponent(state.effort)}&m=${encodeURIComponent(ids)}`;
+}
+
 function setups() {
   return (view().hosts || {})[state.effort] || [];
+}
+
+function effortsByWeight(current) {
+  /* The effort with the most models ranked is the one worth opening on; the order they were declared in says
+     nothing about which has data. */
+  return [...current.efforts].sort((one, two) =>
+    (current.rankings[two] || []).length - (current.rankings[one] || []).length);
+}
+
+function tierSetups() {
+  /* Every row in a tier usually came off the same machine, and repeating its name on each one costs the width the
+     numbers need. */
+  return [...new Set(current().map(model => (model.stack || {}).hostLabel).filter(Boolean))];
 }
 
 function health() {
@@ -392,7 +451,7 @@ function health() {
 }
 
 function sortedModels() {
-  const list = columns();
+  const list = allColumns();
   const column = list.find(item => item.key === state.sortKey) || list[0];
   const direction = state.sortDir === "asc" ? 1 : -1;
   return [...current()].sort((a, b) => {
@@ -407,7 +466,7 @@ function sortedModels() {
 function modelMeta(model) {
   const parts = [model.engine, model.quantization, model.spec, model.context ? fmt.ctx(model.context) + " context" : null].filter(Boolean);
   const chips = [];
-  if (setups().length > 1 && model.stack && model.stack.gpu) parts.push(model.stack.gpu);
+  if (tierSetups().length > 1) parts.push(model.stack.gpu || model.stack.device);
   if (model.run.kind === "quick") chips.push(h("span", { className: "chip", text: "quick run", title: model.run.notes || "Smaller sample; ranked as provisional." }));
   if (model.run.contended && model.run.contended.length) chips.push(h("span", { className: "chip", text: "GPU was shared", title: "Other GPU work during the run: " + model.run.contended.join(", ") }));
   if (model.run.failedItems) chips.push(h("span", { className: "chip", text: `${model.run.failedItems} requests failed` }));
@@ -440,9 +499,23 @@ function modelMeta(model) {
   return h("span", { className: "model-meta" }, [...parts.map(part => h("span", { text: part })), ...chips]);
 }
 
+function measured(cols) {
+  /* A column no model in this tier has a number for is width the numbers beside it need. */
+  const rows = current();
+  return cols.filter(column => rows.some(model => column.get(model) != null));
+}
+
+function columnSwitch() {
+  return h("div", { className: "tabs small", role: "group", "aria-label": "Which numbers" },
+    Object.entries(COLUMN_SETS).map(([key, label]) => h("button", {
+      type: "button", text: label, "aria-pressed": key === state.columns ? "true" : "false",
+      onclick: () => { state.columns = key; render(); },
+    })));
+}
+
 function renderTable(host) {
   const table = h("table", { "aria-label": "Models ranked" });
-  const cols = columns();
+  const cols = measured(columns());
   const headRow = h("tr");
   headRow.appendChild(h("th", { scope: "col", text: "#" }));
   headRow.appendChild(h("th", { scope: "col", className: "model", text: "Model" }));
@@ -467,13 +540,20 @@ function renderTable(host) {
       onkeydown: event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); select(model.id); } },
     });
     row.appendChild(h("td", { className: "rank", text: String(index + 1) }));
-    row.appendChild(h("td", { className: "model" }, [h("span", { className: "model-name", text: model.name }), modelMeta(model)]));
+    row.appendChild(h("td", { className: "model" }, [h("span", { className: "model-name", text: shortName(model) }), modelMeta(model)]));
     for (const column of cols) row.appendChild(column.render(model));
     row.appendChild(h("td", { className: "num", text: fmt.date(model.run.finished) }));
     body.appendChild(row);
   });
   table.appendChild(body);
-  host.appendChild(h("div", { className: "panel table-wrap" }, [table]));
+  const panel = h("div", { className: "panel table-wrap" }, [
+    h("div", { className: "table-head" }, [
+      columnSwitch(),
+      h("a", { className: "card-link", href: tableLink(), text: "share this table ↗", target: "_blank", rel: "noopener" }),
+    ]),
+    table,
+  ]);
+  host.appendChild(panel);
 }
 
 const tooltip = document.getElementById("tooltip");
@@ -557,7 +637,7 @@ function renderFrontier(host) {
     s("line", { x1: left, x2: width - right, y1: y(t), y2: y(t), class: "grid" }, svgNode);
     s("text", { x: left - 10, y: y(t) + 4, "text-anchor": "end", class: "tick" }, svgNode, t + "%");
   }
-  const stepX = maxX > 300 ? 100 : 50;
+  const stepX = [1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000].find(step => maxX / step <= 6) || 1000;
   for (let t = 0; t <= maxX; t += stepX) {
     s("line", { x1: x(t), x2: x(t), y1: height - bottom, y2: height - bottom + 4, class: "axis" }, svgNode);
     s("text", { x: x(t), y: height - bottom + 17, "text-anchor": "middle", class: "tick" }, svgNode, t);
@@ -813,7 +893,8 @@ function renderDetail(host) {
       h("span", { text: `effort ${model.run.effort || "–"}` }), h("span", { text: `config ${model.fingerprint || "–"}` }),
       model.stack && model.stack.build ? h("span", { text: model.stack.build }) : null,
       model.stack && model.stack.gpu ? h("span", { text: model.stack.hostLabel }) : null,
-      h("a", { className: "card-link", href: cardLink(model), text: "share card ↗", target: "_blank", rel: "noopener" }),
+      h("a", { className: "card-link", href: soloLink(model), text: "share this ↗", target: "_blank", rel: "noopener" }),
+      h("a", { className: "card-link", href: cardLink(model), text: "share a comparison ↗", target: "_blank", rel: "noopener" }),
     ]),
     (model.run.stackChange || []).length
       ? h("p", { className: "strip-note", text: "Changed since this model's previous run: " + model.run.stackChange.join("; ")
@@ -958,7 +1039,7 @@ function render() {
     return;
   }
   renderSuiteTabs(host);
-  const efforts = view().efforts;
+  const efforts = effortsByWeight(view());
   if (!efforts.length) {
     host.appendChild(h("div", { className: "panel empty" }, [
       h("h2", { text: `No model has run suite v${state.suite} yet` }),
@@ -982,34 +1063,41 @@ function render() {
       onclick: () => { state.effort = effort; render(); },
     }))));
   }
+  const notes = h("div", { className: "notes" });
+  host.appendChild(notes);
   if (showingPhones()) {
-    host.appendChild(h("p", { className: "notice", text: "A phone is judged on whether it can live with a model: "
-      + "holds up still answers faster than you can read once it is hot (20 tok/s settled, held for 1k tokens), "
-      + "fades sits between reading pace and comfortable, barely runs is under 8 tok/s, which is slower than "
-      + "reading. Every phone measured gives up half its speed or more, so the verdict is against reading speed "
-      + "rather than against a cold number nobody sees, and it reads only the tokens the model produced — a charger "
-      + "or a warm room cannot move it. Quality is measured off the device on the same weights." }));
+    notes.appendChild(h("details", { className: "aside" }, [
+      h("summary", { text: "How a phone verdict is decided" }),
+      h("p", { text: "A phone is judged on whether it can live with a model: holds up still answers faster than you "
+        + "can read once it is hot (20 tok/s settled, held for 1k tokens), fades sits between reading pace and "
+        + "comfortable, barely runs is under 8 tok/s, which is slower than reading. Every phone measured gives up "
+        + "half its speed or more, so the verdict is against reading speed rather than against a cold number nobody "
+        + "sees, and it reads only the tokens the model produced — a charger or a warm room cannot move it. Quality "
+        + "is measured off the device on the same weights." }),
+    ]));
   }
   if (showingPhones()) {
     const usable = current().filter(model => model.verdict !== "barely" && model.index && model.index.value != null)
       .sort((one, two) => two.index.value - one.index.value)[0];
     if (usable) {
       const steady = (usable.speed.decode_steady || {}).value;
-      host.appendChild(h("p", { className: "notice", text: `Best of these on this phone: ${shortName(usable)} — `
+      notes.appendChild(h("p", { className: "notice", text: `Best of these on this phone: ${shortName(usable)} — `
         + `${fmt.pct(usable.index.value)} quality at ${fmt.int(steady)} tok/s once hot. Everything that scores higher `
         + "settles below reading speed; everything faster scores lower." }));
     }
   }
   if (setups().length > 1) {
-    host.appendChild(h("p", { className: "notice", text: `Measured on ${setups().length} setups — `
+    notes.appendChild(h("p", { className: "notice", text: `Measured on ${setups().length} setups — `
       + setups().map(setup => `${setup.label} (${setup.models} ${setup.models === 1 ? "model" : "models"})`).join(", ")
       + ". Quality compares across them; decode, peak and energy only compare within one." }));
   }
   if (!current().some(model => model.id === state.selected)) state.selected = sortedModels()[0].id;
   renderMeta();
-  renderFrontier(host);
   renderTable(host);
-  renderDetail(host);
+  const lower = h("div", { className: "split" });
+  renderFrontier(lower);
+  renderDetail(lower);
+  host.appendChild(lower);
 }
 
 function renderMeta() {

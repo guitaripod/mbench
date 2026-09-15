@@ -26,32 +26,11 @@ It measures the model as your server actually runs it — quantization, chat tem
 <!--LEADERBOARD-->
 | Model | Quality | SuperGPQA | Math | LCB | MRCR | Graphwalks | Tools | tok/s | Peak | TTFT 32k | Wh/correct | Run |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| Qwen3 4B Instruct · llama.cpp · Q4_K_M · 16k (phone twin) | 39.8 | 37.8 | 43.7 | 38.6 | 2.8 | 2.1 | 76.3 | – | – | – | 1.90 | 15 Sep |
-| Qwen3 1.7B · llama.cpp · Q4_K_M · 16k (phone twin) | 27.0 | 26.9 | 24.6 | 25.7 | 3.6 | 0.0 | 56.1 | – | – | – | 0.93 | 15 Sep |
-| Qwen3.5 2B · llama.cpp · Q4_K_M · 16k (phone twin) | 22.8 | 22.6 | 0.0 | 9.9 | 6.7 | 2.1 | 77.2 | – | – | – | 6.52 | 15 Sep |
-| Qwen3 0.6B · llama.cpp · Q4_K_M · 16k (phone twin) | 15.4 | 19.8 | 5.6 | 14.9 | 2.2 | 5.0 | 33.3 | – | – | – | 2.53 | 15 Sep |
-| LFM2 1.2B · llama.cpp · Q4_K_M · 16k (phone twin) | 7.7 | 14.0 | 1.6 | 5.0 | 0.4 | 0.3 | 17.5 | – | – | – | – | 14 Sep |
-| Gemma 3 1B · llama.cpp · Q4_K_M · 16k (phone twin) | 6.3 | 12.3 | 0.0 | 1.0 | 0.0 | 0.0 | 18.4 | – | – | – | 18.86 | 14 Sep |
+| Qwen 3.8 27B · SGLang · DFlash2 · 524K | 81.0 | 61.2 | 81.0 | 76.2 | 78.4 | 94.5 | 100.0 | 157 | 400 | 5.0 | 2.67 | 12 Sep |
+| Muse Glimmer 30B · SGLang · FP8 · DFlash2 · 128K | 71.6 | 57.8 | 84.1 | 62.4 | 33.9 | 78.8 | 97.4 | 143 | 680 | 4.0 | 2.73 | 13 Sep |
+| GPT-OSS 120B · SGLang · MXFP4 · DFlash · 128K | 71.2 | 51.4 | 87.3 | 83.2 | 11.0 | 64.4 | 96.5 | 206 | 432 | 1.8 | 5.99 | 12 Sep |
 
-_6 models on 2 setups, suite full/v1, medium effort, newest run 15 Sep 2026._
-
-_tok/s, Peak and Wh/correct come from 2 setups — iPhone Air · A19 Pro · iOS 27.0 (7), NVIDIA RTX PRO 6000 Blackwell Workstation Edition · driver 610.57.04 (6) — and only compare within one_
-
-### On an iPhone
-
-| Model | Quality | SuperGPQA | Math | LCB | MRCR | Graphwalks | Tools | Settled | Cold | Holds | Peak RAM | Verdict | Run |
-|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| Qwen3 4B Instruct · llama.cpp · Q4_K_M · iPhone Air | 39.8 | 37.8 | 43.7 | 38.6 | 2.8 | 2.1 | 76.3 | 9 | 20 | 34 | 3373 | fades | 14 Sep phone |
-| Qwen3 1.7B · llama.cpp · Q4_K_M · iPhone Air | 27.0 | 26.9 | 24.6 | 25.7 | 3.6 | 0.0 | 56.1 | 19 | 47 | 25 | 3349 | fades | 14 Sep phone |
-| Qwen3.5 2B · llama.cpp · Q4_K_M · iPhone Air | 26.8 | 29.4 | 7.9 | 17.8 | 12.0 | 16.3 | 64.9 | 17 | 39 | 42 | 3305 | fades | 15 Sep phone |
-| Qwen3 0.6B · llama.cpp · Q4_K_M · iPhone Air | 15.4 | 19.8 | 5.6 | 14.9 | 2.2 | 5.0 | 33.3 | 42 | 122 | 27 | 3365 | holds up | 14 Sep phone |
-| LFM2 1.2B · llama.cpp · Q4_K_M · iPhone Air | 7.7 | 14.0 | 1.6 | 5.0 | 0.4 | 0.3 | 17.5 | 30 | 78 | 26 | 793 | holds up | 14 Sep phone |
-| Gemma 3 1B · llama.cpp · Q4_K_M · iPhone Air | 6.3 | 12.3 | 0.0 | 1.0 | 0.0 | 0.0 | 18.4 | 29 | 66 | 28 | 854 | holds up | 14 Sep phone |
-| Qwen3 4B Thinking · llama.cpp · Q4_K_M · iPhone Air | – | – | – | – | – | – | – | 9 | 21 | 29 | 2486 | fades | 14 Sep phone |
-
-_7 models on 2 setups, suite full/v1, medium effort, newest run 15 Sep 2026._
-
-_tok/s, Peak and Wh/correct come from 2 setups — iPhone Air · A19 Pro · iOS 27.0 (7), NVIDIA RTX PRO 6000 Blackwell Workstation Edition · driver 610.57.04 (6) — and only compare within one_
+_3 models on NVIDIA RTX PRO 6000 Blackwell Workstation Edition, suite full/v1, max effort, newest run 13 Sep 2026._
 <!--/LEADERBOARD-->
 
 Quality is the index; then one column per task, single-request decode speed, peak throughput across all requests, first-token wait on a 32k prompt, and board watt-hours per correct answer. The [live page](https://guitaripod.github.io/mbench/) adds 95% intervals, per-length breakdowns and every server setting behind each run. Those are one GPU's numbers — yours will differ with your hardware, quantization and server settings.
@@ -117,7 +96,7 @@ spec = { method = "EAGLE3", draft = "lmsys/EAGLE3-gpt-oss-120b-bf16", tokens_per
 
 **3. Run it.** `mbench run <id> --effort max`, or `mbench run <a> <b> --at 02:00 --until 09:00` for a nightly window. Extra models queue and run one at a time. Answers are written as they arrive, so a pause costs nothing, and the local page rebuilds when the run ends.
 
-**4. Read it.** `mbench ls --effort max` in the terminal, `mbench board --open` for the page, `mbench compare <a> <b>` when two models look close and you want to know whether the gap is real. The page's *share card ↗* link opens a 1200 × 675 comparison card — two models, every task difference, ties greyed out — that downloads as a PNG for posting.
+**4. Read it.** `mbench ls --effort max` in the terminal, `mbench board --open` for the page, `mbench compare <a> <b>` when two models look close and you want to know whether the gap is real. The table shows the scores or what running them cost, whichever tab you pick, and every one of its links opens a 1200 × 675 card that downloads as a PNG for posting: *share this table ↗* ranks everything in the tab, *share this ↗* profiles one model — its per-question scores, and for a phone the throughput curve across twenty answers — and *share a comparison ↗* sets two models against each other with ties greyed out.
 
 **5. Publish it.** `scripts/publish.sh max` exports `site/index.html` and `site/board.json`, re-renders both screenshots, and rewrites the table above between its markers. Commit and push: the `pages` workflow redeploys the site on any change under `site/`. The database is the record; the page, the JSON and that table are all projections of it, so nothing is typed by hand.
 
@@ -156,6 +135,8 @@ mbench phone [health|launch|forward|push|logs]
 ## Benchmarking a phone
 
 The same llama.cpp that serves your card also runs on an iPhone, so a phone is measured on the same terms as the desktop. The question it answers is not which model is cleverest but **which one the device can live with**: a model that makes the phone dim its screen is disqualified however well it scores.
+
+<img src="docs/phone.png" alt="The phone tab: every model the iPhone Air can hold, with the speed it settles at once hot and whether the phone can live with it">
 
 ```
 ios/mbenchd/scripts/build-llama.sh     cross-compile llama.cpp for arm64 iOS
@@ -249,7 +230,7 @@ Questions come from [SuperGPQA](https://huggingface.co/datasets/m-a-p/SuperGPQA)
 ```
 uv run --group dev pytest
 uv tool install --editable .
-scripts/publish.sh max         # site/, docs/leaderboard*.png and the table above
+scripts/publish.sh max         # site/, docs/*.png and the table above
 ```
 
 Licensed under GPL-3.0-or-later.

@@ -32,7 +32,8 @@ select, button { font: inherit; font-size: 0.85rem; padding: 0.35rem 0.5rem; bor
 button { cursor: pointer; font-weight: 600; }
 button:hover { border-color: var(--ink-2); }
 canvas { width: 100%; max-width: 1200px; aspect-ratio: 1200 / 675; border: 1px solid var(--border); border-radius: 8px; }
-.hint { font-size: 0.8rem; color: var(--muted); margin: 0; max-width: 70ch; }
+.hint { font-size: 0.8rem; color: var(--ink-2); margin: 0; max-width: 78ch; line-height: 1.5; }
+.hint .dim { color: var(--muted); }
 body.bare { background: none; }
 body.bare main { max-width: none; margin: 0; padding: 0; gap: 0; }
 body.bare .controls, body.bare h1, body.bare .hint { display: none; }
@@ -41,18 +42,17 @@ body.bare canvas { width: 1200px; border: 0; border-radius: 0; }
 </head>
 <body>
 <main>
-  <h1>Comparison card</h1>
+  <h1 id="title">Comparison card</h1>
   <div class="controls">
     <label>Effort<select id="effort"></select></label>
     <label>Left<select id="left"></select></label>
     <label>Right<select id="right"></select></label>
     <label>Theme<select id="theme"><option value="light">Light</option><option value="dark">Dark</option></select></label>
     <button id="download" type="button">Download PNG</button>
+    <button id="pair" type="button" hidden>Head to head</button>
   </div>
   <canvas id="card" width="2400" height="1350"></canvas>
-  <p class="hint">1200 × 675 at 2×, the size X and Slack want. A difference smaller than the two 95% intervals allow is
-  drawn in grey and marked "tied" — this run can't tell those two apart. <code>mbench compare</code> answers the same
-  question question by question, which is a sharper test.</p>
+  <p class="hint" id="hint"></p>
 </main>
 <script>
 const DATA = /*__DATA__*/null;
@@ -180,15 +180,17 @@ function pair(one, two) {
 
 function strip(left, right, y) {
   const phones = classOf(left) === "phone";
-  const items = phones ? [
+  const all = phones ? [
     ["Decode once hot", model => model.speed.decode_steady, value => Math.round(value) + " tok/s", "high"],
     ["Tokens at full speed", model => model.speed.tokens_to_knee, value => Math.round(value) + " tok", "high"],
     ["Battery an hour costs", model => model.battery && model.battery.per_hour, value => Math.round(value) + "%", "low"],
   ] : [
     ["Decode, one request", model => model.speed.decode, value => Math.round(value) + " tok/s", "high"],
     ["Peak, all requests", model => model.speed.peak, value => Math.round(value) + " tok/s", "high"],
-    ["Energy per correct answer", model => model.energy.perCorrect, value => value.toFixed(2) + " Wh", "low"],
+    ["Energy per correct answer", model => (model.energy || {}).perCorrect, value => value.toFixed(2) + " Wh", "low"],
   ];
+  const items = all.filter(([, pick]) => pick(left) || pick(right));
+  if (!items.length) return;
   const width = (W - 112) / items.length;
   items.forEach(([label, pick, format, better], index) => {
     const x = 56 + index * width;
@@ -202,16 +204,181 @@ function strip(left, right, y) {
   });
 }
 
-function draw() {
+function chosen() {
+  /* A card is asked for by naming models: one to show on its own, two to set against each other, or several to rank.
+     Named models are looked up in the whole ranking, not the class-filtered list, because the list is filtered by
+     whichever model the pair controls happen to hold. The older two-parameter link still works. */
+  const all = view.rankings[state.effort] || [];
+  const named = (state.models || []).map(id => all.find(model => model.id === id)).filter(Boolean);
+  if (named.length) return named;
   const list = models();
-  const left = list.find(model => model.id === state.left) || list[0];
-  const right = list.find(model => model.id === state.right) || list[1] || list[0];
+  const pair = [list.find(model => model.id === state.left), list.find(model => model.id === state.right)]
+    .filter(Boolean);
+  return pair.length ? pair : list.slice(0, 2);
+}
+
+function chrome(models) {
+  text("mbench", 56, 62, { size: 24, weight: 700, family: "display" });
+  const first = models[0] || {};
+  const where = classOf(first) === "phone" ? ((first.stack || {}).device || "a phone")
+    : (first.stack && first.stack.gpu ? first.stack.gpu.replace("NVIDIA ", "") : "one GPU");
+  text(`suite ${DATA.suite || "full"} · ${state.effort} effort · ${where}`, W - 56, 62,
+    { size: 14, family: "mono", color: "muted", align: "right" });
+  box(56, 84, W - 112, 1, "grid");
+  const newest = Math.max(...models.map(model => (model.run || {}).finished || 0));
+  const when = newest > 0 ? new Date(newest * 1000)
+    .toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "";
+  text("guitaripod.github.io/mbench", 56, H - 28, { size: 13, family: "mono", color: "muted" });
+  return when;
+}
+
+const PHONE_COLUMNS = [
+  ["settled", model => (model.speed.decode_steady || {}).value, value => Math.round(value) + " tok/s"],
+  ["cold", model => (model.speed.decode_peak || {}).value, value => Math.round(value) + " tok/s"],
+  ["holds", model => (model.speed.stability || {}).value, value => Math.round(value) + "%"],
+  ["peak RAM", model => (model.speed.footprint || {}).value, value => (value / 1024).toFixed(1) + " GB"],
+];
+
+const GPU_COLUMNS = [
+  ["decode", model => (model.speed.decode || {}).value, value => Math.round(value) + " tok/s"],
+  ["peak", model => (model.speed.peak || {}).value, value => Math.round(value) + " tok/s"],
+  ["Wh/correct", model => ((model.energy || {}).perCorrect || {}).value, value => value.toFixed(2)],
+];
+
+function measures(list) {
+  const columns = classOf(list[0]) === "phone" ? PHONE_COLUMNS : GPU_COLUMNS;
+  return columns.filter(([, read]) => list.some(model => read(model) != null));
+}
+
+function drawMany(list) {
+  /* A ranked card: the models the link named, in order, each with what it scored and what that cost the device.
+     The bar carries the ranking at a glance; the per-question numbers are the single-model card's job. */
+  const when = chrome(list);
+  const columns = measures(list);
+  const gap = 132, firstX = W - 56 - (columns.length - 1) * gap;
+  const indexX = 500, barStart = indexX + 22, barEnd = firstX - 112;
+  const best = Math.max(1, ...list.map(model => (model.index || {}).value || 0));
+  const top = 152, rowHeight = Math.min(78, (H - top - 78) / list.length);
+  text("model", 92, top - 20, { size: 13, family: "mono", color: "muted" });
+  text("quality", indexX, top - 20, { size: 13, family: "mono", color: "muted", align: "right" });
+  columns.forEach(([name], column) => text(name, firstX + column * gap, top - 20,
+    { size: 13, family: "mono", color: "muted", align: "right" }));
+  list.forEach((model, row) => {
+    const y = top + row * rowHeight + rowHeight * 0.5;
+    if (row) box(56, top + row * rowHeight, W - 112, 1, "grid");
+    if ((model.index || {}).value != null) text(String(row + 1), 56, y, { size: 14, family: "mono", color: "muted" });
+    const size = fit(shortName(model), 300, 22, 600, "display");
+    text(shortName(model), 92, y, { size, weight: 600, family: "display" });
+    const facts = [model.quantization, VERDICT_LABELS[model.verdict]].filter(Boolean).join(" · ");
+    if (facts) text(facts, 92, y + 20, { size: 12, family: "mono", color: "muted" });
+    const value = (model.index || {}).value;
+    text(value == null ? "–" : value.toFixed(1), indexX, y,
+      { size: 30, weight: 700, family: "display", align: "right" });
+    box(barStart, y - 10, barEnd - barStart, 10, "grid", 5);
+    if (value != null) box(barStart, y - 10, (barEnd - barStart) * Math.max(0.015, value / best), 10, "a", 5);
+    columns.forEach(([, read, format], column) => {
+      const measure = read(model);
+      text(measure == null ? "–" : format(measure), firstX + column * gap, y,
+        { size: 17, family: "mono", color: measure == null ? "muted" : "ink", align: "right" });
+    });
+  });
+  text(`${list.length} models${when ? " · " + when : ""}`, W - 56, H - 28,
+    { size: 13, family: "mono", color: "muted", align: "right" });
+}
+
+function sustainSeries(model) {
+  return Object.keys(model.speed || {}).filter(key => key.startsWith("sustain."))
+    .sort().map(key => (model.speed[key] || {}).value).filter(value => value != null);
+}
+
+function curve(model, x, y, width, height) {
+  /* The whole point of a phone score: twenty answers back to back, and where the throughput settles. */
+  const series = sustainSeries(model);
+  if (series.length < 3) return;
+  const top = Math.max(...series);
+  const at = value => y + height - (value / top) * height;
+  const knee = (model.speed.tokens_to_knee || {}).value;
+  text(`${series.length} answers back to back`, x, y - 14, { size: 13, family: "mono", color: "muted" });
+  if (knee != null) {
+    text(`slows down after ${knee >= 1024 ? (knee / 1024).toFixed(knee % 1024 ? 1 : 0) + "k" : knee} tokens`,
+      x + width, y - 14, { size: 13, family: "mono", color: "muted", align: "right" });
+  }
+  box(x, y + height, width, 1, "grid");
+  const point = index => [x + (index * width) / (series.length - 1), at(series[index])];
+  context.beginPath();
+  context.moveTo(x * S, (y + height) * S);
+  series.forEach((value, index) => context.lineTo(point(index)[0] * S, point(index)[1] * S));
+  context.lineTo((x + width) * S, (y + height) * S);
+  context.closePath();
+  context.fillStyle = PALETTE[state.theme].grid;
+  context.fill();
+  context.strokeStyle = PALETTE[state.theme].a;
+  context.lineWidth = 3 * S;
+  context.lineJoin = "round";
+  context.beginPath();
+  series.forEach((value, index) => {
+    const [px, py] = point(index);
+    if (index) context.lineTo(px * S, py * S); else context.moveTo(px * S, py * S);
+  });
+  context.stroke();
+}
+
+function drawOne(model) {
+  /* One model on its own: what it scored, question by question, and what it cost the device to score it. */
+  const when = chrome([model]);
+  const size = fit(shortName(model), W - 112, 46, 700, "display");
+  text(shortName(model), 56, 148, { size, weight: 700, family: "display" });
+  text([model.engine, model.quantization, model.context ? Math.round(model.context / 1024) + "k ctx" : null,
+        VERDICT_LABELS[model.verdict], (model.stack || {}).hostLabel].filter(Boolean).join(" · "),
+    56, 176, { size: 15, family: "mono", color: "muted" });
+  const value = model.index && model.index.value != null ? model.index.value.toFixed(1) : "–";
+  const width = text(value, 56, 244, { size: 64, weight: 700, family: "display" });
+  const spread = half(model.index);
+  text("quality index" + (spread != null ? `  ±${spread.toFixed(1)}` : ""), 56 + width + 18, 244,
+    { size: 16, family: "mono", color: "muted" });
+  box(56, 272, W - 112, 1, "grid");
+  const tasks = view.indexTasks.filter(task => model.tasks[task]);
+  const span = (W - 112) / Math.max(1, tasks.length);
+  tasks.forEach((task, column) => {
+    const x = 56 + column * span;
+    const entry = model.tasks[task];
+    text(view.taskShort[task] || task, x, 308, { size: 14, family: "mono", color: "muted" });
+    text(entry.value.toFixed(1), x, 350, { size: 32, weight: 700, family: "display" });
+    box(x, 368, span - 36, 9, "grid", 5);
+    box(x, 368, (span - 36) * Math.max(0, Math.min(1, entry.value / 100)), 9, "a", 5);
+    if (entry.truncated >= 25) {
+      text(`${Math.round(entry.truncated)}% cut off`, x, 394, { size: 12, family: "mono", color: "muted" });
+    }
+  });
+  box(56, 414, W - 112, 1, "grid");
+  const columns = measures([model]);
+  const cell = (W - 112) / Math.max(1, columns.length);
+  columns.forEach(([name, read, format], column) => {
+    const x = 56 + column * cell;
+    text(format(read(model)), x, 466, { size: 32, weight: 700, family: "display" });
+    text(name, x, 490, { size: 13, family: "mono", color: "muted" });
+  });
+  curve(model, 56, 530, W - 112, 86);
+  text(when, W - 56, H - 28, { size: 13, family: "mono", color: "muted", align: "right" });
+}
+
+function draw() {
+  const list = chosen();
   context.fillStyle = PALETTE[state.theme].page;
   context.fillRect(0, 0, canvas.width, canvas.height);
-  if (!left || !right) {
-    text("Two finished runs are needed for a comparison card.", 56, 100, { size: 20, family: "display" });
-    return;
+  if (!list.length) {
+    text("No finished run to show.", 56, 100, { size: 20, family: "display" });
+    return 0;
   }
+  if (list.length === 1) {
+    drawOne(list[0]);
+    return 1;
+  }
+  if (list.length > 2) {
+    drawMany(list);
+    return list.length;
+  }
+  const left = list[0], right = list[1];
   text("mbench", 56, 62, { size: 24, weight: 700, family: "display" });
   const stack = left.stack && left.stack.gpu ? left.stack.gpu.replace("NVIDIA ", "") : "one GPU";
   text(`suite ${DATA.suite || "full"} · ${state.effort} effort · ${stack}`, W - 56, 62,
@@ -229,6 +396,7 @@ function draw() {
     .toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "";
   text(`same questions, same server settings${when ? " · " + when : ""}`, W - 56, H - 28,
     { size: 13, family: "mono", color: "muted", align: "right" });
+  return 2;
 }
 
 function option(value, label, selected) {
@@ -247,6 +415,9 @@ function fillControls() {
     const select = document.getElementById(id);
     select.replaceChildren(...list.map(model => option(model.id, shortName(model), model.id === state[key])));
   }
+  const named = (state.models || []).length > 0;
+  for (const id of ["left", "right"]) document.getElementById(id).closest("label").hidden = named;
+  document.getElementById("pair").hidden = !named;
   document.getElementById("theme").value = state.theme;
 }
 
@@ -273,6 +444,7 @@ function newestPairing() {
 function readHash() {
   const params = new URLSearchParams(location.hash.slice(1));
   const efforts = view.efforts || [];
+  state.models = (params.get("m") || "").split(",").map(id => id.trim()).filter(Boolean);
   const pairing = newestPairing();
   state.effort = params.get("effort") && efforts.includes(params.get("effort")) ? params.get("effort")
     : (pairing ? pairing.effort : efforts.includes("max") ? "max" : efforts[0]);
@@ -285,14 +457,32 @@ function readHash() {
 }
 
 function writeHash() {
-  const params = new URLSearchParams({ effort: state.effort || "", a: state.left || "", b: state.right || "", theme: state.theme });
+  const params = new URLSearchParams((state.models || []).length
+    ? { effort: state.effort || "", m: state.models.join(","), theme: state.theme }
+    : { effort: state.effort || "", a: state.left || "", b: state.right || "", theme: state.theme });
   history.replaceState(null, "", "#" + params.toString());
+}
+
+const HINTS = {
+  one: "One model, question by question, and what it cost the device that ran it.",
+  two: "A difference smaller than the two 95% intervals allow is drawn in grey and marked \"tied\" — this run can't "
+    + "tell those two apart. <code>mbench compare</code> answers the same question question by question, which is a "
+    + "sharper test.",
+  many: "Every model the link named, ranked. Pick the models on the board, then use its share links.",
+};
+const TITLES = { one: "Model card", two: "Comparison card", many: "Ranked card" };
+
+function mode(count) {
+  return count === 1 ? "one" : count === 2 ? "two" : "many";
 }
 
 function render() {
   fillControls();
   writeHash();
-  draw();
+  const shape = mode(draw());
+  document.getElementById("title").textContent = TITLES[shape];
+  document.getElementById("hint").innerHTML = HINTS[shape]
+    + ' <span class="dim">1200 × 675 at 2×, the size X and Slack want.</span>';
 }
 
 for (const [id, key] of [["effort", "effort"], ["left", "left"], ["right", "right"], ["theme", "theme"]]) {
@@ -307,11 +497,21 @@ for (const [id, key] of [["effort", "effort"], ["left", "left"], ["right", "righ
   });
 }
 
+document.getElementById("pair").addEventListener("click", () => {
+  state.models = [];
+  const list = models();
+  state.left = (list[0] || {}).id;
+  state.right = (list[1] || list[0] || {}).id;
+  render();
+});
+
 document.getElementById("download").addEventListener("click", () => {
   canvas.toBlob(blob => {
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
-    link.download = `mbench-${state.left}-vs-${state.right}.png`;
+    const list = chosen();
+    link.download = "mbench-" + (list.length === 1 ? list[0].id
+      : list.length === 2 ? `${list[0].id}-vs-${list[1].id}` : `${state.effort}-top${list.length}`) + ".png";
     link.click();
     setTimeout(() => URL.revokeObjectURL(link.href), 5000);
   }, "image/png");
