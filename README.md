@@ -131,21 +131,24 @@ mbench run <id> --effort max          the model's highest declared effort, ranke
 mbench run <id> --quick --detach      smaller samples; start and return at once
 mbench run <id> --only speed          one task; --skip leaves tasks out
 mbench run <id> --reuse               carry over answers that still apply
+mbench run <id> --quality-from <run>  for a phone run: whose quality the board shows
 mbench run <a> <b> --at 03:00 --until 08:00
                                       several models, one after another, only at night
 mbench run <id> --submit              also submit to localmaxxing (all, speed or evals)
 mbench status                         what is running, and what is scheduled
 mbench logs -f                        follow the worker log
 mbench cancel / mbench resume         stop a run; continue it later
-mbench ls [--effort max] [--markdown] ranked table in the terminal
+mbench ls [--effort max] [--device phone] [--markdown]
+                                      ranked table in the terminal, one tier at a time
 mbench compare <a> <b>                paired differences, task by task, with 95% intervals
 mbench doctor <id>                    check a model's server before spending a night on it
 mbench sources                        newer question sets, or pinned files that moved
 mbench board --open                   the leaderboard page
 mbench export --out site              the page plus board.json, ready to publish
 mbench profile <id>                   what mbench knows about a model
-mbench phone [health|forward|push|logs]
-                                      the phone mbenchd runs on
+mbench rescore [<run>]                score a finished run again from the answers it kept
+mbench phone [health|launch|forward|push|logs]
+                                      the phone mbench runs on
 ```
 
 `mbench -h` and `mbench run -h` cover every option.
