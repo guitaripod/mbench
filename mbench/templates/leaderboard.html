@@ -198,7 +198,8 @@ const NS = "http://www.w3.org/2000/svg";
 const SUITES = DATA.suites || { [DATA.current || "1"]: { indexTasks: DATA.indexTasks, taskLabels: DATA.taskLabels, taskNotes: {}, groups: null, efforts: DATA.efforts, rankings: DATA.rankings } };
 const CURRENT = DATA.current || Object.keys(SUITES)[0];
 const WITH_RUNS = Object.keys(SUITES).filter(name => SUITES[name].efforts.length).sort((a, b) => Number(b) - Number(a));
-const state = { sortKey: "index", sortDir: "desc", selected: null, effort: "medium", deviceClass: null, suite: SUITES[CURRENT].efforts.length ? CURRENT : (WITH_RUNS[0] || CURRENT) };
+const WANTED_CLASS = (location.hash.match(/(?:^|[#&])(gpu|phone)\b/) || [])[1] || null;
+const state = { sortKey: "index", sortDir: "desc", selected: null, effort: "medium", deviceClass: WANTED_CLASS, suite: SUITES[CURRENT].efforts.length ? CURRENT : (WITH_RUNS[0] || CURRENT) };
 const CLASS_LABELS = { gpu: "GPU", phone: "Phone" };
 const THERMAL_NAMES = ["nominal", "fair", "serious", "critical"];
 const VERDICTS = {
@@ -302,7 +303,11 @@ function columns() {
     ...tasks().map(task => ({ key: task, label: label(task).replace(" v6", "").replace(" 2025", "").replace(" 2026", "") + (health()[task] ? " ⚠" : ""),
       note: health()[task] ? `Not separating these models: ${health()[task]}` : null, get: m => m.tasks[task] && m.tasks[task].value,
       better: "high", render: m => pctCell(m.tasks[task], true) })),
-    { key: "decode", label: "Decode tok/s", get: m => m.speed.decode && m.speed.decode.value, better: "high", render: m => numCell(m.speed.decode && m.speed.decode.value, fmt.int) },
+    showingPhones()
+      ? { key: "decode", label: "Settled tok/s", note: "What it decodes at once the phone has throttled, which is what you would live with",
+          get: m => decodeOf(m), better: "high",
+          render: m => numCell(decodeOf(m), fmt.int, m.speed.decode_peak ? `${fmt.int(m.speed.decode_peak.value)} tok/s cold` : null) }
+      : { key: "decode", label: "Decode tok/s", get: m => m.speed.decode && m.speed.decode.value, better: "high", render: m => numCell(m.speed.decode && m.speed.decode.value, fmt.int) },
     ...(showingPhones() ? [
       { key: "steady", label: "Steady tok/s", note: "Decode speed after the phone has throttled, measured back to back",
         get: m => m.speed.decode_steady && m.speed.decode_steady.value, better: "high",
@@ -400,7 +405,7 @@ function modelMeta(model) {
   const parts = [model.engine, model.quantization, model.spec, model.context ? fmt.ctx(model.context) + " context" : null].filter(Boolean);
   const chips = [];
   if (setups().length > 1 && model.stack && model.stack.gpu) parts.push(model.stack.gpu);
-  if (model.run.kind !== "full") chips.push(h("span", { className: "chip", text: "quick run", title: model.run.notes || "Smaller sample; ranked as provisional." }));
+  if (model.run.kind === "quick") chips.push(h("span", { className: "chip", text: "quick run", title: model.run.notes || "Smaller sample; ranked as provisional." }));
   if (model.run.contended && model.run.contended.length) chips.push(h("span", { className: "chip", text: "GPU was shared", title: "Other GPU work during the run: " + model.run.contended.join(", ") }));
   if (model.run.failedItems) chips.push(h("span", { className: "chip", text: `${model.run.failedItems} requests failed` }));
   if (model.warnings && model.warnings.length) chips.push(h("span", { className: "chip", text: "context-capped", title: model.warnings.join(" ") }));
@@ -523,7 +528,11 @@ function renderFrontier(host) {
     h("span", { text: "Up and to the right is better. The line joins models nothing else beats on both; the bar through each point is its 95% interval." + (missing ? ` ${missing} without a full quality index aren't plotted.` : "") }),
   ]));
   if (!points.length) {
-    figure.appendChild(h("p", { className: "lede", text: "No model has a complete quality index yet." }));
+    const scored = current().filter(model => model.index && model.index.value != null).length;
+    figure.appendChild(h("p", { className: "lede", text: scored
+      ? `${scored} ${scored === 1 ? "model was" : "models were"} scored for quality without being timed, `
+        + "so there is nothing to plot against. The phone tab has both."
+      : "No model has a complete quality index yet." }));
     host.appendChild(figure);
     return;
   }
@@ -768,7 +777,11 @@ function tiles(model) {
   const peakAt = speed.peak_at ? `at ${speed.peak_at.value} requests` : null;
   return h("div", { className: "tiles" }, [
     tile(index && index.value != null ? fmt.pct(index.value) : null, "quality index", half != null ? `±${half.toFixed(1)} at 95%` : null),
-    tile(speed.decode ? fmt.int(speed.decode.value) : null, "tok/s, one request", speed["ttft.short"] ? `${Math.round(speed["ttft.short"].value)} ms to first token` : null),
+    tile(showingPhones() && speed.decode_steady ? fmt.int(speed.decode_steady.value)
+           : speed.decode ? fmt.int(speed.decode.value) : null,
+      showingPhones() ? "tok/s once hot" : "tok/s, one request",
+      showingPhones() && speed.decode_peak ? `${fmt.int(speed.decode_peak.value)} tok/s from cold`
+        : speed["ttft.short"] ? `${Math.round(speed["ttft.short"].value)} ms to first token` : null),
     tile(speed.peak ? fmt.int(speed.peak.value) : null, "tok/s, peak", peakAt),
     tile(model.energy && model.energy.perCorrect ? model.energy.perCorrect.value.toFixed(2) : null, "Wh per correct answer",
       model.energy && model.energy.quality ? `${model.energy.quality.value.toFixed(0)} Wh for the suite` : null),
@@ -902,7 +915,9 @@ function renderLede() {
   const groups = view().groups;
   const describe = ([name, members]) => members.length === 1 && label(members[0]) === name ? name : `${name} (${members.map(label).join(" and ")})`;
   const parts = groups ? Object.entries(groups).map(describe) : tasks().map(label);
-  document.getElementById("lede").textContent = "Every model llama-swap serves, measured the same way on this GPU. "
+  document.getElementById("lede").textContent = (showingPhones()
+      ? "Every model this phone can hold, measured the same way on the device: speed, thermals and memory on the phone, quality off it from the same weights. "
+      : "Every model llama-swap serves, measured the same way on this GPU. ")
     + `The quality index averages ${groups && Object.keys(groups).length < tasks().length ? "these groups equally" : "these tasks"}: ${parts.join(", ")}. `
     + "Each reasoning effort is ranked on its own; max is the highest level each model offers. Speed is one request at a time unless a column says otherwise.";
 }
@@ -972,13 +987,21 @@ function render() {
       + ". Quality compares across them; decode, peak and energy only compare within one." }));
   }
   if (!current().some(model => model.id === state.selected)) state.selected = sortedModels()[0].id;
+  renderMeta();
   renderFrontier(host);
   renderTable(host);
   renderDetail(host);
 }
 
-const hw = DATA.hardware || {};
-document.getElementById("meta").textContent = [hw.gpu, hw.vram_mib ? Math.round(hw.vram_mib / 1024) + " GB" : null, hw.driver ? "driver " + hw.driver : null, "suite " + DATA.suite, "built " + new Date(DATA.generated * 1000).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })].filter(Boolean).join(" · ");
+function renderMeta() {
+  const setup = (setups()[0] || {}).label;
+  const hw = DATA.hardware || {};
+  const where = showingPhones() && setup ? [setup]
+    : [hw.gpu, hw.vram_mib ? Math.round(hw.vram_mib / 1024) + " GB" : null, hw.driver ? "driver " + hw.driver : null];
+  document.getElementById("meta").textContent = [...where, "suite " + DATA.suite,
+    "built " + new Date(DATA.generated * 1000).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })]
+    .filter(Boolean).join(" · ");
+}
 document.getElementById("footer").textContent = `Data: ${DATA.database}. Rebuilt after every run, or with mbench board.`;
 render();
 </script>

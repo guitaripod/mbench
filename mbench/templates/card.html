@@ -250,14 +250,37 @@ function fillControls() {
   document.getElementById("theme").value = state.theme;
 }
 
+function newestPairing() {
+  /* The card is the page's own og:image, so with nothing asked for it should show the most recent work — but a
+     comparison needs two models measured the same way, and an effort with only one model would be shown against
+     itself. */
+  const efforts = view.efforts || [];
+  let best = null;
+  for (const effort of efforts) {
+    const classes = {};
+    for (const model of view.rankings[effort] || []) {
+      (classes[classOf(model)] = classes[classOf(model)] || []).push(model);
+    }
+    for (const group of Object.values(classes)) {
+      if (group.length < 2) continue;
+      const newest = Math.max(...group.map(model => (model.run || {}).finished || 0));
+      if (!best || newest > best.newest) best = { effort, group, newest };
+    }
+  }
+  return best;
+}
+
 function readHash() {
   const params = new URLSearchParams(location.hash.slice(1));
   const efforts = view.efforts || [];
+  const pairing = newestPairing();
   state.effort = params.get("effort") && efforts.includes(params.get("effort")) ? params.get("effort")
-    : efforts.includes("max") ? "max" : efforts[0];
+    : (pairing ? pairing.effort : efforts.includes("max") ? "max" : efforts[0]);
+  const ranked = ((pairing && !params.get("a") ? pairing.group : view.rankings[state.effort]) || []).slice()
+    .sort((one, two) => ((two.run || {}).finished || 0) - ((one.run || {}).finished || 0));
+  state.left = params.get("a") || (ranked[0] || {}).id;
   const list = models();
-  state.left = params.get("a") || (list[0] || {}).id;
-  state.right = params.get("b") || (list[1] || list[0] || {}).id;
+  state.right = params.get("b") || (list.find(model => model.id !== state.left) || list[0] || {}).id;
   if (params.get("theme")) state.theme = params.get("theme");
 }
 
