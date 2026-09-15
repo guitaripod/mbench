@@ -433,18 +433,21 @@ function numCell(value, format, title) {
   return h("td", { className: "num", text: format(value), title: title || null });
 }
 
+function toCard(show, ids) {
+  return "card.html#" + new URLSearchParams({ effort: state.effort, class: state.deviceClass, show, m: ids.join(",") });
+}
+
 function cardLink(model) {
   const other = sortedModels().find(entry => entry.id !== model.id) || model;
-  return `card.html#effort=${encodeURIComponent(state.effort)}&a=${encodeURIComponent(model.id)}&b=${encodeURIComponent(other.id)}`;
+  return toCard("two", [model.id, other.id]);
 }
 
 function soloLink(model) {
-  return `card.html#effort=${encodeURIComponent(state.effort)}&m=${encodeURIComponent(model.id)}`;
+  return toCard("one", [model.id]);
 }
 
 function tableLink() {
-  const ids = sortedModels().slice(0, 8).map(model => model.id).join(",");
-  return `card.html#effort=${encodeURIComponent(state.effort)}&m=${encodeURIComponent(ids)}`;
+  return toCard("many", sortedModels().slice(0, 8).map(model => model.id));
 }
 
 function setups() {

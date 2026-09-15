@@ -27,6 +27,8 @@ main { max-width: 1240px; margin: 0 auto; padding: 1.5rem 1.25rem 3rem; display:
 h1 { font-family: "Archivo", var(--ui); font-size: 1.25rem; margin: 0; font-weight: 700; }
 .controls { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; }
 label { font-size: 0.8rem; color: var(--ink-2); display: grid; gap: 0.2rem; }
+label[hidden] { display: none; }
+select:disabled, option:disabled { color: var(--muted); }
 select, button { font: inherit; font-size: 0.85rem; padding: 0.35rem 0.5rem; border-radius: 6px;
   border: 1px solid var(--border); background: var(--page); color: var(--ink); }
 button { cursor: pointer; font-weight: 600; }
@@ -45,11 +47,18 @@ body.bare canvas { width: 1200px; border: 0; border-radius: 0; }
   <h1 id="title">Comparison card</h1>
   <div class="controls">
     <label>Effort<select id="effort"></select></label>
-    <label>Left<select id="left"></select></label>
-    <label>Right<select id="right"></select></label>
+    <label id="where-label">Ran on<select id="where"></select></label>
+    <label>Show<select id="show">
+      <option value="many">A ranking</option>
+      <option value="two">Head to head</option>
+      <option value="one">One model</option>
+    </select></label>
+    <label id="count-label">How many<select id="count"></select></label>
+    <label id="left-label">Left<select id="left"></select></label>
+    <label id="right-label">Right<select id="right"></select></label>
+    <label id="only-label">Model<select id="only"></select></label>
     <label>Theme<select id="theme"><option value="light">Light</option><option value="dark">Dark</option></select></label>
     <button id="download" type="button">Download PNG</button>
-    <button id="pair" type="button" hidden>Head to head</button>
   </div>
   <canvas id="card" width="2400" height="1350"></canvas>
   <p class="hint" id="hint"></p>
@@ -69,17 +78,29 @@ const view = SUITES[CURRENT] || { efforts: [], rankings: {}, indexTasks: [], tas
 const VERDICT_LABELS = { holds: "holds up", fades: "fades", barely: "barely runs" };
 const canvas = document.getElementById("card");
 const context = canvas.getContext("2d");
-const state = { effort: null, left: null, right: null, theme: matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light" };
+const MODES = ["many", "two", "one"];
+const NEEDS = { many: 3, two: 2, one: 1 };
+const CLASS_LABELS = { gpu: "GPU", phone: "Phone" };
+const state = { effort: null, klass: null, mode: "two", models: [],
+                theme: matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light" };
 
 function classOf(model) {
   return (model && model.deviceClass) || "gpu";
 }
 
-function models() {
-  const ranked = (view.rankings[state.effort] || []).slice()
+function ranking() {
+  return (view.rankings[state.effort] || []).slice()
     .sort((one, two) => (two.index?.value ?? -1) - (one.index?.value ?? -1));
-  const chosen = ranked.find(model => model.id === state.left) || ranked[0];
-  return ranked.filter(model => classOf(model) === classOf(chosen));
+}
+
+function classes() {
+  return [...new Set(ranking().map(classOf))];
+}
+
+function pool() {
+  /* Everything a card at these settings could show. A card only ever holds models measured the same way, so the
+     class is part of the settings rather than something each picker filters for itself. */
+  return ranking().filter(model => classOf(model) === state.klass);
 }
 
 function shortName(model) {
@@ -205,16 +226,13 @@ function strip(left, right, y) {
 }
 
 function chosen() {
-  /* A card is asked for by naming models: one to show on its own, two to set against each other, or several to rank.
-     Named models are looked up in the whole ranking, not the class-filtered list, because the list is filtered by
-     whichever model the pair controls happen to hold. The older two-parameter link still works. */
-  const all = view.rankings[state.effort] || [];
-  const named = (state.models || []).map(id => all.find(model => model.id === id)).filter(Boolean);
-  if (named.length) return named;
-  const list = models();
-  const pair = [list.find(model => model.id === state.left), list.find(model => model.id === state.right)]
-    .filter(Boolean);
-  return pair.length ? pair : list.slice(0, 2);
+  /* What the card draws: the models named, in the order the ranking puts them, topped up from the ranking when the
+     link named fewer than the mode needs. */
+  const list = pool();
+  const named = state.models.map(id => list.find(model => model.id === id)).filter(Boolean);
+  const rest = list.filter(model => !named.includes(model));
+  const want = state.mode === "many" ? Math.max(NEEDS.many, named.length) : NEEDS[state.mode];
+  return [...named, ...rest].slice(0, Math.min(want, list.length));
 }
 
 function chrome(models) {
@@ -368,16 +386,10 @@ function draw() {
   context.fillRect(0, 0, canvas.width, canvas.height);
   if (!list.length) {
     text("No finished run to show.", 56, 100, { size: 20, family: "display" });
-    return 0;
+    return;
   }
-  if (list.length === 1) {
-    drawOne(list[0]);
-    return 1;
-  }
-  if (list.length > 2) {
-    drawMany(list);
-    return list.length;
-  }
+  if (list.length === 1) return drawOne(list[0]);
+  if (list.length > 2) return drawMany(list);
   const left = list[0], right = list[1];
   text("mbench", 56, 62, { size: 24, weight: 700, family: "display" });
   const stack = left.stack && left.stack.gpu ? left.stack.gpu.replace("NVIDIA ", "") : "one GPU";
@@ -396,7 +408,6 @@ function draw() {
     .toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "";
   text(`same questions, same server settings${when ? " · " + when : ""}`, W - 56, H - 28,
     { size: 13, family: "mono", color: "muted", align: "right" });
-  return 2;
 }
 
 function option(value, label, selected) {
@@ -407,35 +418,61 @@ function option(value, label, selected) {
   return node;
 }
 
+function fill(id, options, value) {
+  const select = document.getElementById(id);
+  select.replaceChildren(...options.map(([key, label]) => option(key, label, String(key) === String(value))));
+  return select;
+}
+
+function settle() {
+  /* Keeps the settings answerable after any change: a class that no longer has models, a mode the class cannot fill,
+     and models named at another effort all resolve to the nearest thing that can actually be drawn. */
+  const efforts = view.efforts || [];
+  if (!efforts.includes(state.effort)) state.effort = efforts[0];
+  const here = classes();
+  if (!here.includes(state.klass)) state.klass = here[0];
+  const list = pool();
+  if (!MODES.includes(state.mode)) state.mode = "two";
+  while (list.length < NEEDS[state.mode]) state.mode = MODES[MODES.indexOf(state.mode) + 1] || "one";
+  state.models = chosen().map(model => model.id);
+}
+
 function fillControls() {
-  const efforts = document.getElementById("effort");
-  efforts.replaceChildren(...(view.efforts || []).map(effort => option(effort, effort, effort === state.effort)));
-  const list = models();
-  for (const [id, key] of [["left", "left"], ["right", "right"]]) {
-    const select = document.getElementById(id);
-    select.replaceChildren(...list.map(model => option(model.id, shortName(model), model.id === state[key])));
+  fill("effort", (view.efforts || []).map(effort => [effort, effort]), state.effort);
+  const here = classes();
+  document.getElementById("where-label").hidden = here.length < 2;
+  fill("where", here.map(name => [name, CLASS_LABELS[name] || name]), state.klass);
+  const list = pool();
+  for (const option of document.getElementById("show").options) {
+    option.disabled = list.length < NEEDS[option.value];
   }
-  const named = (state.models || []).length > 0;
-  for (const id of ["left", "right"]) document.getElementById(id).closest("label").hidden = named;
-  document.getElementById("pair").hidden = !named;
+  document.getElementById("show").value = state.mode;
+  const names = list.map(model => [model.id, shortName(model)]);
+  const counts = [];
+  for (let many = NEEDS.many; many <= list.length; many += 1) counts.push([many, `Top ${many}`]);
+  if (counts.length) counts[counts.length - 1][1] = `All ${list.length}`;
+  document.getElementById("count-label").hidden = state.mode !== "many";
+  fill("count", counts, state.models.length);
+  for (const [id, index] of [["left", 0], ["right", 1]]) {
+    document.getElementById(`${id}-label`).hidden = state.mode !== "two";
+    fill(id, names, state.models[index]);
+  }
+  document.getElementById("only-label").hidden = state.mode !== "one";
+  fill("only", names, state.models[0]);
   document.getElementById("theme").value = state.theme;
 }
 
-function newestPairing() {
-  /* The card is the page's own og:image, so with nothing asked for it should show the most recent work — but a
-     comparison needs two models measured the same way, and an effort with only one model would be shown against
-     itself. */
-  const efforts = view.efforts || [];
+function newest() {
+  /* The card is the page's own og:image, so with nothing asked for it shows the most recent work — and a comparison
+     needs two models measured the same way, so an effort and class holding only one is not the answer. */
   let best = null;
-  for (const effort of efforts) {
-    const classes = {};
-    for (const model of view.rankings[effort] || []) {
-      (classes[classOf(model)] = classes[classOf(model)] || []).push(model);
-    }
-    for (const group of Object.values(classes)) {
+  for (const effort of view.efforts || []) {
+    const groups = {};
+    for (const model of view.rankings[effort] || []) (groups[classOf(model)] ||= []).push(model);
+    for (const [klass, group] of Object.entries(groups)) {
       if (group.length < 2) continue;
-      const newest = Math.max(...group.map(model => (model.run || {}).finished || 0));
-      if (!best || newest > best.newest) best = { effort, group, newest };
+      const when = Math.max(...group.map(model => (model.run || {}).finished || 0));
+      if (!best || when > best.when) best = { effort, klass, when };
     }
   }
   return best;
@@ -443,24 +480,22 @@ function newestPairing() {
 
 function readHash() {
   const params = new URLSearchParams(location.hash.slice(1));
-  const efforts = view.efforts || [];
-  state.models = (params.get("m") || "").split(",").map(id => id.trim()).filter(Boolean);
-  const pairing = newestPairing();
-  state.effort = params.get("effort") && efforts.includes(params.get("effort")) ? params.get("effort")
-    : (pairing ? pairing.effort : efforts.includes("max") ? "max" : efforts[0]);
-  const ranked = ((pairing && !params.get("a") ? pairing.group : view.rankings[state.effort]) || []).slice()
-    .sort((one, two) => ((two.run || {}).finished || 0) - ((one.run || {}).finished || 0));
-  state.left = params.get("a") || (ranked[0] || {}).id;
-  const list = models();
-  state.right = params.get("b") || (list.find(model => model.id !== state.left) || list[0] || {}).id;
+  const start = newest() || { effort: (view.efforts || [])[0], klass: classes()[0] };
+  state.effort = params.get("effort") || start.effort;
+  state.models = (params.get("m") || [params.get("a"), params.get("b")].filter(Boolean).join(","))
+    .split(",").map(id => id.trim()).filter(Boolean);
+  const first = (view.rankings[state.effort] || []).find(model => model.id === state.models[0]);
+  state.klass = params.get("class") || (first ? classOf(first) : start.klass);
+  state.mode = params.get("show") || (params.get("m") ? (state.models.length === 1 ? "one"
+    : state.models.length === 2 ? "two" : "many") : "two");
   if (params.get("theme")) state.theme = params.get("theme");
 }
 
 function writeHash() {
-  const params = new URLSearchParams((state.models || []).length
-    ? { effort: state.effort || "", m: state.models.join(","), theme: state.theme }
-    : { effort: state.effort || "", a: state.left || "", b: state.right || "", theme: state.theme });
-  history.replaceState(null, "", "#" + params.toString());
+  history.replaceState(null, "", "#" + new URLSearchParams({
+    effort: state.effort || "", class: state.klass || "", show: state.mode,
+    m: state.models.join(","), theme: state.theme,
+  }).toString());
 }
 
 const HINTS = {
@@ -468,42 +503,35 @@ const HINTS = {
   two: "A difference smaller than the two 95% intervals allow is drawn in grey and marked \"tied\" — this run can't "
     + "tell those two apart. <code>mbench compare</code> answers the same question question by question, which is a "
     + "sharper test.",
-  many: "Every model the link named, ranked. Pick the models on the board, then use its share links.",
+  many: "The ranking at these settings, with what each model settles at beside it.",
 };
 const TITLES = { one: "Model card", two: "Comparison card", many: "Ranked card" };
 
-function mode(count) {
-  return count === 1 ? "one" : count === 2 ? "two" : "many";
-}
-
 function render() {
+  settle();
   fillControls();
   writeHash();
-  const shape = mode(draw());
-  document.getElementById("title").textContent = TITLES[shape];
-  document.getElementById("hint").innerHTML = HINTS[shape]
+  draw();
+  document.getElementById("title").textContent = TITLES[state.mode];
+  document.getElementById("hint").innerHTML = HINTS[state.mode]
     + ' <span class="dim">1200 × 675 at 2×, the size X and Slack want.</span>';
 }
 
-for (const [id, key] of [["effort", "effort"], ["left", "left"], ["right", "right"], ["theme", "theme"]]) {
+function onChange(id, apply) {
   document.getElementById(id).addEventListener("change", event => {
-    state[key] = event.target.value;
-    if (key === "effort") {
-      const list = models();
-      state.left = (list[0] || {}).id;
-      state.right = (list[1] || list[0] || {}).id;
-    }
+    apply(event.target.value);
     render();
   });
 }
 
-document.getElementById("pair").addEventListener("click", () => {
-  state.models = [];
-  const list = models();
-  state.left = (list[0] || {}).id;
-  state.right = (list[1] || list[0] || {}).id;
-  render();
-});
+onChange("effort", value => { state.effort = value; });
+onChange("where", value => { state.klass = value; });
+onChange("theme", value => { state.theme = value; });
+onChange("show", value => { state.mode = value; });
+onChange("count", value => { state.models = pool().slice(0, Number(value)).map(model => model.id); });
+onChange("only", value => { state.models = [value]; });
+onChange("left", value => { state.models = [value, state.models.find(id => id !== value)].filter(Boolean); });
+onChange("right", value => { state.models = [state.models.find(id => id !== value), value].filter(Boolean); });
 
 document.getElementById("download").addEventListener("click", () => {
   canvas.toBlob(blob => {
@@ -515,6 +543,11 @@ document.getElementById("download").addEventListener("click", () => {
     link.click();
     setTimeout(() => URL.revokeObjectURL(link.href), 5000);
   }, "image/png");
+});
+
+window.addEventListener("hashchange", () => {
+  readHash();
+  render();
 });
 
 if (new URLSearchParams(location.search).get("bare") === "1") document.body.classList.add("bare");
