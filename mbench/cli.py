@@ -320,6 +320,14 @@ def cmd_run(args):
 
 
 def cmd_phone(args):
+    """Every phone action talks over a cable that may not be there; a missing device is a message, not a traceback."""
+    try:
+        return phone_action(args)
+    except RuntimeError as error:
+        fail(error)
+
+
+def phone_action(args):
     device = phone.Device()
     if args.action == "forward":
         processes = [phone.forward(18080, phone.SERVER_PORT), phone.forward(18081, phone.CONTROL_PORT)]
@@ -341,6 +349,10 @@ def cmd_phone(args):
                 return
             time.sleep(1)
         fail("the app launched but never answered; `mbench phone logs` may say why")
+    if args.action == "installed":
+        app = phone.installed()
+        print(f"{app['name'] or '?'} {app['version'] or '?'} ({app['build'] or '?'}) as {app['bundle']}")
+        return
     if args.action == "push":
         for path in args.files:
             source = Path(path)
@@ -907,7 +919,7 @@ def parser():
     profile.add_argument("model", help="llama-swap model id or alias")
     profile.set_defaults(handler=cmd_profile)
     phone_parser = commands.add_parser("phone", help="the phone mbenchd runs on: forward its ports, push models, read its logs")
-    phone_parser.add_argument("action", choices=("health", "launch", "forward", "push", "logs"), nargs="?", default="health")
+    phone_parser.add_argument("action", choices=("health", "installed", "launch", "forward", "push", "logs"), nargs="?", default="health")
     phone_parser.add_argument("files", nargs="*", help="for push: the .gguf files to copy into the app")
     phone_parser.add_argument("--into", help="for logs: where to write them (default: here)")
     phone_parser.set_defaults(handler=cmd_phone)

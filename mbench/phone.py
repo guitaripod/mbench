@@ -273,19 +273,40 @@ def run_tool(*args, timeout=600, capture=True):
     return subprocess.run([tool(), *args], capture_output=capture, text=True, timeout=timeout)
 
 
-def bundle_id():
-    """The app's id on the device. xtool installs under an XTL- prefix of its own, so the id is looked up rather
-    than assumed."""
-    override = os.environ.get("MBENCH_BUNDLE_ID")
-    if override:
-        return override
+def complain(completed):
+    """pymobiledevice3 writes a timestamped log line rather than a message; only the part after its level is worth
+    repeating, and its usual failure means the cable, not the tool."""
+    text = ((completed.stderr or "") + (completed.stdout or "")).strip()
+    said = text.rsplit("ERROR ", 1)[-1].splitlines()[0] if text else ""
+    if "usbmuxd" in said:
+        return "no phone on the cable — plug it in, unlock it, and trust this computer"
+    return said[:200] or "pymobiledevice3 said nothing"
+
+
+def apps():
+    """Every mbenchd on the device, keyed by bundle id. xtool installs under an XTL- prefix of its own, so the id is
+    looked up rather than assumed."""
     completed = run_tool("apps", "list")
     if completed.returncode != 0:
-        raise RuntimeError(f"could not list apps on the phone: {completed.stderr.strip()[:200]}")
-    found = [key for key in json.loads(completed.stdout) if key.endswith(BUNDLE_SUFFIX)]
+        raise RuntimeError(f"could not list apps on the phone: {complain(completed)}")
+    listed = json.loads(completed.stdout)
+    found = sorted((key for key in listed if key.endswith(BUNDLE_SUFFIX)), key=len)
     if not found:
         raise RuntimeError(f"no app ending in {BUNDLE_SUFFIX} is installed; build and install ios/mbenchd first")
-    return sorted(found, key=len)[0]
+    return found, listed
+
+
+def bundle_id():
+    return os.environ.get("MBENCH_BUNDLE_ID") or apps()[0][0]
+
+
+def installed():
+    """What the phone actually holds: the bundle it is installed under, its name and its version. A build that
+    never reached the device is the difference between a fixed bug and a bug reported twice."""
+    found, listed = apps()
+    entry = listed[found[0]] or {}
+    return {"bundle": found[0], "name": entry.get("CFBundleDisplayName") or entry.get("CFBundleName"),
+            "version": entry.get("CFBundleShortVersionString"), "build": entry.get("CFBundleVersion")}
 
 
 def launch(kill_existing=True):

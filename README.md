@@ -142,7 +142,7 @@ mbench board --open                   the leaderboard page
 mbench export --out site              the page plus board.json, ready to publish
 mbench profile <id>                   what mbench knows about a model
 mbench rescore [<run>]                score a finished run again from the answers it kept
-mbench phone [health|launch|forward|push|logs]
+mbench phone [health|installed|launch|forward|push|logs]
                                       the phone mbench runs on
 ```
 
@@ -156,7 +156,8 @@ The same llama.cpp that serves your card also runs on an iPhone, so a phone is m
 
 ```
 ios/mbenchd/scripts/build-llama.sh     cross-compile llama.cpp for arm64 iOS
-cd ios/mbenchd && xtool dev            build, sign and install the app
+ios/mbenchd/scripts/install.sh         build, sign and install it, then check the phone agrees
+mbench phone installed                 which build the device is actually holding
 mbench phone launch                    start it on the device
 mbench phone push model.gguf           copy the weights over the cable
 mbench phone forward                   llama-server on 18080, mbenchd on 18081
