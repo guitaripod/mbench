@@ -203,9 +203,9 @@ const state = { sortKey: "index", sortDir: "desc", selected: null, effort: "medi
 const CLASS_LABELS = { gpu: "GPU", phone: "Phone" };
 const THERMAL_NAMES = ["nominal", "fair", "serious", "critical"];
 const VERDICTS = {
-  holds: { label: "holds up", rank: 2, note: "Keeps at least four fifths of its cold speed, and delivers 2k tokens before giving any of it up." },
-  fades: { label: "fades", rank: 1, note: "Loses a fifth or more of its speed, or gives it up inside 2k tokens." },
-  barely: { label: "barely runs", rank: 0, note: "Under 8 tok/s once settled, under half its cold speed, or slowing inside 512 tokens — not a model you would keep installed." },
+  holds: { label: "holds up", rank: 2, note: "Still answers faster than you can read once the phone is hot — 20 tok/s or better settled — and holds that for 1k tokens." },
+  fades: { label: "fades", rank: 1, note: "Settles between reading pace and comfortable, or slows inside 1k tokens: usable, but you wait on it." },
+  barely: { label: "barely runs", rank: 0, note: "Under 8 tok/s once settled, which is slower than reading — not a model you would keep installed." },
 };
 const EFFORT_LABELS = { medium: "Medium effort", max: "Max effort", min: "Min effort", none: "No thinking" };
 const COUNT_NOUNS = { math: "problems", aime: "problems", lcb: "problems", tools: "episodes", mrcr: "conversations", graphwalks: "graphs", niah: "prompts" };
@@ -984,10 +984,21 @@ function render() {
   }
   if (showingPhones()) {
     host.appendChild(h("p", { className: "notice", text: "A phone is judged on whether it can live with a model: "
-      + "holds up keeps four fifths of its cold speed and delivers 2k tokens before giving any of it up, fades loses "
-      + "a fifth or slows sooner, barely runs is under 8 tok/s once settled. The verdict reads only the tokens the "
-      + "model produced, never the phone's thermal state, so a charger or a warm room cannot move it. Quality is "
-      + "measured off the device on the same weights." }));
+      + "holds up still answers faster than you can read once it is hot (20 tok/s settled, held for 1k tokens), "
+      + "fades sits between reading pace and comfortable, barely runs is under 8 tok/s, which is slower than "
+      + "reading. Every phone measured gives up half its speed or more, so the verdict is against reading speed "
+      + "rather than against a cold number nobody sees, and it reads only the tokens the model produced — a charger "
+      + "or a warm room cannot move it. Quality is measured off the device on the same weights." }));
+  }
+  if (showingPhones()) {
+    const usable = current().filter(model => model.verdict !== "barely" && model.index && model.index.value != null)
+      .sort((one, two) => two.index.value - one.index.value)[0];
+    if (usable) {
+      const steady = (usable.speed.decode_steady || {}).value;
+      host.appendChild(h("p", { className: "notice", text: `Best of these on this phone: ${shortName(usable)} — `
+        + `${fmt.pct(usable.index.value)} quality at ${fmt.int(steady)} tok/s once hot. Everything that scores higher `
+        + "settles below reading speed; everything faster scores lower." }));
+    }
   }
   if (setups().length > 1) {
     host.appendChild(h("p", { className: "notice", text: `Measured on ${setups().length} setups — `

@@ -1,5 +1,5 @@
 {
- "generated": 1789454810.5669026,
+ "generated": 1789455552.1931448,
  "suite": "full/v1",
  "current": "1",
  "hardware": {
@@ -1234,7 +1234,7 @@
        }
       },
       "battery": {},
-      "verdict": "barely",
+      "verdict": "fades",
       "repeats": {
        "runs": 1,
        "spread": null
@@ -2882,7 +2882,7 @@
        }
       },
       "battery": {},
-      "verdict": "barely",
+      "verdict": "holds",
       "repeats": {
        "runs": 2,
        "spread": 8.675946908384578
@@ -3570,7 +3570,7 @@
        }
       },
       "battery": {},
-      "verdict": "barely",
+      "verdict": "holds",
       "repeats": {
        "runs": 2,
        "spread": 8.020050125313274
@@ -4258,7 +4258,7 @@
        }
       },
       "battery": {},
-      "verdict": "barely",
+      "verdict": "fades",
       "repeats": {
        "runs": 2,
        "spread": 23.981693363844386
@@ -4823,7 +4823,7 @@
        }
       },
       "battery": {},
-      "verdict": "barely",
+      "verdict": "fades",
       "repeats": {
        "runs": 1,
        "spread": null
@@ -5587,7 +5587,7 @@
        }
       },
       "battery": {},
-      "verdict": "barely",
+      "verdict": "holds",
       "repeats": {
        "runs": 1,
        "spread": null
@@ -6218,7 +6218,7 @@
        }
       },
       "battery": {},
-      "verdict": "barely",
+      "verdict": "fades",
       "repeats": {
        "runs": 2,
        "spread": 1.1695906432748664
@@ -9046,7 +9046,7 @@
      }
     },
     "battery": {},
-    "verdict": "barely",
+    "verdict": "fades",
     "repeats": {
      "runs": 1,
      "spread": null
@@ -10694,7 +10694,7 @@
      }
     },
     "battery": {},
-    "verdict": "barely",
+    "verdict": "holds",
     "repeats": {
      "runs": 2,
      "spread": 8.675946908384578
@@ -11382,7 +11382,7 @@
      }
     },
     "battery": {},
-    "verdict": "barely",
+    "verdict": "holds",
     "repeats": {
      "runs": 2,
      "spread": 8.020050125313274
@@ -12070,7 +12070,7 @@
      }
     },
     "battery": {},
-    "verdict": "barely",
+    "verdict": "fades",
     "repeats": {
      "runs": 2,
      "spread": 23.981693363844386
@@ -12635,7 +12635,7 @@
      }
     },
     "battery": {},
-    "verdict": "barely",
+    "verdict": "fades",
     "repeats": {
      "runs": 1,
      "spread": null
@@ -13399,7 +13399,7 @@
      }
     },
     "battery": {},
-    "verdict": "barely",
+    "verdict": "holds",
     "repeats": {
      "runs": 1,
      "spread": null
@@ -14030,7 +14030,7 @@
      }
     },
     "battery": {},
-    "verdict": "barely",
+    "verdict": "fades",
     "repeats": {
      "runs": 2,
      "spread": 1.1695906432748664

@@ -177,23 +177,30 @@ def test_a_desktop_run_has_no_thermal_story():
     assert metrics.thermal_metrics(None) == {}
 
 
-def test_the_verdict_reads_only_what_the_model_produced():
-    def judge(steady, ratio, knee):
-        return metrics.verdict({"speed.decode_steady": {"value": steady}, "speed.sustain_ratio": {"value": ratio},
-                                "speed.tokens_to_knee": {"value": knee}})
+def test_the_verdict_is_measured_against_reading_speed():
+    def judge(steady, knee):
+        return metrics.verdict({"speed.decode_steady": {"value": steady}, "speed.tokens_to_knee": {"value": knee}})
 
-    assert judge(24.0, 0.92, 4096) == "holds"
-    assert judge(18.0, 0.70, 4096) == "fades"
-    assert judge(18.0, 0.85, 1024) == "fades"
-    assert judge(6.0, 0.95, 4096) == "barely"
-    assert judge(18.0, 0.40, 4096) == "barely"
-    assert judge(18.0, 0.90, 256) == "barely"
+    assert judge(42.0, 2560) == "holds"
+    assert judge(29.6, 2048) == "holds"
+    assert judge(19.2, 1536) == "fades"
+    assert judge(9.3, 512) == "fades"
+    assert judge(6.0, 4096) == "barely"
+    assert judge(40.0, 512) == "fades"
+
+
+def test_the_verdict_discriminates_between_the_models_measured():
+    measured = {"qwen3-0.6b": 42.1, "lfm2-1.2b": 29.6, "gemma3-1b": 28.6,
+                "qwen3-1.7b": 19.2, "qwen3.5-2b": 17.0, "qwen3-4b": 9.3}
+    verdicts = {metrics.verdict({"speed.decode_steady": {"value": value},
+                                 "speed.tokens_to_knee": {"value": 2048}}) for value in measured.values()}
+    assert len(verdicts) > 1, "a verdict every model shares is not a measurement"
 
 
 def test_a_hot_phone_alone_never_decides_the_verdict():
     hot = {"thermal.worst": {"value": 3}, "thermal.share_hot": {"value": 90.0}}
     assert metrics.verdict({**hot, "speed.decode_steady": {"value": 24.0},
-                            "speed.sustain_ratio": {"value": 0.92}}) == "holds"
+                            "speed.tokens_to_knee": {"value": 2048}}) == "holds"
     assert metrics.verdict(hot) is None
 
 

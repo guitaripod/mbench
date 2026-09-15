@@ -11,11 +11,9 @@ from . import suite
 BINARY_TASKS = ("supergpqa", "math", "lcb", "tools")
 THERMAL_STATES = ("nominal", "fair", "serious", "critical")
 STABLE_PERCENT = 97.0
-HOLDS_RATIO = 0.8
-BARELY_RATIO = 0.55
-BARELY_TOKENS_PER_SECOND = 8.0
-HOLDS_TOKENS_TO_KNEE = 2048
-BARELY_TOKENS_TO_KNEE = 512
+READING_TOKENS_PER_SECOND = 8.0
+COMFORTABLE_TOKENS_PER_SECOND = 20.0
+HOLDS_TOKENS_TO_KNEE = 1024
 THROTTLE_SHARE = 0.9
 BOOTSTRAP_DRAWS = 4000
 
@@ -400,21 +398,19 @@ def speed_metrics(result):
 
 
 def verdict(entry):
-    """Whether a phone can live with a model, decided only on tokens the model itself produced: what it settles at,
-    how much of its cold speed that is, and how many tokens it delivered before it gave any of it up. The phone's
-    own thermal state stays out of it — a charger, a warm room or a different phone move that number, and none of
-    them move this one."""
+    """Whether a phone can live with a model, measured against reading speed rather than against a share of a cold
+    number nobody sees. Every phone measured gives up half its speed or more, so grading on that share put every
+    model in one bucket and said nothing; what a reader notices is whether the words still arrive faster than they
+    can read them once the device is hot. Eight tokens a second is about reading pace, twenty is comfortably past
+    it. The phone's own thermal state stays out of it — a charger or a warm room moves that, and neither moves
+    this."""
     speed = {key.removeprefix("speed."): value for key, value in entry.items() if key.startswith("speed.")}
     steady = (speed.get("decode_steady") or {}).get("value")
-    ratio = (speed.get("sustain_ratio") or {}).get("value")
     knee = (speed.get("tokens_to_knee") or {}).get("value")
-    if steady is None and ratio is None:
+    if steady is None:
         return None
-    if ((steady is not None and steady < BARELY_TOKENS_PER_SECOND)
-            or (ratio is not None and ratio < BARELY_RATIO)
-            or (knee is not None and knee < BARELY_TOKENS_TO_KNEE)):
+    if steady < READING_TOKENS_PER_SECOND:
         return "barely"
-    if ((ratio is not None and ratio < HOLDS_RATIO)
-            or (knee is not None and knee < HOLDS_TOKENS_TO_KNEE)):
+    if steady < COMFORTABLE_TOKENS_PER_SECOND or (knee is not None and knee < HOLDS_TOKENS_TO_KNEE):
         return "fades"
     return "holds"
