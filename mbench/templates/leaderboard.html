@@ -87,9 +87,8 @@ code, pre, .mono { font-family: var(--mono); }
 .masthead { display: grid; gap: 0.7rem; }
 .lede { color: var(--ink-2); }
 .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
-.split { display: grid; gap: 1.5rem; align-items: start; }
-@media (min-width: 1240px) { .split { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); } }
 .frontier { padding: 1rem 1.1rem 0.6rem; display: grid; gap: 0.5rem; }
+.frontier svg { max-width: 62rem; }
 .frontier-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.3rem 1.5rem; align-items: baseline; }
 .frontier-head span { color: var(--muted); font-size: 0.84rem; }
 .chip.verdict { border-color: transparent; font-weight: 600; }
@@ -1141,10 +1140,8 @@ function render() {
   if (!current().some(model => model.id === state.selected)) state.selected = sortedModels()[0].id;
   renderMeta();
   renderTable(host);
-  const lower = h("div", { className: "split" });
-  renderFrontier(lower);
-  renderDetail(lower);
-  host.appendChild(lower);
+  renderFrontier(host);
+  renderDetail(host);
 }
 
 function renderMeta() {
