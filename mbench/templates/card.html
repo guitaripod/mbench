@@ -34,11 +34,17 @@ select, button { font: inherit; font-size: 0.85rem; padding: 0.35rem 0.5rem; bor
 button { cursor: pointer; font-weight: 600; }
 button:hover { border-color: var(--ink-2); }
 canvas { width: 100%; max-width: 1200px; aspect-ratio: 1200 / 675; border: 1px solid var(--border); border-radius: 8px; }
+.picks { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.picks[hidden] { display: none; }
+.picks button { font: inherit; font-size: 0.78rem; padding: 0.2rem 0.6rem; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--page); color: var(--muted); }
+.picks button[aria-pressed="true"] { color: var(--ink); border-color: currentColor; font-weight: 600; }
+.picks button:disabled { cursor: default; opacity: 0.55; }
 .hint { font-size: 0.8rem; color: var(--ink-2); margin: 0; max-width: 78ch; line-height: 1.5; }
 .hint .dim { color: var(--muted); }
 body.bare { background: none; }
 body.bare main { max-width: none; margin: 0; padding: 0; gap: 0; }
-body.bare .controls, body.bare h1, body.bare .hint { display: none; }
+body.bare .controls, body.bare h1, body.bare .hint, body.bare .picks { display: none; }
 body.bare canvas { width: 1200px; border: 0; border-radius: 0; }
 </style>
 </head>
@@ -60,6 +66,7 @@ body.bare canvas { width: 1200px; border: 0; border-radius: 0; }
     <label>Theme<select id="theme"><option value="light">Light</option><option value="dark">Dark</option></select></label>
     <button id="download" type="button">Download PNG</button>
   </div>
+  <div class="picks" id="picks" hidden></div>
   <canvas id="card" width="2400" height="1350"></canvas>
   <p class="hint" id="hint"></p>
 </main>
@@ -276,7 +283,7 @@ function drawMany(list) {
   const gap = 132, firstX = W - 56 - (columns.length - 1) * gap;
   const indexX = 500, barStart = indexX + 22, barEnd = firstX - 112;
   const best = Math.max(1, ...list.map(model => (model.index || {}).value || 0));
-  const top = 152, rowHeight = Math.min(78, (H - top - 78) / list.length);
+  const top = 152, rowHeight = (H - top - 78) / list.length;
   text("model", 92, top - 20, { size: 13, family: "mono", color: "muted" });
   text("quality", indexX, top - 20, { size: 13, family: "mono", color: "muted", align: "right" });
   columns.forEach(([name], column) => text(name, firstX + column * gap, top - 20,
@@ -437,6 +444,30 @@ function settle() {
   state.models = chosen().map(model => model.id);
 }
 
+function fillPicks(list) {
+  /* A ranking is a set, not a length: the chips say which models are in the card, so any one of them can be dropped
+     without disturbing the rest. */
+  const picks = document.getElementById("picks");
+  picks.hidden = state.mode !== "many";
+  if (picks.hidden) return;
+  picks.replaceChildren(...list.map(model => {
+    const inside = state.models.includes(model.id);
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.textContent = shortName(model);
+    chip.setAttribute("aria-pressed", inside ? "true" : "false");
+    chip.disabled = inside && state.models.length <= NEEDS.many;
+    chip.title = inside ? (chip.disabled ? `A ranking shows at least ${NEEDS.many} models` : "Leave it out")
+      : "Put it back";
+    chip.addEventListener("click", () => {
+      state.models = inside ? state.models.filter(id => id !== model.id)
+        : list.filter(entry => state.models.includes(entry.id) || entry === model).map(entry => entry.id);
+      render();
+    });
+    return chip;
+  }));
+}
+
 function fillControls() {
   fill("effort", (view.efforts || []).map(effort => [effort, effort]), state.effort);
   const here = classes();
@@ -451,8 +482,12 @@ function fillControls() {
   const counts = [];
   for (let many = NEEDS.many; many <= list.length; many += 1) counts.push([many, `Top ${many}`]);
   if (counts.length) counts[counts.length - 1][1] = `All ${list.length}`;
+  const topN = state.models.length >= NEEDS.many
+    && state.models.every((id, index) => (list[index] || {}).id === id);
+  if (!topN) counts.unshift(["custom", "Custom"]);
   document.getElementById("count-label").hidden = state.mode !== "many";
-  fill("count", counts, state.models.length);
+  fill("count", counts, topN ? state.models.length : "custom");
+  fillPicks(list);
   for (const [id, index] of [["left", 0], ["right", 1]]) {
     document.getElementById(`${id}-label`).hidden = state.mode !== "two";
     fill(id, names, state.models[index]);
@@ -528,7 +563,9 @@ onChange("effort", value => { state.effort = value; });
 onChange("where", value => { state.klass = value; });
 onChange("theme", value => { state.theme = value; });
 onChange("show", value => { state.mode = value; });
-onChange("count", value => { state.models = pool().slice(0, Number(value)).map(model => model.id); });
+onChange("count", value => {
+  if (value !== "custom") state.models = pool().slice(0, Number(value)).map(model => model.id);
+});
 onChange("only", value => { state.models = [value]; });
 onChange("left", value => { state.models = [value, state.models.find(id => id !== value)].filter(Boolean); });
 onChange("right", value => { state.models = [state.models.find(id => id !== value), value].filter(Boolean); });
