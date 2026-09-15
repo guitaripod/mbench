@@ -1,5 +1,5 @@
 {
- "generated": 1789456858.5308912,
+ "generated": 1789457573.6678636,
  "suite": "full/v1",
  "current": "1",
  "hardware": {
@@ -68,7 +68,7 @@
     "medium": [
      {
       "id": "qwen3-4b-instruct-gguf",
-      "name": "Qwen3 4B Instruct \u00b7 llama.cpp \u00b7 Q4_K_M \u00b7 16k (phone twin)",
+      "name": "Qwen3 4B Instruct \u00b7 llama.cpp \u00b7 Q4_K_M \u00b7 16k",
       "engine": "llama.cpp",
       "quantization": "Q4_K_M",
       "spec": null,
@@ -291,7 +291,7 @@
      },
      {
       "id": "qwen3.5-2b-gguf",
-      "name": "Qwen3.5 2B \u00b7 llama.cpp \u00b7 Q4_K_M \u00b7 16k (phone twin)",
+      "name": "Qwen3.5 2B \u00b7 llama.cpp \u00b7 Q4_K_M \u00b7 16k",
       "engine": "llama.cpp",
       "quantization": "Q4_K_M",
       "spec": null,
@@ -1276,7 +1276,7 @@
      },
      {
       "id": "lfm2-1_2b-gguf",
-      "name": "LFM2 1.2B \u00b7 llama.cpp \u00b7 Q4_K_M \u00b7 16k (phone twin)",
+      "name": "LFM2 1.2B \u00b7 llama.cpp \u00b7 Q4_K_M \u00b7 16k",
       "engine": "llama.cpp",
       "quantization": "Q4_K_M",
       "spec": null,
@@ -1495,7 +1495,7 @@
      },
      {
       "id": "gemma3-1b-gguf",
-      "name": "Gemma 3 1B \u00b7 llama.cpp \u00b7 Q4_K_M \u00b7 16k (phone twin)",
+      "name": "Gemma 3 1B \u00b7 llama.cpp \u00b7 Q4_K_M \u00b7 16k",
       "engine": "llama.cpp",
       "quantization": "Q4_K_M",
       "spec": null,
@@ -1724,7 +1724,7 @@
      },
      {
       "id": "qwen3-0_6b-gguf",
-      "name": "Qwen3 0.6B \u00b7 llama.cpp \u00b7 Q4_K_M \u00b7 16k (phone twin)",
+      "name": "Qwen3 0.6B \u00b7 llama.cpp \u00b7 Q4_K_M \u00b7 16k",
       "engine": "llama.cpp",
       "quantization": "Q4_K_M",
       "spec": null,
@@ -1942,7 +1942,7 @@
      },
      {
       "id": "qwen3-1_7b-gguf",
-      "name": "Qwen3 1.7B \u00b7 llama.cpp \u00b7 Q4_K_M \u00b7 16k (phone twin)",
+      "name": "Qwen3 1.7B \u00b7 llama.cpp \u00b7 Q4_K_M \u00b7 16k",
       "engine": "llama.cpp",
       "quantization": "Q4_K_M",
       "spec": null,
@@ -7596,7 +7596,7 @@
     "none": [
      {
       "id": "qwen3.5-2b-gguf",
-      "name": "Qwen3.5 2B \u00b7 llama.cpp \u00b7 Q4_K_M \u00b7 16k (phone twin)",
+      "name": "Qwen3.5 2B \u00b7 llama.cpp \u00b7 Q4_K_M \u00b7 16k",
       "engine": "llama.cpp",
       "quantization": "Q4_K_M",
       "spec": null,
@@ -7880,7 +7880,7 @@
   "medium": [
    {
     "id": "qwen3-4b-instruct-gguf",
-    "name": "Qwen3 4B Instruct \u00b7 llama.cpp \u00b7 Q4_K_M \u00b7 16k (phone twin)",
+    "name": "Qwen3 4B Instruct \u00b7 llama.cpp \u00b7 Q4_K_M \u00b7 16k",
     "engine": "llama.cpp",
     "quantization": "Q4_K_M",
     "spec": null,
@@ -8103,7 +8103,7 @@
    },
    {
     "id": "qwen3.5-2b-gguf",
-    "name": "Qwen3.5 2B \u00b7 llama.cpp \u00b7 Q4_K_M \u00b7 16k (phone twin)",
+    "name": "Qwen3.5 2B \u00b7 llama.cpp \u00b7 Q4_K_M \u00b7 16k",
     "engine": "llama.cpp",
     "quantization": "Q4_K_M",
     "spec": null,
@@ -9088,7 +9088,7 @@
    },
    {
     "id": "lfm2-1_2b-gguf",
-    "name": "LFM2 1.2B \u00b7 llama.cpp \u00b7 Q4_K_M \u00b7 16k (phone twin)",
+    "name": "LFM2 1.2B \u00b7 llama.cpp \u00b7 Q4_K_M \u00b7 16k",
     "engine": "llama.cpp",
     "quantization": "Q4_K_M",
     "spec": null,
@@ -9307,7 +9307,7 @@
    },
    {
     "id": "gemma3-1b-gguf",
-    "name": "Gemma 3 1B \u00b7 llama.cpp \u00b7 Q4_K_M \u00b7 16k (phone twin)",
+    "name": "Gemma 3 1B \u00b7 llama.cpp \u00b7 Q4_K_M \u00b7 16k",
     "engine": "llama.cpp",
     "quantization": "Q4_K_M",
     "spec": null,
@@ -9536,7 +9536,7 @@
    },
    {
     "id": "qwen3-0_6b-gguf",
-    "name": "Qwen3 0.6B \u00b7 llama.cpp \u00b7 Q4_K_M \u00b7 16k (phone twin)",
+    "name": "Qwen3 0.6B \u00b7 llama.cpp \u00b7 Q4_K_M \u00b7 16k",
     "engine": "llama.cpp",
     "quantization": "Q4_K_M",
     "spec": null,
@@ -9754,7 +9754,7 @@
    },
    {
     "id": "qwen3-1_7b-gguf",
-    "name": "Qwen3 1.7B \u00b7 llama.cpp \u00b7 Q4_K_M \u00b7 16k (phone twin)",
+    "name": "Qwen3 1.7B \u00b7 llama.cpp \u00b7 Q4_K_M \u00b7 16k",
     "engine": "llama.cpp",
     "quantization": "Q4_K_M",
     "spec": null,
@@ -15408,7 +15408,7 @@
   "none": [
    {
     "id": "qwen3.5-2b-gguf",
-    "name": "Qwen3.5 2B \u00b7 llama.cpp \u00b7 Q4_K_M \u00b7 16k (phone twin)",
+    "name": "Qwen3.5 2B \u00b7 llama.cpp \u00b7 Q4_K_M \u00b7 16k",
     "engine": "llama.cpp",
     "quantization": "Q4_K_M",
     "spec": null,

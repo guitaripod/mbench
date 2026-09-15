@@ -26,6 +26,12 @@
   --deemph: #898781;
   --border: rgba(11, 11, 11, 0.10);
   --select: rgba(42, 120, 214, 0.08);
+  --ok: #17703f;
+  --ok-wash: rgba(47, 158, 99, 0.16);
+  --warn: #7a4e00;
+  --warn-wash: rgba(215, 154, 30, 0.22);
+  --bad: #a32b28;
+  --bad-wash: rgba(204, 67, 64, 0.14);
   --ui: "Atkinson Hyperlegible Next", "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: "Atkinson Hyperlegible Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
   --display: "Archivo", "Arial Narrow", system-ui, sans-serif;
@@ -45,6 +51,12 @@
     --deemph: #898781;
     --border: rgba(255, 255, 255, 0.10);
     --select: rgba(57, 135, 229, 0.12);
+    --ok: #7fdcaa;
+    --ok-wash: rgba(47, 158, 99, 0.22);
+    --warn: #f0c265;
+    --warn-wash: rgba(215, 154, 30, 0.22);
+    --bad: #ef9b99;
+    --bad-wash: rgba(204, 67, 64, 0.22);
   }
 }
 :root[data-theme="dark"] {
@@ -81,9 +93,9 @@ code, pre, .mono { font-family: var(--mono); }
 .frontier-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.3rem 1.5rem; align-items: baseline; }
 .frontier-head span { color: var(--muted); font-size: 0.84rem; }
 .chip.verdict { border-color: transparent; font-weight: 600; }
-.chip.verdict.holds { background: color-mix(in srgb, #2f9e63 22%, transparent); color: #7fdcaa; }
-.chip.verdict.fades { background: color-mix(in srgb, #d79a1e 22%, transparent); color: #f0c265; }
-.chip.verdict.barely { background: color-mix(in srgb, #cc4340 22%, transparent); color: #ef9b99; }
+.chip.verdict.holds { background: var(--ok-wash); color: var(--ok); }
+.chip.verdict.fades { background: var(--warn-wash); color: var(--warn); }
+.chip.verdict.barely { background: var(--bad-wash); color: var(--bad); }
 svg { display: block; width: 100%; height: auto; overflow: visible; }
 svg text { font-family: var(--mono); font-size: 11px; }
 .grid { stroke: var(--grid); stroke-width: 1; }
@@ -118,6 +130,9 @@ td.model { white-space: normal; min-width: 14rem; }
 .chip { display: inline-block; border: 1px solid var(--axis); color: var(--ink-2); border-radius: 999px; padding: 0 0.45rem; font-size: 0.72rem; font-family: var(--ui); letter-spacing: 0.02em; }
 .num { font-family: var(--mono); }
 .ci { color: var(--muted); font-size: 0.78rem; margin-left: 0.25rem; }
+td.best { color: var(--series); font-weight: 600; }
+td.nothing { color: var(--muted); }
+td.nothing .meter i { background: var(--axis); }
 .meter { display: block; height: 3px; margin-top: 4px; background: var(--grid); border-radius: 2px; overflow: hidden; }
 .meter i { display: block; height: 100%; background: var(--series); border-radius: 0 2px 2px 0; }
 .empty { padding: 2rem 1.25rem; display: grid; gap: 0.6rem; }
@@ -310,7 +325,8 @@ function avgTokens(model) {
 const COLUMN_SETS = { scores: "Scores", device: "What it cost" };
 
 function qualityColumn() {
-  return { key: "index", label: "Quality", get: m => m.index && m.index.value, better: "high", render: m => pctCell(m.index) };
+  return { key: "index", label: "Quality", get: m => m.index && m.index.value, better: "high",
+    render: m => pctCell(m.index, true) };
 }
 
 function taskColumns() {
@@ -349,27 +365,25 @@ function costColumns() {
     ];
   }
   return [
+    { key: "footprint", label: "Peak RAM", note: "The most memory the app held, and how much iOS still had left",
+      get: m => m.speed.footprint && m.speed.footprint.value, better: "low",
+      render: m => numCell(m.speed.footprint && m.speed.footprint.value, value => value == null ? "–" : (value / 1024).toFixed(1) + " GB",
+        m.speed.headroom ? `${Math.round(m.speed.headroom.value)} MiB to spare` : null) },
+    { key: "knee", label: "Full-speed tokens", note: "Tokens delivered before throughput fell under 90% of its cold speed",
+      get: m => m.speed.tokens_to_knee && m.speed.tokens_to_knee.value, better: "high",
+      render: m => numCell(m.speed.tokens_to_knee && m.speed.tokens_to_knee.value,
+        value => value == null ? "–" : value >= 1000 ? (value / 1000).toFixed(1) + "k" : String(Math.round(value)),
+        m.speed.tokens_to_knee ? `about ${Math.max(1, Math.round(m.speed.tokens_to_knee.value / 500))} answers of 500 tokens` : null) },
+    { key: "sustain", label: "Holds", note: "Steady speed as a share of the cold speed",
+      get: m => m.speed.sustain_ratio && m.speed.sustain_ratio.value, better: "high",
+      render: m => numCell(m.speed.sustain_ratio && m.speed.sustain_ratio.value, value => value == null ? "–" : value.toFixed(2) + "×",
+        m.speed.throttle_s ? `throttled after ${Math.round(m.speed.throttle_s.value)} s` : null) },
     { key: "stability", label: "Stability", note: "Slowest answer as a share of the fastest, the way a stress test "
         + "reports it. 97% or better is the bar a device that is not throttling clears",
       get: m => m.speed.stability && m.speed.stability.value, better: "high",
       render: m => numCell(m.speed.stability && m.speed.stability.value,
         value => value == null ? "–" : Math.round(value) + "%",
         m.speed.degradation ? `${Math.round(m.speed.degradation.value)}% slower once settled` : null) },
-    { key: "sustain", label: "Holds", note: "Steady speed as a share of the cold speed",
-      get: m => m.speed.sustain_ratio && m.speed.sustain_ratio.value, better: "high",
-      render: m => numCell(m.speed.sustain_ratio && m.speed.sustain_ratio.value, value => value == null ? "–" : value.toFixed(2) + "×",
-        m.speed.throttle_s ? `throttled after ${Math.round(m.speed.throttle_s.value)} s` : null) },
-    { key: "knee", label: "Full-speed tokens", note: "Tokens delivered before throughput fell under 90% of its cold speed",
-      get: m => m.speed.tokens_to_knee && m.speed.tokens_to_knee.value, better: "high",
-      render: m => numCell(m.speed.tokens_to_knee && m.speed.tokens_to_knee.value,
-        value => value == null ? "–" : value >= 1000 ? (value / 1000).toFixed(1) + "k" : String(Math.round(value)),
-        m.speed.tokens_to_knee ? `about ${Math.max(1, Math.round(m.speed.tokens_to_knee.value / 500))} answers of 500 tokens` : null) },
-    { key: "hot", label: "Ran hot", note: "Share of the run spent at serious or critical thermal state. Context only — "
-        + "a charger or a warm room moves this, so it stays out of the verdict",
-      get: m => m.thermal && m.thermal.share_hot && m.thermal.share_hot.value, better: "low",
-      render: m => numCell(m.thermal && m.thermal.share_hot && m.thermal.share_hot.value,
-        value => value == null ? "–" : Math.round(value) + "%",
-        m.thermal && m.thermal.to_serious_s ? `hot after ${Math.round(m.thermal.to_serious_s.value)} s` : null) },
     ...(current().some(model => model.battery && model.battery.hours) ? [
       { key: "drain", label: "Hours on a charge", note: "The measured discharge extrapolated across a full charge, "
           + "the way a phone battery test reports it. Only a run made off the charger has one",
@@ -380,10 +394,12 @@ function costColumns() {
     ] : []),
     { key: "wait", label: "First token", note: "Seconds to the first token on the longest prompt every model was asked",
       get: m => phoneTtft(m), better: "low", render: m => numCell(phoneTtft(m), fmt.secs) },
-    { key: "footprint", label: "Peak RAM", note: "The most memory the app held, and how much iOS still had left",
-      get: m => m.speed.footprint && m.speed.footprint.value, better: "low",
-      render: m => numCell(m.speed.footprint && m.speed.footprint.value, value => value == null ? "–" : (value / 1024).toFixed(1) + " GB",
-        m.speed.headroom ? `${Math.round(m.speed.headroom.value)} MiB to spare` : null) },
+    { key: "hot", label: "Ran hot", note: "Share of the run spent at serious or critical thermal state. Context only — "
+        + "a charger or a warm room moves this, so it stays out of the verdict",
+      get: m => m.thermal && m.thermal.share_hot && m.thermal.share_hot.value, better: "low",
+      render: m => numCell(m.thermal && m.thermal.share_hot && m.thermal.share_hot.value,
+        value => value == null ? "–" : Math.round(value) + "%",
+        m.thermal && m.thermal.to_serious_s ? `hot after ${Math.round(m.thermal.to_serious_s.value)} s` : null) },
   ];
 }
 
@@ -393,16 +409,19 @@ function allColumns() {
 }
 
 function columns() {
+  /* The ranking first, then whether the device can live with it and how fast it answers once it has settled — a
+     reader deciding on a model reads those before any single question's score. */
   const cost = state.columns === "device";
-  return [qualityColumn(), ...(cost ? costColumns() : taskColumns()), decodeColumn(),
-          ...(showingPhones() ? [verdictColumn()] : [])];
+  return [qualityColumn(), ...(showingPhones() ? [verdictColumn()] : []), decodeColumn(),
+          ...(cost ? costColumns() : taskColumns())];
 }
 
 function pctCell(entry, meter) {
   if (!entry || entry.value == null) return h("td", { className: "num", text: "–" });
+  const nothing = entry.value === 0;
   const cut = entry.truncated != null && entry.truncated >= 25 ? Math.round(entry.truncated) : null;
   const half = entry.lo != null && entry.hi != null ? (entry.hi - entry.lo) / 2 : null;
-  return h("td", { className: "num" }, [
+  return h("td", { className: nothing ? "num nothing" : "num" }, [
     fmt.pct(entry.value),
     half != null ? h("span", { className: "ci", text: "±" + half.toFixed(1) }) : null,
     meter ? h("span", { className: "meter", "aria-hidden": "true" }, [h("i", { style: `width:${Math.max(0, Math.min(100, entry.value))}%` })]) : null,
@@ -463,7 +482,7 @@ function sortedModels() {
   });
 }
 
-function modelMeta(model) {
+function modelMeta(model, withVerdict = true) {
   const parts = [model.engine, model.quantization, model.spec, model.context ? fmt.ctx(model.context) + " context" : null].filter(Boolean);
   const chips = [];
   if (tierSetups().length > 1) parts.push(model.stack.gpu || model.stack.device);
@@ -492,11 +511,23 @@ function modelMeta(model) {
     chips.push(h("span", { className: "chip", text: "measured warm",
       title: "The device had not returned to its cold state before a block started, so its speed reads low." }));
   }
-  if (model.verdict && VERDICTS[model.verdict]) {
+  if (withVerdict && model.verdict && VERDICTS[model.verdict]) {
     chips.unshift(h("span", { className: "chip verdict " + model.verdict, text: VERDICTS[model.verdict].label,
       title: VERDICTS[model.verdict].note }));
   }
   return h("span", { className: "model-meta" }, [...parts.map(part => h("span", { text: part })), ...chips]);
+}
+
+const UNRANKED = ["index", "verdict", "hot"];
+
+function leads(column) {
+  /* Which number wins a column, so the eye finds it without reading every row. Columns carrying a meter already
+     show their own scale, a verdict is a word rather than a measurement, and a thermal state a charger can move is
+     not something to win. */
+  if (UNRANKED.includes(column.key) || tasks().includes(column.key)) return null;
+  const values = current().map(column.get).filter(value => value != null);
+  if (values.length < 3) return null;
+  return column.better === "low" ? Math.min(...values) : Math.max(...values);
 }
 
 function measured(cols) {
@@ -511,6 +542,19 @@ function columnSwitch() {
       type: "button", text: label, "aria-pressed": key === state.columns ? "true" : "false",
       onclick: () => { state.columns = key; render(); },
     })));
+}
+
+function markLeaders(body, cols, ranked) {
+  /* The mark follows what a column prints, so two rows that both read 0.8 GB both lead rather than one of them
+     winning by a rounding place nobody can see. */
+  cols.forEach((column, index) => {
+    const best = leads(column);
+    if (best == null) return;
+    const cells = [...body.rows].map(row => row.cells[index + 2]);
+    const winner = cells[ranked.findIndex(model => column.get(model) === best)];
+    if (!winner) return;
+    for (const cell of cells) if (cell.textContent === winner.textContent) cell.classList.add("best");
+  });
 }
 
 function renderTable(host) {
@@ -533,19 +577,22 @@ function renderTable(host) {
   headRow.appendChild(h("th", { scope: "col", text: "Run" }));
   table.appendChild(h("thead", {}, [headRow]));
   const body = h("tbody");
-  sortedModels().forEach((model, index) => {
+  const ranked = sortedModels();
+  ranked.forEach((model, index) => {
     const row = h("tr", {
       tabindex: "0", className: model.id === state.selected ? "selected" : null, "aria-selected": model.id === state.selected ? "true" : "false",
       onclick: () => select(model.id),
       onkeydown: event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); select(model.id); } },
     });
     row.appendChild(h("td", { className: "rank", text: String(index + 1) }));
-    row.appendChild(h("td", { className: "model" }, [h("span", { className: "model-name", text: shortName(model) }), modelMeta(model)]));
+    row.appendChild(h("td", { className: "model" }, [h("span", { className: "model-name", text: shortName(model) }),
+      modelMeta(model, !cols.some(column => column.key === "verdict"))]));
     for (const column of cols) row.appendChild(column.render(model));
     row.appendChild(h("td", { className: "num", text: fmt.date(model.run.finished) }));
     body.appendChild(row);
   });
   table.appendChild(body);
+  markLeaders(body, cols, ranked);
   const panel = h("div", { className: "panel table-wrap" }, [
     h("div", { className: "table-head" }, [
       columnSwitch(),
