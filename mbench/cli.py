@@ -513,18 +513,32 @@ def cell(entry, digits=1):
     return f"{entry['value']:.{digits}f}"
 
 
-def ranking_table(view, effort):
-    """The ranked table as a header plus rows of strings, shared by the terminal and the markdown output."""
-    header = ["Model", "Quality", *[view["taskShort"][task] for task in view["indexTasks"]],
-              "tok/s", "Peak", "TTFT 32k", "Wh/correct", "Run"]
+VERDICT_WORDS = {"holds": "holds up", "fades": "fades", "barely": "barely runs"}
+
+
+def ranking_table(view, effort, device="gpu"):
+    """The ranked table as a header plus rows of strings, shared by the terminal and the markdown output. A phone is
+    ranked on what it settles at once hot and what that costs it, not on a cold number it holds for half a minute,
+    and watt-hours have no meaning there."""
+    phone = device == "phone"
+    tail = (["Settled", "Cold", "Holds", "Peak RAM", "Verdict"] if phone
+            else ["tok/s", "Peak", "TTFT 32k", "Wh/correct"])
+    header = ["Model", "Quality", *[view["taskShort"][task] for task in view["indexTasks"]], *tail, "Run"]
     rows = []
-    for model in sorted(view["rankings"][effort], key=lambda model: -((model["index"] or {}).get("value") or -1)):
+    chosen = [model for model in view["rankings"][effort] if (model.get("deviceClass") or "gpu") == device]
+    for model in sorted(chosen, key=lambda model: -((model["index"] or {}).get("value") or -1)):
         speed = model["speed"]
         kind = model["run"]["kind"]
+        if phone:
+            values = [cell(speed.get("decode_steady"), 0), cell(speed.get("decode_peak"), 0),
+                      cell(speed.get("stability"), 0), cell(speed.get("footprint"), 0),
+                      VERDICT_WORDS.get(model.get("verdict"), "–")]
+        else:
+            values = [cell(speed.get("decode"), 0), cell(speed.get("peak"), 0), cell(speed.get("ttft.32000")),
+                      cell(model["energy"].get("perCorrect"), 2)]
         rows.append([
             model["name"], cell(model["index"]), *[cell(model["tasks"].get(task)) for task in view["indexTasks"]],
-            cell(speed.get("decode"), 0), cell(speed.get("peak"), 0), cell(speed.get("ttft.32000")),
-            cell(model["energy"].get("perCorrect"), 2),
+            *values,
             datetime.fromtimestamp(model["run"]["finished"]).strftime("%d %b") + ("" if kind == "full" else f" {kind}"),
         ])
     return header, rows
@@ -564,8 +578,12 @@ def cmd_ls(args):
               + (f" Older suites have runs: `mbench ls --suite {older[0]}`." if older else "")
               + ("" if others or older else " Start one with `mbench run <llama-swap model>`."))
         return
-    models = view["rankings"][args.effort]
-    header, rows = ranking_table(view, args.effort)
+    models = [model for model in view["rankings"][args.effort]
+              if (model.get("deviceClass") or "gpu") == args.device]
+    if not models:
+        fail(f"no {args.device} runs at {args.effort} effort; `mbench ls --device "
+             f"{'gpu' if args.device == 'phone' else 'phone'}` has some")
+    header, rows = ranking_table(view, args.effort, args.device)
     (print_markdown if args.markdown else print_columns)(header, rows)
     setups = view["hosts"].get(args.effort) or []
     if args.markdown:
@@ -861,6 +879,8 @@ def parser():
     resume.add_argument("--until", metavar="TIME", help="with --at: stop at this time each day and continue the next")
     resume.set_defaults(handler=cmd_resume)
     ls = commands.add_parser("ls", help="ranked table of every model in the terminal")
+    ls.add_argument("--device", choices=("gpu", "phone"), default="gpu",
+                    help="which tier to rank: the card's models or the phone's (default: gpu)")
     ls.add_argument("--effort", default="medium", metavar="LEVEL", help="which effort's ranking, e.g. medium or max (default medium)")
     ls.add_argument("--suite", metavar="VERSION", help=f"which suite version's ranking (default {suite.VERSION})")
     ls.add_argument("--markdown", action="store_true", help="print the table as markdown, for a README or an issue")
