@@ -714,3 +714,37 @@ def test_every_refused_item_scores_zero_and_none_of_them_fail_the_task():
     item = {"id": "tools-1", "sample": 0, "gold": "g", "meta": {}, "max_tokens": 4096}
     record = engine.refused("tools", item, 0.0)
     assert record["score"] == 0.0 and record["finish"] == "template" and record["prediction"] is None
+
+
+def test_a_speed_run_keeps_what_it_has_measured(tmp_path):
+    from mbench import speed
+    kept = []
+    run = speed.SpeedRun.__new__(speed.SpeedRun)
+    run.partial = kept.append
+    run.keep({"single": [1, 2]})
+    assert kept == [{"single": [1, 2]}]
+    run.partial = None
+    run.keep({"single": []})
+    assert len(kept) == 1
+
+
+def test_a_run_spawned_a_moment_ago_is_not_declared_dead(tmp_path, monkeypatch):
+    monkeypatch.setattr("mbench.paths.DB", tmp_path / "bench.db")
+    monkeypatch.setattr(units, "unit_active", lambda run_id: False)
+    db = store.connect()
+    store.insert_run(db, {"id": "fresh", "model": "m", "name": "m", "suite": suite.label("full"), "effort": "max",
+                          "status": "queued", "profile": {}, "hardware": {}})
+    store.update_run(db, "fresh", started=time.time())
+    units.reconcile(db)
+    assert store.get_run(db, "fresh")["status"] == "queued"
+
+
+def test_a_run_whose_unit_has_been_gone_a_while_is_failed(tmp_path, monkeypatch):
+    monkeypatch.setattr("mbench.paths.DB", tmp_path / "bench.db")
+    monkeypatch.setattr(units, "unit_active", lambda run_id: False)
+    db = store.connect()
+    store.insert_run(db, {"id": "stale", "model": "m", "name": "m", "suite": suite.label("full"), "effort": "max",
+                          "status": "running", "profile": {}, "hardware": {}})
+    store.update_run(db, "stale", started=time.time() - units.RECONCILE_GRACE_S - 60)
+    units.reconcile(db)
+    assert store.get_run(db, "stale")["status"] == "failed"

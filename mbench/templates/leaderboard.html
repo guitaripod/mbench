@@ -363,11 +363,14 @@ function columns() {
 
 function pctCell(entry, meter) {
   if (!entry || entry.value == null) return h("td", { className: "num", text: "–" });
+  const cut = entry.truncated != null && entry.truncated >= 25 ? Math.round(entry.truncated) : null;
   const half = entry.lo != null && entry.hi != null ? (entry.hi - entry.lo) / 2 : null;
   return h("td", { className: "num" }, [
     fmt.pct(entry.value),
     half != null ? h("span", { className: "ci", text: "±" + half.toFixed(1) }) : null,
     meter ? h("span", { className: "meter", "aria-hidden": "true" }, [h("i", { style: `width:${Math.max(0, Math.min(100, entry.value))}%` })]) : null,
+    cut ? h("span", { className: "ci", text: `${cut}% cut off`,
+      title: "That share of answers hit the token budget before finishing, so this score is a floor, not the model's ceiling." }) : null,
   ]);
 }
 
@@ -416,6 +419,11 @@ function modelMeta(model) {
   if (model.repeats && model.repeats.spread != null && model.repeats.spread > 5) {
     chips.push(h("span", { className: "chip", text: `repeats differ ${Math.round(model.repeats.spread)}%`,
       title: "Runs of the same configuration landed this far apart; five per cent is the bar a mobile suite uses." }));
+  }
+  const cutOff = tasks().filter(task => ((model.tasks[task] || {}).truncated || 0) >= 50);
+  if (cutOff.length) {
+    chips.push(h("span", { className: "chip", text: `${cutOff.map(label).join(", ")} cut off`,
+      title: "Over half of these answers hit the token budget before finishing; the score is a floor, not a ceiling." }));
   }
   if (model.speed && model.speed.memory_used && model.speed.memory_used.value > 95) {
     chips.push(h("span", { className: "chip", text: "at the memory ceiling",

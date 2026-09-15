@@ -218,13 +218,18 @@ def submit(db, run_id, profile, effort, run_dir, events, which):
 def measure_speed(db, run_id, profile, spec, level, run_dir, events, halt, levels, context, host):
     """Measures speed once; a speed.json already in the run (resumed, or carried over with --reuse) is scored instead."""
     speed_file = run_dir / "speed.json"
+    partial_file = run_dir / "speed.partial.json"
     if speed_file.exists():
         result = json.loads(speed_file.read_text())
     else:
+        def keep(found):
+            partial_file.write_text(json.dumps(found, indent=1))
+
         result = asyncio.run(speed.SpeedRun(profile, spec, level, run_id, events.progress, halt, levels, context,
-                                            host=host).run())
+                                            host=host, partial=keep).run())
         if not halt.is_set():
             speed_file.write_text(json.dumps(result, indent=1))
+            partial_file.unlink(missing_ok=True)
     store.set_metrics(db, run_id, metrics.speed_metrics(result))
     return [process["name"] for process in result.get("contention", [])]
 

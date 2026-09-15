@@ -32,7 +32,7 @@ struct ContentView: View {
     private var header: some View {
         HStack(alignment: .firstTextBaseline) {
             VStack(alignment: .leading, spacing: 3) {
-                Text("mbenchd").font(.system(size: 26, weight: .heavy, design: .rounded))
+                Text("mbench").font(.system(size: 26, weight: .heavy, design: .rounded))
                 Text(subtitle).font(.system(size: 11, design: .monospaced)).foregroundStyle(.white.opacity(0.45))
             }
             Spacer()

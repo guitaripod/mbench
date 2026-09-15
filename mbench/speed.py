@@ -35,8 +35,10 @@ class Filler:
 class SpeedRun:
     """Greedy decoding throughout, so the same prompt produces the same tokens and drafter acceptance stays comparable between runs."""
 
-    def __init__(self, profile, spec, effort, run_id, report, abort, levels=None, context=None, host=None):
+    def __init__(self, profile, spec, effort, run_id, report, abort, levels=None, context=None, host=None,
+                 partial=None):
         self.profile = profile
+        self.partial = partial
         self.host = host or hosts.for_profile(profile)
         self.spec = spec
         self.levels = list(levels or spec["concurrency"])
@@ -102,6 +104,12 @@ class SpeedRun:
             "finish_reason": finish,
         }
 
+    def keep(self, results):
+        """Writes what has been measured so far. A phone run interrupted at answer nineteen of twenty used to lose the
+        whole phase; now it loses the answer."""
+        if self.partial:
+            self.partial(results)
+
     def cool(self):
         """Lets the device come back to its cold state so the next block is not measured on heat the block before it
         made. A card returns at once."""
@@ -142,6 +150,7 @@ class SpeedRun:
         def step():
             progress["done"] += 1
             self.report("speed", progress["done"], total)
+            self.keep(results)
 
         sampler = self.host.sampler()
         try:

@@ -8,6 +8,7 @@ from . import paths, store
 ACTIVE = ("queued", "running")
 GPU_CLASS = "gpu"
 MAX_SHARED_RUNS = 3
+RECONCILE_GRACE_S = 300
 
 
 def device_class(run):
@@ -39,9 +40,14 @@ def unit_active(run_id):
 
 
 def reconcile(db):
-    """A worker that died without writing its verdict (reboot, kill) leaves a running row; mark it failed so it can be resumed."""
+    """A worker that died without writing its verdict (reboot, kill) leaves a running row; mark it failed so it can be
+    resumed. The age of the row is not evidence of that — a run queued an hour ago and spawned a second ago is young
+    in every way that matters — so a row is only given up on once its unit has been gone for a while."""
     for run in store.list_runs(db):
-        if run["status"] in ACTIVE and not unit_active(run["id"]) and time.time() - (run["created"] or 0) > 60:
+        if run["status"] not in ACTIVE or unit_active(run["id"]):
+            continue
+        idle = time.time() - (run.get("started") or run.get("created") or 0)
+        if idle > RECONCILE_GRACE_S:
             store.update_run(db, run["id"], status="failed", error="the worker stopped without finishing")
 
 
