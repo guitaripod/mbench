@@ -255,6 +255,20 @@ def park_for_window(db, run, events, window, host):
                     run=run["id"], status="paused")
 
 
+def halt_fault(halt, host, card):
+    """The message a stopped run fails with, or nothing when stopping was only a reason to try again later. A phone
+    that iOS killed for memory is the second kind on the desktop and the first kind here: the model does not fit in
+    what the phone will give it, and the same settings ten minutes later are killed the same way."""
+    if halt.reason == "memory" and host.kind == "phone":
+        return ("stopped because the phone had no room for the model: "
+                f"{card.fault if card else 'iOS killed the app'}")
+    if halt.reason == "card":
+        return f"stopped because the GPU stopped answering: {card.fault if card else ''}"
+    if halt.reason == "device":
+        return f"stopped because the phone stopped answering: {card.fault if card else ''}"
+    return None
+
+
 def give_way(db, run, events, found, host):
     """Frees the GPU for whatever else wants it and tries again in ten minutes, from the saved answers."""
     resumes = time.time() + YIELD_RETRY_S
@@ -375,13 +389,12 @@ def execute(run_id):
                 graded = grader.grade(run_dir)
             store.set_metrics(db, run_id, metrics.task_metrics(task, metrics.load(run_dir, task), graded))
         if halt.is_set():
+            fault = halt_fault(halt, host, card)
+            if fault:
+                raise RuntimeError(fault)
             if halt.reason == "memory":
                 give_way(db, run, events, [{"name": f"a box with under {RAM_FLOOR_GB:.0f} GB free"}], host)
                 return
-            if halt.reason == "card":
-                raise RuntimeError(f"stopped because the GPU stopped answering: {card.fault}")
-            if halt.reason == "device":
-                raise RuntimeError(f"stopped because the phone stopped answering: {card.fault if card else ''}")
             give_way(db, run, events, watch.found if watch else [], host)
             return
         if runner.drained:

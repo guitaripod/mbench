@@ -755,3 +755,31 @@ def test_a_run_whose_unit_has_been_gone_a_while_is_failed(tmp_path, monkeypatch)
     store.update_run(db, "stale", started=time.time() - units.RECONCILE_GRACE_S - 60)
     units.reconcile(db)
     assert store.get_run(db, "stale")["status"] == "failed"
+
+
+def test_a_phone_that_ran_out_of_room_fails_instead_of_waiting_for_another_turn():
+    from mbench import worker
+
+    class Halt:
+        reason = "memory"
+
+    class Host:
+        kind = "phone"
+
+    class Card:
+        fault = "iOS killed the app and it relaunched: the model needed more memory than the phone would give it"
+
+    fault = worker.halt_fault(Halt(), Host(), Card())
+    assert fault and "no room for the model" in fault and "more memory" in fault
+
+
+def test_a_desktop_short_of_ram_is_only_asked_to_wait():
+    from mbench import worker
+
+    class Halt:
+        reason = "memory"
+
+    class Host:
+        kind = "gpu"
+
+    assert worker.halt_fault(Halt(), Host(), None) is None
