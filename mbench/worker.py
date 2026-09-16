@@ -255,6 +255,18 @@ def park_for_window(db, run, events, window, host):
                     run=run["id"], status="paused")
 
 
+def free_the_phone(host, events):
+    """A finished run leaves the model loaded otherwise, and the phone has to sit in the foreground holding a gigabyte
+    of weights nothing is reading until the next run relaunches the app. The card is left alone: llama-swap unloads on
+    its own, and another run sharing the box may still be using what it holds."""
+    if host.kind != "phone":
+        return
+    try:
+        host.unload()
+    except Exception as error:
+        events.log(f"unloading the phone failed: {error!r}")
+
+
 def halt_fault(halt, host, card):
     """The message a stopped run fails with, or nothing when stopping was only a reason to try again later. A phone
     that iOS killed for memory is the second kind on the desktop and the first kind here: the model does not fit in
@@ -422,6 +434,7 @@ def execute(run_id):
     finally:
         for each in guards:
             each.stop()
+        free_the_phone(host, events)
         if watch:
             watch.stop()
         if sampler:

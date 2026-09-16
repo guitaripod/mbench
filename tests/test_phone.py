@@ -783,3 +783,40 @@ def test_a_desktop_short_of_ram_is_only_asked_to_wait():
         kind = "gpu"
 
     assert worker.halt_fault(Halt(), Host(), None) is None
+
+
+def test_a_finished_phone_run_gives_the_model_back():
+    from mbench import worker
+
+    class Events:
+        def log(self, message):
+            pass
+
+    class Host:
+        kind = "phone"
+
+        def __init__(self):
+            self.unloaded = False
+
+        def unload(self):
+            self.unloaded = True
+
+    host = Host()
+    worker.free_the_phone(host, Events())
+    assert host.unloaded
+
+
+def test_a_finished_gpu_run_leaves_llama_swap_alone():
+    from mbench import worker
+
+    class Events:
+        def log(self, message):
+            pass
+
+    class Host:
+        kind = "gpu"
+
+        def unload(self):
+            raise AssertionError("a run sharing the box may still be using what llama-swap holds")
+
+    worker.free_the_phone(Host(), Events())
