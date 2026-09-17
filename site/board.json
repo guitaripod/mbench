@@ -1,11 +1,16 @@
 {
- "generated": 1789459960.5283968,
+ "generated": 1789605515.7094862,
  "suite": "full/v1",
  "current": "1",
  "hardware": {
-  "gpu": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
-  "driver": "610.57.04",
-  "vram_mib": 97887
+  "class": "phone",
+  "hardware": "iPhone18,4",
+  "device": "iPhone Air",
+  "soc": "A19 Pro",
+  "ram_gb": 12,
+  "bandwidth_gbs": 68.3,
+  "os": "iOS 27.0",
+  "app": "0.1.0"
  },
  "suites": {
   "1": {
@@ -67,13 +72,777 @@
    "rankings": {
     "medium": [
      {
-      "id": "qwen3-4b-instruct-gguf",
-      "name": "Qwen3 4B Instruct \u00b7 llama.cpp \u00b7 Q4_K_M \u00b7 16k",
+      "id": "lfm2.5-2.6b-air",
+      "name": "LFM2.5 2.6B \u00b7 llama.cpp \u00b7 Q4_K_M \u00b7 iPhone Air",
       "engine": "llama.cpp",
       "quantization": "Q4_K_M",
       "spec": null,
       "context": 16384,
-      "fingerprint": "933293b9d99de0b2",
+      "fingerprint": "8b3f2deb76064d1b",
+      "stack": {
+       "host": "iPhone Air|iOS 27.0",
+       "hostLabel": "iPhone Air \u00b7 A19 Pro \u00b7 iOS 27.0",
+       "gpu": null,
+       "driver": null,
+       "vramMib": null,
+       "deviceClass": "phone",
+       "device": "iPhone Air",
+       "soc": "A19 Pro",
+       "bandwidthGbs": 68.3,
+       "ramGb": 12,
+       "engine": "llama.cpp",
+       "build": "llama.cpp b50",
+       "source": null
+      },
+      "run": {
+       "id": "20260916-235247-lfm2.5-2.6b-air",
+       "suite": "phone/v1",
+       "kind": "phone",
+       "finished": 1789594610.0301926,
+       "effort": "medium",
+       "harness": "1.1.0+536a3a2",
+       "contended": [],
+       "failedItems": 0,
+       "notes": null,
+       "reused": null,
+       "stackChange": []
+      },
+      "index": {
+       "value": 34.76197461646561,
+       "unit": "%",
+       "n": 5,
+       "lo": 31.007400951553134,
+       "hi": 38.30008734839825
+      },
+      "tasks": {
+       "supergpqa": {
+        "value": 27.2552783109405,
+        "unit": "%",
+        "n": 521,
+        "lo": 23.60862305875647,
+        "hi": 31.234895442825728,
+        "tokens": 6839.174664107486,
+        "latency": 8.82,
+        "truncated": 24.184261036468328,
+        "unreachable": null,
+        "malformed": null,
+        "parts": {}
+       },
+       "math": {
+        "value": 26.984126984126984,
+        "unit": "%",
+        "n": 63,
+        "lo": 17.110291234158097,
+        "hi": 36.857962734095864,
+        "tokens": 11474.833333333334,
+        "latency": 36.67,
+        "truncated": 54.761904761904766,
+        "unreachable": null,
+        "malformed": null,
+        "parts": {
+         "aime": 31.666666666666664,
+         "hmmt": 22.727272727272727
+        }
+       },
+       "lcb": {
+        "value": 35.64356435643564,
+        "unit": "%",
+        "n": 101,
+        "lo": 26.986507179349307,
+        "hi": 45.35271694542558,
+        "tokens": 10838.455445544554,
+        "latency": 34.86,
+        "truncated": 51.48514851485149,
+        "unreachable": null,
+        "malformed": null,
+        "parts": {}
+       },
+       "mrcr": {
+        "value": 0.8581928265621473,
+        "unit": "%",
+        "n": 60,
+        "lo": 0.19827238857713214,
+        "hi": 1.5181132645471627,
+        "tokens": 1940.090909090909,
+        "latency": 4.61,
+        "truncated": 5.0,
+        "unreachable": 81.66666666666667,
+        "malformed": null,
+        "parts": {
+         "131072": 0.0,
+         "16384": 3.4327713062485894,
+         "32768": 0.0,
+         "65536": 0.0
+        }
+       },
+       "graphwalks": {
+        "value": 2.083333333333333,
+        "unit": "%",
+        "n": 48,
+        "lo": 0.0,
+        "hi": 6.166666666666666,
+        "tokens": 7603.0,
+        "latency": 18.759999999999998,
+        "truncated": 22.916666666666664,
+        "unreachable": 75.0,
+        "malformed": null,
+        "parts": {
+         "16384": 0.0,
+         "32768": 0.0,
+         "65536": 0.0,
+         "8192": 8.333333333333332
+        }
+       },
+       "tools": {
+        "value": 82.45614035087719,
+        "unit": "%",
+        "n": 38,
+        "lo": 70.96785062849712,
+        "hi": 93.94443007325727,
+        "tokens": 608.859649122807,
+        "latency": 0.73,
+        "truncated": 0.0,
+        "unreachable": null,
+        "malformed": 0.0,
+        "parts": {
+         "clarify": 66.66666666666666,
+         "conditional": 100.0,
+         "distractor": 100.0,
+         "irrelevant": 100.0,
+         "multi-turn": 100.0,
+         "parallel": 100.0,
+         "policy": 100.0,
+         "recovery": 50.0,
+         "sequential": 57.57575757575758,
+         "single": 100.0
+        }
+       }
+      },
+      "qualityFrom": {
+       "run": "20260916-232854-lfm2_5-2_6b-gguf",
+       "model": "lfm2_5-2_6b-gguf",
+       "suite": "full/v1",
+       "host": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition \u00b7 driver 610.57.04",
+       "verified": true,
+       "agreement": null
+      },
+      "deviceClass": "phone",
+      "capacity": {
+       "slots": 4,
+       "context": 16384,
+       "pool": 16384
+      },
+      "warnings": [],
+      "energy": {
+       "perCorrect": null,
+       "quality": null
+      },
+      "speed": {
+       "conc.1": {
+        "value": 11.75,
+        "unit": "tok/s",
+        "n": 2,
+        "lo": 11.7,
+        "hi": 11.8
+       },
+       "conc.2": {
+        "value": 17.45,
+        "unit": "tok/s",
+        "n": 2,
+        "lo": 17.4,
+        "hi": 17.5
+       },
+       "conc.4": {
+        "value": 26.75,
+        "unit": "tok/s",
+        "n": 2,
+        "lo": 26.6,
+        "hi": 26.9
+       },
+       "cooldown_s": {
+        "value": 520.2,
+        "unit": "s",
+        "n": 2,
+        "lo": null,
+        "hi": null
+       },
+       "cooled": {
+        "value": 100.0,
+        "unit": "%",
+        "n": 2,
+        "lo": null,
+        "hi": null
+       },
+       "decode": {
+        "value": 17.743333333333332,
+        "unit": "tok/s",
+        "n": 3,
+        "lo": null,
+        "hi": null
+       },
+       "decode.code-v1": {
+        "value": 10.13,
+        "unit": "tok/s",
+        "n": 3,
+        "lo": 8.62,
+        "hi": 11.99
+       },
+       "decode.prose-v1": {
+        "value": 11.83,
+        "unit": "tok/s",
+        "n": 3,
+        "lo": 11.77,
+        "hi": 11.88
+       },
+       "decode.reasoning-v1": {
+        "value": 31.27,
+        "unit": "tok/s",
+        "n": 3,
+        "lo": 15.25,
+        "hi": 33.92
+       },
+       "decode_at.1000": {
+        "value": 13.115,
+        "unit": "tok/s",
+        "n": 2,
+        "lo": 13.09,
+        "hi": 13.14
+       },
+       "decode_at.12000": {
+        "value": 11.8,
+        "unit": "tok/s",
+        "n": 2,
+        "lo": 11.76,
+        "hi": 11.84
+       },
+       "decode_at.4000": {
+        "value": 12.844999999999999,
+        "unit": "tok/s",
+        "n": 2,
+        "lo": 12.78,
+        "hi": 12.91
+       },
+       "decode_at.8000": {
+        "value": 12.335,
+        "unit": "tok/s",
+        "n": 2,
+        "lo": 12.29,
+        "hi": 12.38
+       },
+       "decode_peak": {
+        "value": 34.0,
+        "unit": "tok/s",
+        "n": 2,
+        "lo": null,
+        "hi": null
+       },
+       "decode_steady": {
+        "value": 13.17,
+        "unit": "tok/s",
+        "n": 7,
+        "lo": 13.03,
+        "hi": 13.2
+       },
+       "degradation": {
+        "value": 61.26470588235294,
+        "unit": "%",
+        "n": 20,
+        "lo": null,
+        "hi": null
+       },
+       "footprint": {
+        "value": 1026.0,
+        "unit": "MiB",
+        "n": 43,
+        "lo": null,
+        "hi": null
+       },
+       "headroom": {
+        "value": 2349.902114868164,
+        "unit": "MiB",
+        "n": 2398,
+        "lo": null,
+        "hi": null
+       },
+       "memory_used": {
+        "value": 30.391876455223212,
+        "unit": "%",
+        "n": 2398,
+        "lo": null,
+        "hi": null
+       },
+       "peak": {
+        "value": 26.75,
+        "unit": "tok/s",
+        "n": 2,
+        "lo": 26.6,
+        "hi": 26.9
+       },
+       "peak_at": {
+        "value": 4.0,
+        "unit": "requests",
+        "n": 2,
+        "lo": null,
+        "hi": null
+       },
+       "plateau_cv": {
+        "value": 0.5066702066065739,
+        "unit": "%",
+        "n": 7,
+        "lo": null,
+        "hi": null
+       },
+       "prefill.1000": {
+        "value": 315.15,
+        "unit": "tok/s",
+        "n": 2,
+        "lo": 281.5,
+        "hi": 348.8
+       },
+       "prefill.12000": {
+        "value": 278.85,
+        "unit": "tok/s",
+        "n": 2,
+        "lo": 277.8,
+        "hi": 279.9
+       },
+       "prefill.4000": {
+        "value": 308.95000000000005,
+        "unit": "tok/s",
+        "n": 2,
+        "lo": 308.8,
+        "hi": 309.1
+       },
+       "prefill.8000": {
+        "value": 296.2,
+        "unit": "tok/s",
+        "n": 2,
+        "lo": 295.2,
+        "hi": 297.2
+       },
+       "stability": {
+        "value": 26.088235294117645,
+        "unit": "%",
+        "n": 20,
+        "lo": null,
+        "hi": null
+       },
+       "sustain.00": {
+        "value": 34.0,
+        "unit": "tok/s",
+        "n": 1,
+        "lo": null,
+        "hi": null
+       },
+       "sustain.01": {
+        "value": 31.79,
+        "unit": "tok/s",
+        "n": 1,
+        "lo": null,
+        "hi": null
+       },
+       "sustain.02": {
+        "value": 14.66,
+        "unit": "tok/s",
+        "n": 1,
+        "lo": null,
+        "hi": null
+       },
+       "sustain.03": {
+        "value": 8.87,
+        "unit": "tok/s",
+        "n": 1,
+        "lo": null,
+        "hi": null
+       },
+       "sustain.04": {
+        "value": 10.25,
+        "unit": "tok/s",
+        "n": 1,
+        "lo": null,
+        "hi": null
+       },
+       "sustain.05": {
+        "value": 12.38,
+        "unit": "tok/s",
+        "n": 1,
+        "lo": null,
+        "hi": null
+       },
+       "sustain.06": {
+        "value": 12.56,
+        "unit": "tok/s",
+        "n": 1,
+        "lo": null,
+        "hi": null
+       },
+       "sustain.07": {
+        "value": 12.27,
+        "unit": "tok/s",
+        "n": 1,
+        "lo": null,
+        "hi": null
+       },
+       "sustain.08": {
+        "value": 12.31,
+        "unit": "tok/s",
+        "n": 1,
+        "lo": null,
+        "hi": null
+       },
+       "sustain.09": {
+        "value": 12.3,
+        "unit": "tok/s",
+        "n": 1,
+        "lo": null,
+        "hi": null
+       },
+       "sustain.10": {
+        "value": 12.69,
+        "unit": "tok/s",
+        "n": 1,
+        "lo": null,
+        "hi": null
+       },
+       "sustain.11": {
+        "value": 12.88,
+        "unit": "tok/s",
+        "n": 1,
+        "lo": null,
+        "hi": null
+       },
+       "sustain.12": {
+        "value": 12.85,
+        "unit": "tok/s",
+        "n": 1,
+        "lo": null,
+        "hi": null
+       },
+       "sustain.13": {
+        "value": 13.12,
+        "unit": "tok/s",
+        "n": 1,
+        "lo": null,
+        "hi": null
+       },
+       "sustain.14": {
+        "value": 13.03,
+        "unit": "tok/s",
+        "n": 1,
+        "lo": null,
+        "hi": null
+       },
+       "sustain.15": {
+        "value": 13.17,
+        "unit": "tok/s",
+        "n": 1,
+        "lo": null,
+        "hi": null
+       },
+       "sustain.16": {
+        "value": 13.06,
+        "unit": "tok/s",
+        "n": 1,
+        "lo": null,
+        "hi": null
+       },
+       "sustain.17": {
+        "value": 13.2,
+        "unit": "tok/s",
+        "n": 1,
+        "lo": null,
+        "hi": null
+       },
+       "sustain.18": {
+        "value": 13.19,
+        "unit": "tok/s",
+        "n": 1,
+        "lo": null,
+        "hi": null
+       },
+       "sustain.19": {
+        "value": 13.17,
+        "unit": "tok/s",
+        "n": 1,
+        "lo": null,
+        "hi": null
+       },
+       "sustain_ratio": {
+        "value": 0.38735294117647057,
+        "unit": "x",
+        "n": 20,
+        "lo": null,
+        "hi": null
+       },
+       "sustain_state.00": {
+        "value": 0.0,
+        "unit": "state",
+        "n": 1,
+        "lo": null,
+        "hi": null
+       },
+       "sustain_state.01": {
+        "value": 2.0,
+        "unit": "state",
+        "n": 1,
+        "lo": null,
+        "hi": null
+       },
+       "sustain_state.02": {
+        "value": 2.0,
+        "unit": "state",
+        "n": 1,
+        "lo": null,
+        "hi": null
+       },
+       "sustain_state.03": {
+        "value": 2.0,
+        "unit": "state",
+        "n": 1,
+        "lo": null,
+        "hi": null
+       },
+       "sustain_state.04": {
+        "value": 2.0,
+        "unit": "state",
+        "n": 1,
+        "lo": null,
+        "hi": null
+       },
+       "sustain_state.05": {
+        "value": 2.0,
+        "unit": "state",
+        "n": 1,
+        "lo": null,
+        "hi": null
+       },
+       "sustain_state.06": {
+        "value": 2.0,
+        "unit": "state",
+        "n": 1,
+        "lo": null,
+        "hi": null
+       },
+       "sustain_state.07": {
+        "value": 2.0,
+        "unit": "state",
+        "n": 1,
+        "lo": null,
+        "hi": null
+       },
+       "sustain_state.08": {
+        "value": 2.0,
+        "unit": "state",
+        "n": 1,
+        "lo": null,
+        "hi": null
+       },
+       "sustain_state.09": {
+        "value": 2.0,
+        "unit": "state",
+        "n": 1,
+        "lo": null,
+        "hi": null
+       },
+       "sustain_state.10": {
+        "value": 2.0,
+        "unit": "state",
+        "n": 1,
+        "lo": null,
+        "hi": null
+       },
+       "sustain_state.11": {
+        "value": 2.0,
+        "unit": "state",
+        "n": 1,
+        "lo": null,
+        "hi": null
+       },
+       "sustain_state.12": {
+        "value": 2.0,
+        "unit": "state",
+        "n": 1,
+        "lo": null,
+        "hi": null
+       },
+       "sustain_state.13": {
+        "value": 2.0,
+        "unit": "state",
+        "n": 1,
+        "lo": null,
+        "hi": null
+       },
+       "sustain_state.14": {
+        "value": 2.0,
+        "unit": "state",
+        "n": 1,
+        "lo": null,
+        "hi": null
+       },
+       "sustain_state.15": {
+        "value": 2.0,
+        "unit": "state",
+        "n": 1,
+        "lo": null,
+        "hi": null
+       },
+       "sustain_state.16": {
+        "value": 2.0,
+        "unit": "state",
+        "n": 1,
+        "lo": null,
+        "hi": null
+       },
+       "sustain_state.17": {
+        "value": 2.0,
+        "unit": "state",
+        "n": 1,
+        "lo": null,
+        "hi": null
+       },
+       "sustain_state.18": {
+        "value": 2.0,
+        "unit": "state",
+        "n": 1,
+        "lo": null,
+        "hi": null
+       },
+       "sustain_state.19": {
+        "value": 2.0,
+        "unit": "state",
+        "n": 1,
+        "lo": null,
+        "hi": null
+       },
+       "throttle_s": {
+        "value": 33.5,
+        "unit": "s",
+        "n": 1,
+        "lo": null,
+        "hi": null
+       },
+       "tokens_to_knee": {
+        "value": 1024.0,
+        "unit": "tokens",
+        "n": 1,
+        "lo": null,
+        "hi": null
+       },
+       "ttft.1000": {
+        "value": 3.47365,
+        "unit": "s",
+        "n": 2,
+        "lo": 3.0648,
+        "hi": 3.8825
+       },
+       "ttft.12000": {
+        "value": 44.03875,
+        "unit": "s",
+        "n": 2,
+        "lo": 43.6821,
+        "hi": 44.3954
+       },
+       "ttft.4000": {
+        "value": 13.60065,
+        "unit": "s",
+        "n": 2,
+        "lo": 13.3206,
+        "hi": 13.8807
+       },
+       "ttft.8000": {
+        "value": 27.73555,
+        "unit": "s",
+        "n": 2,
+        "lo": 27.6913,
+        "hi": 27.7798
+       },
+       "ttft.short": {
+        "value": 712.6,
+        "unit": "ms",
+        "n": 9,
+        "lo": 485.0,
+        "hi": 1622.0
+       }
+      },
+      "thermal": {
+       "share_hot": {
+        "value": 96.80390032502709,
+        "unit": "%",
+        "n": 1846,
+        "lo": null,
+        "hi": null
+       },
+       "to_fair_s": {
+        "value": 17.1,
+        "unit": "s",
+        "n": 1,
+        "lo": null,
+        "hi": null
+       },
+       "to_serious_s": {
+        "value": 32.1,
+        "unit": "s",
+        "n": 1,
+        "lo": null,
+        "hi": null
+       },
+       "worst": {
+        "value": 2.0,
+        "unit": "state",
+        "n": 1846,
+        "lo": null,
+        "hi": null
+       }
+      },
+      "battery": {},
+      "verdict": "fades",
+      "repeats": {
+       "runs": 1,
+       "spread": null
+      },
+      "lmx": {},
+      "submissions": [],
+      "server": {
+       "load_s": 0.52,
+       "model_path": "/var/mobile/Containers/Data/Application/D7E8CF25-2F32-424C-856F-4A6A751182D8/Documents/models/LFM2.5-2.6B-Q4_K_M.gguf",
+       "n_ctx": 16384,
+       "total_slots": 4,
+       "build": {
+        "engine": "llama.cpp",
+        "build": "b50-5266f24",
+        "version": "b50",
+        "commit": "5266f24",
+        "app": "0.1.0"
+       },
+       "capacity": {
+        "slots": 4,
+        "context": 16384,
+        "pool": 16384
+       },
+       "weights": "02a8b7e17487d326e46d68ce0ba24211e1b80a14c4cd0597fa73c1cd697f52ed",
+       "probe": {
+        "error": "NameError(\"name 'request_kwargs' is not defined\")"
+       }
+      },
+      "history": [
+       {
+        "id": "20260916-235247-lfm2.5-2.6b-air",
+        "suite": "phone/v1",
+        "effort": "medium",
+        "finished": 1789594610.0301926,
+        "index": null,
+        "decode": 17.743333333333332
+       }
+      ]
+     },
+     {
+      "id": "lfm2_5-2_6b-gguf",
+      "name": "LFM2.5 2.6B \u00b7 llama.cpp \u00b7 Q4_K_M \u00b7 16k",
+      "engine": "llama.cpp",
+      "quantization": "Q4_K_M",
+      "spec": null,
+      "context": 16384,
+      "fingerprint": "9a0c60acef442601",
       "stack": {
        "host": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition|610.57.04",
        "hostLabel": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition \u00b7 driver 610.57.04",
@@ -90,92 +859,82 @@
        "source": null
       },
       "run": {
-       "id": "20260915-012817-qwen3-4b-instruct-gguf",
+       "id": "20260916-232854-lfm2_5-2_6b-gguf",
        "suite": "full/v1",
        "kind": "full",
-       "finished": 1789427219.6819456,
+       "finished": 1789605482.7678318,
        "effort": "medium",
-       "harness": "1.1.0+c8ece36",
+       "harness": "1.1.0+9593c20",
        "contended": [],
        "failedItems": 0,
        "notes": null,
-       "reused": {
-        "run": "20260914-222330-qwen3-4b-instruct-gguf",
-        "tasks": [
-         "supergpqa",
-         "math",
-         "tools",
-         "mrcr",
-         "graphwalks",
-         "lcb"
-        ]
-       },
+       "reused": null,
        "stackChange": []
       },
       "index": {
-       "value": 39.76512645313105,
+       "value": 34.76197461646561,
        "unit": "%",
        "n": 5,
-       "lo": 35.72583331351524,
-       "hi": 43.72446393370467
+       "lo": 31.007400951553134,
+       "hi": 38.30008734839825
       },
       "tasks": {
        "supergpqa": {
-        "value": 37.81190019193858,
+        "value": 27.2552783109405,
         "unit": "%",
         "n": 521,
-        "lo": 33.751473353656294,
-        "hi": 42.05074964086244,
-        "tokens": 2515.593090211132,
-        "latency": 23.91,
-        "truncated": 3.45489443378119,
+        "lo": 23.60862305875647,
+        "hi": 31.234895442825728,
+        "tokens": 6839.174664107486,
+        "latency": 8.82,
+        "truncated": 24.184261036468328,
         "unreachable": null,
         "malformed": null,
         "parts": {}
        },
        "math": {
-        "value": 43.65079365079365,
+        "value": 26.984126984126984,
         "unit": "%",
         "n": 63,
-        "lo": 32.02350047332509,
-        "hi": 55.278086828262204,
-        "tokens": 7599.547619047619,
-        "latency": 182.02499999999998,
-        "truncated": 15.079365079365079,
+        "lo": 17.110291234158097,
+        "hi": 36.857962734095864,
+        "tokens": 11474.833333333334,
+        "latency": 36.67,
+        "truncated": 54.761904761904766,
         "unreachable": null,
         "malformed": null,
         "parts": {
-         "aime": 60.0,
-         "hmmt": 28.78787878787879
+         "aime": 31.666666666666664,
+         "hmmt": 22.727272727272727
         }
        },
        "lcb": {
-        "value": 38.613861386138616,
+        "value": 35.64356435643564,
         "unit": "%",
         "n": 101,
-        "lo": 29.702164422098594,
-        "hi": 48.35997884927459,
-        "tokens": 2375.4455445544554,
-        "latency": 49.54,
-        "truncated": 0.0,
+        "lo": 26.986507179349307,
+        "hi": 45.35271694542558,
+        "tokens": 10838.455445544554,
+        "latency": 34.86,
+        "truncated": 51.48514851485149,
         "unreachable": null,
         "malformed": null,
         "parts": {}
        },
        "mrcr": {
-        "value": 2.783241792866998,
+        "value": 0.8581928265621473,
         "unit": "%",
         "n": 60,
-        "lo": 0.0,
-        "hi": 6.1080159449985985,
-        "tokens": 372.8181818181818,
-        "latency": 18.17,
-        "truncated": 0.0,
+        "lo": 0.19827238857713214,
+        "hi": 1.5181132645471627,
+        "tokens": 1940.090909090909,
+        "latency": 4.61,
+        "truncated": 5.0,
         "unreachable": 81.66666666666667,
         "malformed": null,
         "parts": {
          "131072": 0.0,
-         "16384": 11.132967171467993,
+         "16384": 3.4327713062485894,
          "32768": 0.0,
          "65536": 0.0
         }
@@ -186,8 +945,8 @@
         "n": 48,
         "lo": 0.0,
         "hi": 6.166666666666666,
-        "tokens": 5241.833333333333,
-        "latency": 137.26,
+        "tokens": 7603.0,
+        "latency": 18.759999999999998,
         "truncated": 22.916666666666664,
         "unreachable": 75.0,
         "malformed": null,
@@ -199,25 +958,372 @@
         }
        },
        "tools": {
-        "value": 76.31578947368422,
+        "value": 82.45614035087719,
         "unit": "%",
         "n": 38,
-        "lo": 63.77360408007403,
-        "hi": 88.8579748672944,
-        "tokens": 130.8421052631579,
-        "latency": 2.5549999999999997,
+        "lo": 70.96785062849712,
+        "hi": 93.94443007325727,
+        "tokens": 608.859649122807,
+        "latency": 0.73,
         "truncated": 0.0,
         "unreachable": null,
         "malformed": 0.0,
         "parts": {
-         "clarify": 88.88888888888889,
-         "conditional": 83.33333333333334,
+         "clarify": 66.66666666666666,
+         "conditional": 100.0,
          "distractor": 100.0,
          "irrelevant": 100.0,
          "multi-turn": 100.0,
          "parallel": 100.0,
-         "policy": 91.66666666666666,
-         "recovery": 16.666666666666664,
+         "policy": 100.0,
+         "recovery": 50.0,
+         "sequential": 57.57575757575758,
+         "single": 100.0
+        }
+       }
+      },
+      "qualityFrom": null,
+      "deviceClass": "gpu",
+      "capacity": {
+       "slots": 4,
+       "context": 16384,
+       "pool": 16384
+      },
+      "warnings": [
+       "Capped at 16k tokens per request: MRCR 8-needle 82% out of reach, Graphwalks 75% out of reach"
+      ],
+      "energy": {
+       "perCorrect": {
+        "value": 4.701596333068864,
+        "unit": "Wh",
+        "n": 308,
+        "lo": null,
+        "hi": null
+       },
+       "quality": {
+        "value": 1445.811,
+        "unit": "Wh",
+        "n": 6,
+        "lo": null,
+        "hi": null
+       }
+      },
+      "speed": {
+       "conc.1": {
+        "value": 439.4,
+        "unit": "tok/s",
+        "n": 2,
+        "lo": 436.9,
+        "hi": 441.9
+       },
+       "conc.2": {
+        "value": 699.95,
+        "unit": "tok/s",
+        "n": 2,
+        "lo": 676.3,
+        "hi": 723.6
+       },
+       "conc.4": {
+        "value": 1013.4,
+        "unit": "tok/s",
+        "n": 2,
+        "lo": 983.2,
+        "hi": 1043.6
+       },
+       "decode": {
+        "value": 436.99666666666667,
+        "unit": "tok/s",
+        "n": 3,
+        "lo": null,
+        "hi": null
+       },
+       "decode.code-v1": {
+        "value": 436.36,
+        "unit": "tok/s",
+        "n": 3,
+        "lo": 433.26,
+        "hi": 440.43
+       },
+       "decode.prose-v1": {
+        "value": 441.09,
+        "unit": "tok/s",
+        "n": 3,
+        "lo": 440.17,
+        "hi": 442.55
+       },
+       "decode.reasoning-v1": {
+        "value": 433.54,
+        "unit": "tok/s",
+        "n": 3,
+        "lo": 431.2,
+        "hi": 444.11
+       },
+       "decode_at.1000": {
+        "value": 443.91999999999996,
+        "unit": "tok/s",
+        "n": 2,
+        "lo": 442.25,
+        "hi": 445.59
+       },
+       "decode_at.8000": {
+        "value": 424.62,
+        "unit": "tok/s",
+        "n": 2,
+        "lo": 423.35,
+        "hi": 425.89
+       },
+       "energy": {
+        "value": 0.7285269043908699,
+        "unit": "J/token",
+        "n": 3,
+        "lo": null,
+        "hi": null
+       },
+       "peak": {
+        "value": 1013.4,
+        "unit": "tok/s",
+        "n": 2,
+        "lo": 983.2,
+        "hi": 1043.6
+       },
+       "peak_at": {
+        "value": 4.0,
+        "unit": "requests",
+        "n": 2,
+        "lo": null,
+        "hi": null
+       },
+       "power": {
+        "value": 317.9,
+        "unit": "W",
+        "n": 3,
+        "lo": null,
+        "hi": null
+       },
+       "prefill.1000": {
+        "value": 11138.75,
+        "unit": "tok/s",
+        "n": 2,
+        "lo": 2688.9,
+        "hi": 19588.6
+       },
+       "prefill.8000": {
+        "value": 25440.550000000003,
+        "unit": "tok/s",
+        "n": 2,
+        "lo": 24205.7,
+        "hi": 26675.4
+       },
+       "temp": {
+        "value": 49.0,
+        "unit": "C",
+        "n": 3,
+        "lo": null,
+        "hi": null
+       },
+       "ttft.1000": {
+        "value": 0.2271,
+        "unit": "s",
+        "n": 2,
+        "lo": 0.0559,
+        "hi": 0.3983
+       },
+       "ttft.8000": {
+        "value": 0.32384999999999997,
+        "unit": "s",
+        "n": 2,
+        "lo": 0.3065,
+        "hi": 0.3412
+       },
+       "ttft.short": {
+        "value": 20.299999999999997,
+        "unit": "ms",
+        "n": 9,
+        "lo": 16.2,
+        "hi": 22.700000000000003
+       }
+      },
+      "thermal": {},
+      "battery": {},
+      "verdict": null,
+      "repeats": {
+       "runs": 1,
+       "spread": null
+      },
+      "lmx": {},
+      "submissions": [],
+      "server": {
+       "load_s": 2.3,
+       "model_path": "/mnt/nvme8tb/Downloads/phone-models/LFM2.5-2.6B-Q4_K_M.gguf",
+       "n_ctx": 16384,
+       "total_slots": 4,
+       "build": {
+        "engine": "llama.cpp",
+        "build": "b50-5266f24"
+       },
+       "capacity": {
+        "slots": 4,
+        "context": 16384,
+        "pool": 16384
+       },
+       "weights": "02a8b7e17487d326e46d68ce0ba24211e1b80a14c4cd0597fa73c1cd697f52ed",
+       "probe": {
+        "error": "NameError(\"name 'request_kwargs' is not defined\")"
+       }
+      },
+      "history": [
+       {
+        "id": "20260916-232854-lfm2_5-2_6b-gguf",
+        "suite": "full/v1",
+        "effort": "medium",
+        "finished": 1789605482.7678318,
+        "index": 34.76197461646561,
+        "decode": 436.99666666666667
+       }
+      ]
+     },
+     {
+      "id": "qwen3-4b-instruct-gguf",
+      "name": "Qwen3 4B Instruct \u00b7 llama.cpp \u00b7 Q4_K_M \u00b7 16k",
+      "engine": "llama.cpp",
+      "quantization": "Q4_K_M",
+      "spec": null,
+      "context": 16384,
+      "fingerprint": "2a08a20514a26923",
+      "stack": {
+       "host": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition|610.57.04",
+       "hostLabel": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition \u00b7 driver 610.57.04",
+       "gpu": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+       "driver": "610.57.04",
+       "vramMib": 97887,
+       "deviceClass": "gpu",
+       "device": null,
+       "soc": null,
+       "bandwidthGbs": null,
+       "ramGb": null,
+       "engine": "llama.cpp",
+       "build": "llama.cpp b50-5266f24",
+       "source": null
+      },
+      "run": {
+       "id": "20260915-095921-qwen3-4b-instruct-gguf",
+       "suite": "full/v1",
+       "kind": "full",
+       "finished": 1789466930.1310904,
+       "effort": "medium",
+       "harness": "1.1.0+12b29fe",
+       "contended": [],
+       "failedItems": 3,
+       "notes": null,
+       "reused": null,
+       "stackChange": []
+      },
+      "index": {
+       "value": 39.56411969575936,
+       "unit": "%",
+       "n": 5,
+       "lo": 35.51540125789504,
+       "hi": 43.45954354280014
+      },
+      "tasks": {
+       "supergpqa": {
+        "value": 39.575289575289574,
+        "unit": "%",
+        "n": 518,
+        "lo": 35.45561476692202,
+        "hi": 43.8484499147745,
+        "tokens": 2569.046332046332,
+        "latency": 3.0549999999999997,
+        "truncated": 4.247104247104247,
+        "unreachable": null,
+        "malformed": null,
+        "parts": {}
+       },
+       "math": {
+        "value": 42.06349206349206,
+        "unit": "%",
+        "n": 63,
+        "lo": 30.93003782567211,
+        "hi": 53.19694630131202,
+        "tokens": 7659.341269841269,
+        "latency": 29.814999999999998,
+        "truncated": 15.079365079365079,
+        "unreachable": null,
+        "malformed": null,
+        "parts": {
+         "aime": 55.00000000000001,
+         "hmmt": 30.303030303030305
+        }
+       },
+       "lcb": {
+        "value": 36.633663366336634,
+        "unit": "%",
+        "n": 101,
+        "lo": 27.887722904962388,
+        "hi": 46.359140935345266,
+        "tokens": 2741.0,
+        "latency": 7.38,
+        "truncated": 0.0,
+        "unreachable": null,
+        "malformed": null,
+        "parts": {}
+       },
+       "mrcr": {
+        "value": 2.627008701743005,
+        "unit": "%",
+        "n": 60,
+        "lo": 0.0,
+        "hi": 5.926055525190442,
+        "tokens": 372.6363636363636,
+        "latency": 3.11,
+        "truncated": 0.0,
+        "unreachable": 81.66666666666667,
+        "malformed": null,
+        "parts": {
+         "131072": 0.0,
+         "16384": 10.50803480697202,
+         "32768": 0.0,
+         "65536": 0.0
+        }
+       },
+       "graphwalks": {
+        "value": 2.083333333333333,
+        "unit": "%",
+        "n": 48,
+        "lo": 0.0,
+        "hi": 6.166666666666666,
+        "tokens": 4720.0,
+        "latency": 27.4,
+        "truncated": 20.833333333333336,
+        "unreachable": 75.0,
+        "malformed": null,
+        "parts": {
+         "16384": 0.0,
+         "32768": 0.0,
+         "65536": 0.0,
+         "8192": 8.333333333333332
+        }
+       },
+       "tools": {
+        "value": 77.19298245614034,
+        "unit": "%",
+        "n": 38,
+        "lo": 64.60311401616798,
+        "hi": 89.7828508961127,
+        "tokens": 131.30701754385964,
+        "latency": 0.41,
+        "truncated": 0.0,
+        "unreachable": null,
+        "malformed": 0.0,
+        "parts": {
+         "clarify": 77.77777777777779,
+         "conditional": 100.0,
+         "distractor": 100.0,
+         "irrelevant": 100.0,
+         "multi-turn": 100.0,
+         "parallel": 100.0,
+         "policy": 83.33333333333334,
+         "recovery": 50.0,
          "sequential": 54.54545454545454,
          "single": 73.33333333333333
         }
@@ -226,25 +1332,25 @@
       "qualityFrom": null,
       "deviceClass": "gpu",
       "capacity": {
-       "slots": 8,
+       "slots": 4,
        "context": 16384,
-       "pool": 131072
+       "pool": 16384
       },
       "warnings": [
        "Capped at 16k tokens per request: MRCR 8-needle 82% out of reach, Graphwalks 75% out of reach"
       ],
       "energy": {
        "perCorrect": {
-        "value": 1.899897435897436,
+        "value": 2.9958150538303774,
         "unit": "Wh",
-        "n": 39,
+        "n": 386,
         "lo": null,
         "hi": null
        },
        "quality": {
-        "value": 74.096,
+        "value": 1155.115,
         "unit": "Wh",
-        "n": 1,
+        "n": 6,
         "lo": null,
         "hi": null
        }
@@ -263,15 +1369,15 @@
        "load_s": 2.3,
        "model_path": "/mnt/nvme8tb/Downloads/phone-models/Qwen3-4B-Instruct-2507-Q4_K_M.gguf",
        "n_ctx": 16384,
-       "total_slots": 8,
+       "total_slots": 4,
        "build": {
         "engine": "llama.cpp",
         "build": "b50-5266f24"
        },
        "capacity": {
-        "slots": 8,
+        "slots": 4,
         "context": 16384,
-        "pool": 131072
+        "pool": 16384
        },
        "weights": "3605803b982cb64aead44f6c1b2ae36e3acdb41d8e46c8a94c6533bc4c67e597",
        "probe": {
@@ -279,6 +1385,14 @@
        }
       },
       "history": [
+       {
+        "id": "20260915-095921-qwen3-4b-instruct-gguf",
+        "suite": "full/v1",
+        "effort": "medium",
+        "finished": 1789466930.1310904,
+        "index": 39.56411969575936,
+        "decode": null
+       },
        {
         "id": "20260915-012817-qwen3-4b-instruct-gguf",
         "suite": "full/v1",
@@ -5107,69 +6221,69 @@
        "stackChange": []
       },
       "index": {
-       "value": 39.76512645313105,
+       "value": 39.56411969575936,
        "unit": "%",
        "n": 5,
-       "lo": 35.72583331351524,
-       "hi": 43.72446393370467
+       "lo": 35.51540125789504,
+       "hi": 43.45954354280014
       },
       "tasks": {
        "supergpqa": {
-        "value": 37.81190019193858,
+        "value": 39.575289575289574,
         "unit": "%",
-        "n": 521,
-        "lo": 33.751473353656294,
-        "hi": 42.05074964086244,
-        "tokens": 2515.593090211132,
-        "latency": 23.91,
-        "truncated": 3.45489443378119,
+        "n": 518,
+        "lo": 35.45561476692202,
+        "hi": 43.8484499147745,
+        "tokens": 2569.046332046332,
+        "latency": 3.0549999999999997,
+        "truncated": 4.247104247104247,
         "unreachable": null,
         "malformed": null,
         "parts": {}
        },
        "math": {
-        "value": 43.65079365079365,
+        "value": 42.06349206349206,
         "unit": "%",
         "n": 63,
-        "lo": 32.02350047332509,
-        "hi": 55.278086828262204,
-        "tokens": 7599.547619047619,
-        "latency": 182.02499999999998,
+        "lo": 30.93003782567211,
+        "hi": 53.19694630131202,
+        "tokens": 7659.341269841269,
+        "latency": 29.814999999999998,
         "truncated": 15.079365079365079,
         "unreachable": null,
         "malformed": null,
         "parts": {
-         "aime": 60.0,
-         "hmmt": 28.78787878787879
+         "aime": 55.00000000000001,
+         "hmmt": 30.303030303030305
         }
        },
        "lcb": {
-        "value": 38.613861386138616,
+        "value": 36.633663366336634,
         "unit": "%",
         "n": 101,
-        "lo": 29.702164422098594,
-        "hi": 48.35997884927459,
-        "tokens": 2375.4455445544554,
-        "latency": 49.54,
+        "lo": 27.887722904962388,
+        "hi": 46.359140935345266,
+        "tokens": 2741.0,
+        "latency": 7.38,
         "truncated": 0.0,
         "unreachable": null,
         "malformed": null,
         "parts": {}
        },
        "mrcr": {
-        "value": 2.783241792866998,
+        "value": 2.627008701743005,
         "unit": "%",
         "n": 60,
         "lo": 0.0,
-        "hi": 6.1080159449985985,
-        "tokens": 372.8181818181818,
-        "latency": 18.17,
+        "hi": 5.926055525190442,
+        "tokens": 372.6363636363636,
+        "latency": 3.11,
         "truncated": 0.0,
         "unreachable": 81.66666666666667,
         "malformed": null,
         "parts": {
          "131072": 0.0,
-         "16384": 11.132967171467993,
+         "16384": 10.50803480697202,
          "32768": 0.0,
          "65536": 0.0
         }
@@ -5180,9 +6294,9 @@
         "n": 48,
         "lo": 0.0,
         "hi": 6.166666666666666,
-        "tokens": 5241.833333333333,
-        "latency": 137.26,
-        "truncated": 22.916666666666664,
+        "tokens": 4720.0,
+        "latency": 27.4,
+        "truncated": 20.833333333333336,
         "unreachable": 75.0,
         "malformed": null,
         "parts": {
@@ -5193,32 +6307,32 @@
         }
        },
        "tools": {
-        "value": 76.31578947368422,
+        "value": 77.19298245614034,
         "unit": "%",
         "n": 38,
-        "lo": 63.77360408007403,
-        "hi": 88.8579748672944,
-        "tokens": 130.8421052631579,
-        "latency": 2.5549999999999997,
+        "lo": 64.60311401616798,
+        "hi": 89.7828508961127,
+        "tokens": 131.30701754385964,
+        "latency": 0.41,
         "truncated": 0.0,
         "unreachable": null,
         "malformed": 0.0,
         "parts": {
-         "clarify": 88.88888888888889,
-         "conditional": 83.33333333333334,
+         "clarify": 77.77777777777779,
+         "conditional": 100.0,
          "distractor": 100.0,
          "irrelevant": 100.0,
          "multi-turn": 100.0,
          "parallel": 100.0,
-         "policy": 91.66666666666666,
-         "recovery": 16.666666666666664,
+         "policy": 83.33333333333334,
+         "recovery": 50.0,
          "sequential": 54.54545454545454,
          "single": 73.33333333333333
         }
        }
       },
       "qualityFrom": {
-       "run": "20260915-012817-qwen3-4b-instruct-gguf",
+       "run": "20260915-095921-qwen3-4b-instruct-gguf",
        "model": "qwen3-4b-instruct-gguf",
        "suite": "full/v1",
        "host": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition \u00b7 driver 610.57.04",
@@ -7271,14 +8385,14 @@
    "hosts": {
     "medium": [
      {
-      "key": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition|610.57.04",
-      "label": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition \u00b7 driver 610.57.04",
-      "models": 6
-     },
-     {
       "key": "iPhone Air|iOS 27.0",
       "label": "iPhone Air \u00b7 A19 Pro \u00b7 iOS 27.0",
-      "models": 6
+      "models": 7
+     },
+     {
+      "key": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition|610.57.04",
+      "label": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition \u00b7 driver 610.57.04",
+      "models": 7
      }
     ],
     "max": [
@@ -7322,13 +8436,777 @@
  "rankings": {
   "medium": [
    {
-    "id": "qwen3-4b-instruct-gguf",
-    "name": "Qwen3 4B Instruct \u00b7 llama.cpp \u00b7 Q4_K_M \u00b7 16k",
+    "id": "lfm2.5-2.6b-air",
+    "name": "LFM2.5 2.6B \u00b7 llama.cpp \u00b7 Q4_K_M \u00b7 iPhone Air",
     "engine": "llama.cpp",
     "quantization": "Q4_K_M",
     "spec": null,
     "context": 16384,
-    "fingerprint": "933293b9d99de0b2",
+    "fingerprint": "8b3f2deb76064d1b",
+    "stack": {
+     "host": "iPhone Air|iOS 27.0",
+     "hostLabel": "iPhone Air \u00b7 A19 Pro \u00b7 iOS 27.0",
+     "gpu": null,
+     "driver": null,
+     "vramMib": null,
+     "deviceClass": "phone",
+     "device": "iPhone Air",
+     "soc": "A19 Pro",
+     "bandwidthGbs": 68.3,
+     "ramGb": 12,
+     "engine": "llama.cpp",
+     "build": "llama.cpp b50",
+     "source": null
+    },
+    "run": {
+     "id": "20260916-235247-lfm2.5-2.6b-air",
+     "suite": "phone/v1",
+     "kind": "phone",
+     "finished": 1789594610.0301926,
+     "effort": "medium",
+     "harness": "1.1.0+536a3a2",
+     "contended": [],
+     "failedItems": 0,
+     "notes": null,
+     "reused": null,
+     "stackChange": []
+    },
+    "index": {
+     "value": 34.76197461646561,
+     "unit": "%",
+     "n": 5,
+     "lo": 31.007400951553134,
+     "hi": 38.30008734839825
+    },
+    "tasks": {
+     "supergpqa": {
+      "value": 27.2552783109405,
+      "unit": "%",
+      "n": 521,
+      "lo": 23.60862305875647,
+      "hi": 31.234895442825728,
+      "tokens": 6839.174664107486,
+      "latency": 8.82,
+      "truncated": 24.184261036468328,
+      "unreachable": null,
+      "malformed": null,
+      "parts": {}
+     },
+     "math": {
+      "value": 26.984126984126984,
+      "unit": "%",
+      "n": 63,
+      "lo": 17.110291234158097,
+      "hi": 36.857962734095864,
+      "tokens": 11474.833333333334,
+      "latency": 36.67,
+      "truncated": 54.761904761904766,
+      "unreachable": null,
+      "malformed": null,
+      "parts": {
+       "aime": 31.666666666666664,
+       "hmmt": 22.727272727272727
+      }
+     },
+     "lcb": {
+      "value": 35.64356435643564,
+      "unit": "%",
+      "n": 101,
+      "lo": 26.986507179349307,
+      "hi": 45.35271694542558,
+      "tokens": 10838.455445544554,
+      "latency": 34.86,
+      "truncated": 51.48514851485149,
+      "unreachable": null,
+      "malformed": null,
+      "parts": {}
+     },
+     "mrcr": {
+      "value": 0.8581928265621473,
+      "unit": "%",
+      "n": 60,
+      "lo": 0.19827238857713214,
+      "hi": 1.5181132645471627,
+      "tokens": 1940.090909090909,
+      "latency": 4.61,
+      "truncated": 5.0,
+      "unreachable": 81.66666666666667,
+      "malformed": null,
+      "parts": {
+       "131072": 0.0,
+       "16384": 3.4327713062485894,
+       "32768": 0.0,
+       "65536": 0.0
+      }
+     },
+     "graphwalks": {
+      "value": 2.083333333333333,
+      "unit": "%",
+      "n": 48,
+      "lo": 0.0,
+      "hi": 6.166666666666666,
+      "tokens": 7603.0,
+      "latency": 18.759999999999998,
+      "truncated": 22.916666666666664,
+      "unreachable": 75.0,
+      "malformed": null,
+      "parts": {
+       "16384": 0.0,
+       "32768": 0.0,
+       "65536": 0.0,
+       "8192": 8.333333333333332
+      }
+     },
+     "tools": {
+      "value": 82.45614035087719,
+      "unit": "%",
+      "n": 38,
+      "lo": 70.96785062849712,
+      "hi": 93.94443007325727,
+      "tokens": 608.859649122807,
+      "latency": 0.73,
+      "truncated": 0.0,
+      "unreachable": null,
+      "malformed": 0.0,
+      "parts": {
+       "clarify": 66.66666666666666,
+       "conditional": 100.0,
+       "distractor": 100.0,
+       "irrelevant": 100.0,
+       "multi-turn": 100.0,
+       "parallel": 100.0,
+       "policy": 100.0,
+       "recovery": 50.0,
+       "sequential": 57.57575757575758,
+       "single": 100.0
+      }
+     }
+    },
+    "qualityFrom": {
+     "run": "20260916-232854-lfm2_5-2_6b-gguf",
+     "model": "lfm2_5-2_6b-gguf",
+     "suite": "full/v1",
+     "host": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition \u00b7 driver 610.57.04",
+     "verified": true,
+     "agreement": null
+    },
+    "deviceClass": "phone",
+    "capacity": {
+     "slots": 4,
+     "context": 16384,
+     "pool": 16384
+    },
+    "warnings": [],
+    "energy": {
+     "perCorrect": null,
+     "quality": null
+    },
+    "speed": {
+     "conc.1": {
+      "value": 11.75,
+      "unit": "tok/s",
+      "n": 2,
+      "lo": 11.7,
+      "hi": 11.8
+     },
+     "conc.2": {
+      "value": 17.45,
+      "unit": "tok/s",
+      "n": 2,
+      "lo": 17.4,
+      "hi": 17.5
+     },
+     "conc.4": {
+      "value": 26.75,
+      "unit": "tok/s",
+      "n": 2,
+      "lo": 26.6,
+      "hi": 26.9
+     },
+     "cooldown_s": {
+      "value": 520.2,
+      "unit": "s",
+      "n": 2,
+      "lo": null,
+      "hi": null
+     },
+     "cooled": {
+      "value": 100.0,
+      "unit": "%",
+      "n": 2,
+      "lo": null,
+      "hi": null
+     },
+     "decode": {
+      "value": 17.743333333333332,
+      "unit": "tok/s",
+      "n": 3,
+      "lo": null,
+      "hi": null
+     },
+     "decode.code-v1": {
+      "value": 10.13,
+      "unit": "tok/s",
+      "n": 3,
+      "lo": 8.62,
+      "hi": 11.99
+     },
+     "decode.prose-v1": {
+      "value": 11.83,
+      "unit": "tok/s",
+      "n": 3,
+      "lo": 11.77,
+      "hi": 11.88
+     },
+     "decode.reasoning-v1": {
+      "value": 31.27,
+      "unit": "tok/s",
+      "n": 3,
+      "lo": 15.25,
+      "hi": 33.92
+     },
+     "decode_at.1000": {
+      "value": 13.115,
+      "unit": "tok/s",
+      "n": 2,
+      "lo": 13.09,
+      "hi": 13.14
+     },
+     "decode_at.12000": {
+      "value": 11.8,
+      "unit": "tok/s",
+      "n": 2,
+      "lo": 11.76,
+      "hi": 11.84
+     },
+     "decode_at.4000": {
+      "value": 12.844999999999999,
+      "unit": "tok/s",
+      "n": 2,
+      "lo": 12.78,
+      "hi": 12.91
+     },
+     "decode_at.8000": {
+      "value": 12.335,
+      "unit": "tok/s",
+      "n": 2,
+      "lo": 12.29,
+      "hi": 12.38
+     },
+     "decode_peak": {
+      "value": 34.0,
+      "unit": "tok/s",
+      "n": 2,
+      "lo": null,
+      "hi": null
+     },
+     "decode_steady": {
+      "value": 13.17,
+      "unit": "tok/s",
+      "n": 7,
+      "lo": 13.03,
+      "hi": 13.2
+     },
+     "degradation": {
+      "value": 61.26470588235294,
+      "unit": "%",
+      "n": 20,
+      "lo": null,
+      "hi": null
+     },
+     "footprint": {
+      "value": 1026.0,
+      "unit": "MiB",
+      "n": 43,
+      "lo": null,
+      "hi": null
+     },
+     "headroom": {
+      "value": 2349.902114868164,
+      "unit": "MiB",
+      "n": 2398,
+      "lo": null,
+      "hi": null
+     },
+     "memory_used": {
+      "value": 30.391876455223212,
+      "unit": "%",
+      "n": 2398,
+      "lo": null,
+      "hi": null
+     },
+     "peak": {
+      "value": 26.75,
+      "unit": "tok/s",
+      "n": 2,
+      "lo": 26.6,
+      "hi": 26.9
+     },
+     "peak_at": {
+      "value": 4.0,
+      "unit": "requests",
+      "n": 2,
+      "lo": null,
+      "hi": null
+     },
+     "plateau_cv": {
+      "value": 0.5066702066065739,
+      "unit": "%",
+      "n": 7,
+      "lo": null,
+      "hi": null
+     },
+     "prefill.1000": {
+      "value": 315.15,
+      "unit": "tok/s",
+      "n": 2,
+      "lo": 281.5,
+      "hi": 348.8
+     },
+     "prefill.12000": {
+      "value": 278.85,
+      "unit": "tok/s",
+      "n": 2,
+      "lo": 277.8,
+      "hi": 279.9
+     },
+     "prefill.4000": {
+      "value": 308.95000000000005,
+      "unit": "tok/s",
+      "n": 2,
+      "lo": 308.8,
+      "hi": 309.1
+     },
+     "prefill.8000": {
+      "value": 296.2,
+      "unit": "tok/s",
+      "n": 2,
+      "lo": 295.2,
+      "hi": 297.2
+     },
+     "stability": {
+      "value": 26.088235294117645,
+      "unit": "%",
+      "n": 20,
+      "lo": null,
+      "hi": null
+     },
+     "sustain.00": {
+      "value": 34.0,
+      "unit": "tok/s",
+      "n": 1,
+      "lo": null,
+      "hi": null
+     },
+     "sustain.01": {
+      "value": 31.79,
+      "unit": "tok/s",
+      "n": 1,
+      "lo": null,
+      "hi": null
+     },
+     "sustain.02": {
+      "value": 14.66,
+      "unit": "tok/s",
+      "n": 1,
+      "lo": null,
+      "hi": null
+     },
+     "sustain.03": {
+      "value": 8.87,
+      "unit": "tok/s",
+      "n": 1,
+      "lo": null,
+      "hi": null
+     },
+     "sustain.04": {
+      "value": 10.25,
+      "unit": "tok/s",
+      "n": 1,
+      "lo": null,
+      "hi": null
+     },
+     "sustain.05": {
+      "value": 12.38,
+      "unit": "tok/s",
+      "n": 1,
+      "lo": null,
+      "hi": null
+     },
+     "sustain.06": {
+      "value": 12.56,
+      "unit": "tok/s",
+      "n": 1,
+      "lo": null,
+      "hi": null
+     },
+     "sustain.07": {
+      "value": 12.27,
+      "unit": "tok/s",
+      "n": 1,
+      "lo": null,
+      "hi": null
+     },
+     "sustain.08": {
+      "value": 12.31,
+      "unit": "tok/s",
+      "n": 1,
+      "lo": null,
+      "hi": null
+     },
+     "sustain.09": {
+      "value": 12.3,
+      "unit": "tok/s",
+      "n": 1,
+      "lo": null,
+      "hi": null
+     },
+     "sustain.10": {
+      "value": 12.69,
+      "unit": "tok/s",
+      "n": 1,
+      "lo": null,
+      "hi": null
+     },
+     "sustain.11": {
+      "value": 12.88,
+      "unit": "tok/s",
+      "n": 1,
+      "lo": null,
+      "hi": null
+     },
+     "sustain.12": {
+      "value": 12.85,
+      "unit": "tok/s",
+      "n": 1,
+      "lo": null,
+      "hi": null
+     },
+     "sustain.13": {
+      "value": 13.12,
+      "unit": "tok/s",
+      "n": 1,
+      "lo": null,
+      "hi": null
+     },
+     "sustain.14": {
+      "value": 13.03,
+      "unit": "tok/s",
+      "n": 1,
+      "lo": null,
+      "hi": null
+     },
+     "sustain.15": {
+      "value": 13.17,
+      "unit": "tok/s",
+      "n": 1,
+      "lo": null,
+      "hi": null
+     },
+     "sustain.16": {
+      "value": 13.06,
+      "unit": "tok/s",
+      "n": 1,
+      "lo": null,
+      "hi": null
+     },
+     "sustain.17": {
+      "value": 13.2,
+      "unit": "tok/s",
+      "n": 1,
+      "lo": null,
+      "hi": null
+     },
+     "sustain.18": {
+      "value": 13.19,
+      "unit": "tok/s",
+      "n": 1,
+      "lo": null,
+      "hi": null
+     },
+     "sustain.19": {
+      "value": 13.17,
+      "unit": "tok/s",
+      "n": 1,
+      "lo": null,
+      "hi": null
+     },
+     "sustain_ratio": {
+      "value": 0.38735294117647057,
+      "unit": "x",
+      "n": 20,
+      "lo": null,
+      "hi": null
+     },
+     "sustain_state.00": {
+      "value": 0.0,
+      "unit": "state",
+      "n": 1,
+      "lo": null,
+      "hi": null
+     },
+     "sustain_state.01": {
+      "value": 2.0,
+      "unit": "state",
+      "n": 1,
+      "lo": null,
+      "hi": null
+     },
+     "sustain_state.02": {
+      "value": 2.0,
+      "unit": "state",
+      "n": 1,
+      "lo": null,
+      "hi": null
+     },
+     "sustain_state.03": {
+      "value": 2.0,
+      "unit": "state",
+      "n": 1,
+      "lo": null,
+      "hi": null
+     },
+     "sustain_state.04": {
+      "value": 2.0,
+      "unit": "state",
+      "n": 1,
+      "lo": null,
+      "hi": null
+     },
+     "sustain_state.05": {
+      "value": 2.0,
+      "unit": "state",
+      "n": 1,
+      "lo": null,
+      "hi": null
+     },
+     "sustain_state.06": {
+      "value": 2.0,
+      "unit": "state",
+      "n": 1,
+      "lo": null,
+      "hi": null
+     },
+     "sustain_state.07": {
+      "value": 2.0,
+      "unit": "state",
+      "n": 1,
+      "lo": null,
+      "hi": null
+     },
+     "sustain_state.08": {
+      "value": 2.0,
+      "unit": "state",
+      "n": 1,
+      "lo": null,
+      "hi": null
+     },
+     "sustain_state.09": {
+      "value": 2.0,
+      "unit": "state",
+      "n": 1,
+      "lo": null,
+      "hi": null
+     },
+     "sustain_state.10": {
+      "value": 2.0,
+      "unit": "state",
+      "n": 1,
+      "lo": null,
+      "hi": null
+     },
+     "sustain_state.11": {
+      "value": 2.0,
+      "unit": "state",
+      "n": 1,
+      "lo": null,
+      "hi": null
+     },
+     "sustain_state.12": {
+      "value": 2.0,
+      "unit": "state",
+      "n": 1,
+      "lo": null,
+      "hi": null
+     },
+     "sustain_state.13": {
+      "value": 2.0,
+      "unit": "state",
+      "n": 1,
+      "lo": null,
+      "hi": null
+     },
+     "sustain_state.14": {
+      "value": 2.0,
+      "unit": "state",
+      "n": 1,
+      "lo": null,
+      "hi": null
+     },
+     "sustain_state.15": {
+      "value": 2.0,
+      "unit": "state",
+      "n": 1,
+      "lo": null,
+      "hi": null
+     },
+     "sustain_state.16": {
+      "value": 2.0,
+      "unit": "state",
+      "n": 1,
+      "lo": null,
+      "hi": null
+     },
+     "sustain_state.17": {
+      "value": 2.0,
+      "unit": "state",
+      "n": 1,
+      "lo": null,
+      "hi": null
+     },
+     "sustain_state.18": {
+      "value": 2.0,
+      "unit": "state",
+      "n": 1,
+      "lo": null,
+      "hi": null
+     },
+     "sustain_state.19": {
+      "value": 2.0,
+      "unit": "state",
+      "n": 1,
+      "lo": null,
+      "hi": null
+     },
+     "throttle_s": {
+      "value": 33.5,
+      "unit": "s",
+      "n": 1,
+      "lo": null,
+      "hi": null
+     },
+     "tokens_to_knee": {
+      "value": 1024.0,
+      "unit": "tokens",
+      "n": 1,
+      "lo": null,
+      "hi": null
+     },
+     "ttft.1000": {
+      "value": 3.47365,
+      "unit": "s",
+      "n": 2,
+      "lo": 3.0648,
+      "hi": 3.8825
+     },
+     "ttft.12000": {
+      "value": 44.03875,
+      "unit": "s",
+      "n": 2,
+      "lo": 43.6821,
+      "hi": 44.3954
+     },
+     "ttft.4000": {
+      "value": 13.60065,
+      "unit": "s",
+      "n": 2,
+      "lo": 13.3206,
+      "hi": 13.8807
+     },
+     "ttft.8000": {
+      "value": 27.73555,
+      "unit": "s",
+      "n": 2,
+      "lo": 27.6913,
+      "hi": 27.7798
+     },
+     "ttft.short": {
+      "value": 712.6,
+      "unit": "ms",
+      "n": 9,
+      "lo": 485.0,
+      "hi": 1622.0
+     }
+    },
+    "thermal": {
+     "share_hot": {
+      "value": 96.80390032502709,
+      "unit": "%",
+      "n": 1846,
+      "lo": null,
+      "hi": null
+     },
+     "to_fair_s": {
+      "value": 17.1,
+      "unit": "s",
+      "n": 1,
+      "lo": null,
+      "hi": null
+     },
+     "to_serious_s": {
+      "value": 32.1,
+      "unit": "s",
+      "n": 1,
+      "lo": null,
+      "hi": null
+     },
+     "worst": {
+      "value": 2.0,
+      "unit": "state",
+      "n": 1846,
+      "lo": null,
+      "hi": null
+     }
+    },
+    "battery": {},
+    "verdict": "fades",
+    "repeats": {
+     "runs": 1,
+     "spread": null
+    },
+    "lmx": {},
+    "submissions": [],
+    "server": {
+     "load_s": 0.52,
+     "model_path": "/var/mobile/Containers/Data/Application/D7E8CF25-2F32-424C-856F-4A6A751182D8/Documents/models/LFM2.5-2.6B-Q4_K_M.gguf",
+     "n_ctx": 16384,
+     "total_slots": 4,
+     "build": {
+      "engine": "llama.cpp",
+      "build": "b50-5266f24",
+      "version": "b50",
+      "commit": "5266f24",
+      "app": "0.1.0"
+     },
+     "capacity": {
+      "slots": 4,
+      "context": 16384,
+      "pool": 16384
+     },
+     "weights": "02a8b7e17487d326e46d68ce0ba24211e1b80a14c4cd0597fa73c1cd697f52ed",
+     "probe": {
+      "error": "NameError(\"name 'request_kwargs' is not defined\")"
+     }
+    },
+    "history": [
+     {
+      "id": "20260916-235247-lfm2.5-2.6b-air",
+      "suite": "phone/v1",
+      "effort": "medium",
+      "finished": 1789594610.0301926,
+      "index": null,
+      "decode": 17.743333333333332
+     }
+    ]
+   },
+   {
+    "id": "lfm2_5-2_6b-gguf",
+    "name": "LFM2.5 2.6B \u00b7 llama.cpp \u00b7 Q4_K_M \u00b7 16k",
+    "engine": "llama.cpp",
+    "quantization": "Q4_K_M",
+    "spec": null,
+    "context": 16384,
+    "fingerprint": "9a0c60acef442601",
     "stack": {
      "host": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition|610.57.04",
      "hostLabel": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition \u00b7 driver 610.57.04",
@@ -7345,92 +9223,82 @@
      "source": null
     },
     "run": {
-     "id": "20260915-012817-qwen3-4b-instruct-gguf",
+     "id": "20260916-232854-lfm2_5-2_6b-gguf",
      "suite": "full/v1",
      "kind": "full",
-     "finished": 1789427219.6819456,
+     "finished": 1789605482.7678318,
      "effort": "medium",
-     "harness": "1.1.0+c8ece36",
+     "harness": "1.1.0+9593c20",
      "contended": [],
      "failedItems": 0,
      "notes": null,
-     "reused": {
-      "run": "20260914-222330-qwen3-4b-instruct-gguf",
-      "tasks": [
-       "supergpqa",
-       "math",
-       "tools",
-       "mrcr",
-       "graphwalks",
-       "lcb"
-      ]
-     },
+     "reused": null,
      "stackChange": []
     },
     "index": {
-     "value": 39.76512645313105,
+     "value": 34.76197461646561,
      "unit": "%",
      "n": 5,
-     "lo": 35.72583331351524,
-     "hi": 43.72446393370467
+     "lo": 31.007400951553134,
+     "hi": 38.30008734839825
     },
     "tasks": {
      "supergpqa": {
-      "value": 37.81190019193858,
+      "value": 27.2552783109405,
       "unit": "%",
       "n": 521,
-      "lo": 33.751473353656294,
-      "hi": 42.05074964086244,
-      "tokens": 2515.593090211132,
-      "latency": 23.91,
-      "truncated": 3.45489443378119,
+      "lo": 23.60862305875647,
+      "hi": 31.234895442825728,
+      "tokens": 6839.174664107486,
+      "latency": 8.82,
+      "truncated": 24.184261036468328,
       "unreachable": null,
       "malformed": null,
       "parts": {}
      },
      "math": {
-      "value": 43.65079365079365,
+      "value": 26.984126984126984,
       "unit": "%",
       "n": 63,
-      "lo": 32.02350047332509,
-      "hi": 55.278086828262204,
-      "tokens": 7599.547619047619,
-      "latency": 182.02499999999998,
-      "truncated": 15.079365079365079,
+      "lo": 17.110291234158097,
+      "hi": 36.857962734095864,
+      "tokens": 11474.833333333334,
+      "latency": 36.67,
+      "truncated": 54.761904761904766,
       "unreachable": null,
       "malformed": null,
       "parts": {
-       "aime": 60.0,
-       "hmmt": 28.78787878787879
+       "aime": 31.666666666666664,
+       "hmmt": 22.727272727272727
       }
      },
      "lcb": {
-      "value": 38.613861386138616,
+      "value": 35.64356435643564,
       "unit": "%",
       "n": 101,
-      "lo": 29.702164422098594,
-      "hi": 48.35997884927459,
-      "tokens": 2375.4455445544554,
-      "latency": 49.54,
-      "truncated": 0.0,
+      "lo": 26.986507179349307,
+      "hi": 45.35271694542558,
+      "tokens": 10838.455445544554,
+      "latency": 34.86,
+      "truncated": 51.48514851485149,
       "unreachable": null,
       "malformed": null,
       "parts": {}
      },
      "mrcr": {
-      "value": 2.783241792866998,
+      "value": 0.8581928265621473,
       "unit": "%",
       "n": 60,
-      "lo": 0.0,
-      "hi": 6.1080159449985985,
-      "tokens": 372.8181818181818,
-      "latency": 18.17,
-      "truncated": 0.0,
+      "lo": 0.19827238857713214,
+      "hi": 1.5181132645471627,
+      "tokens": 1940.090909090909,
+      "latency": 4.61,
+      "truncated": 5.0,
       "unreachable": 81.66666666666667,
       "malformed": null,
       "parts": {
        "131072": 0.0,
-       "16384": 11.132967171467993,
+       "16384": 3.4327713062485894,
        "32768": 0.0,
        "65536": 0.0
       }
@@ -7441,8 +9309,8 @@
       "n": 48,
       "lo": 0.0,
       "hi": 6.166666666666666,
-      "tokens": 5241.833333333333,
-      "latency": 137.26,
+      "tokens": 7603.0,
+      "latency": 18.759999999999998,
       "truncated": 22.916666666666664,
       "unreachable": 75.0,
       "malformed": null,
@@ -7454,25 +9322,372 @@
       }
      },
      "tools": {
-      "value": 76.31578947368422,
+      "value": 82.45614035087719,
       "unit": "%",
       "n": 38,
-      "lo": 63.77360408007403,
-      "hi": 88.8579748672944,
-      "tokens": 130.8421052631579,
-      "latency": 2.5549999999999997,
+      "lo": 70.96785062849712,
+      "hi": 93.94443007325727,
+      "tokens": 608.859649122807,
+      "latency": 0.73,
       "truncated": 0.0,
       "unreachable": null,
       "malformed": 0.0,
       "parts": {
-       "clarify": 88.88888888888889,
-       "conditional": 83.33333333333334,
+       "clarify": 66.66666666666666,
+       "conditional": 100.0,
        "distractor": 100.0,
        "irrelevant": 100.0,
        "multi-turn": 100.0,
        "parallel": 100.0,
-       "policy": 91.66666666666666,
-       "recovery": 16.666666666666664,
+       "policy": 100.0,
+       "recovery": 50.0,
+       "sequential": 57.57575757575758,
+       "single": 100.0
+      }
+     }
+    },
+    "qualityFrom": null,
+    "deviceClass": "gpu",
+    "capacity": {
+     "slots": 4,
+     "context": 16384,
+     "pool": 16384
+    },
+    "warnings": [
+     "Capped at 16k tokens per request: MRCR 8-needle 82% out of reach, Graphwalks 75% out of reach"
+    ],
+    "energy": {
+     "perCorrect": {
+      "value": 4.701596333068864,
+      "unit": "Wh",
+      "n": 308,
+      "lo": null,
+      "hi": null
+     },
+     "quality": {
+      "value": 1445.811,
+      "unit": "Wh",
+      "n": 6,
+      "lo": null,
+      "hi": null
+     }
+    },
+    "speed": {
+     "conc.1": {
+      "value": 439.4,
+      "unit": "tok/s",
+      "n": 2,
+      "lo": 436.9,
+      "hi": 441.9
+     },
+     "conc.2": {
+      "value": 699.95,
+      "unit": "tok/s",
+      "n": 2,
+      "lo": 676.3,
+      "hi": 723.6
+     },
+     "conc.4": {
+      "value": 1013.4,
+      "unit": "tok/s",
+      "n": 2,
+      "lo": 983.2,
+      "hi": 1043.6
+     },
+     "decode": {
+      "value": 436.99666666666667,
+      "unit": "tok/s",
+      "n": 3,
+      "lo": null,
+      "hi": null
+     },
+     "decode.code-v1": {
+      "value": 436.36,
+      "unit": "tok/s",
+      "n": 3,
+      "lo": 433.26,
+      "hi": 440.43
+     },
+     "decode.prose-v1": {
+      "value": 441.09,
+      "unit": "tok/s",
+      "n": 3,
+      "lo": 440.17,
+      "hi": 442.55
+     },
+     "decode.reasoning-v1": {
+      "value": 433.54,
+      "unit": "tok/s",
+      "n": 3,
+      "lo": 431.2,
+      "hi": 444.11
+     },
+     "decode_at.1000": {
+      "value": 443.91999999999996,
+      "unit": "tok/s",
+      "n": 2,
+      "lo": 442.25,
+      "hi": 445.59
+     },
+     "decode_at.8000": {
+      "value": 424.62,
+      "unit": "tok/s",
+      "n": 2,
+      "lo": 423.35,
+      "hi": 425.89
+     },
+     "energy": {
+      "value": 0.7285269043908699,
+      "unit": "J/token",
+      "n": 3,
+      "lo": null,
+      "hi": null
+     },
+     "peak": {
+      "value": 1013.4,
+      "unit": "tok/s",
+      "n": 2,
+      "lo": 983.2,
+      "hi": 1043.6
+     },
+     "peak_at": {
+      "value": 4.0,
+      "unit": "requests",
+      "n": 2,
+      "lo": null,
+      "hi": null
+     },
+     "power": {
+      "value": 317.9,
+      "unit": "W",
+      "n": 3,
+      "lo": null,
+      "hi": null
+     },
+     "prefill.1000": {
+      "value": 11138.75,
+      "unit": "tok/s",
+      "n": 2,
+      "lo": 2688.9,
+      "hi": 19588.6
+     },
+     "prefill.8000": {
+      "value": 25440.550000000003,
+      "unit": "tok/s",
+      "n": 2,
+      "lo": 24205.7,
+      "hi": 26675.4
+     },
+     "temp": {
+      "value": 49.0,
+      "unit": "C",
+      "n": 3,
+      "lo": null,
+      "hi": null
+     },
+     "ttft.1000": {
+      "value": 0.2271,
+      "unit": "s",
+      "n": 2,
+      "lo": 0.0559,
+      "hi": 0.3983
+     },
+     "ttft.8000": {
+      "value": 0.32384999999999997,
+      "unit": "s",
+      "n": 2,
+      "lo": 0.3065,
+      "hi": 0.3412
+     },
+     "ttft.short": {
+      "value": 20.299999999999997,
+      "unit": "ms",
+      "n": 9,
+      "lo": 16.2,
+      "hi": 22.700000000000003
+     }
+    },
+    "thermal": {},
+    "battery": {},
+    "verdict": null,
+    "repeats": {
+     "runs": 1,
+     "spread": null
+    },
+    "lmx": {},
+    "submissions": [],
+    "server": {
+     "load_s": 2.3,
+     "model_path": "/mnt/nvme8tb/Downloads/phone-models/LFM2.5-2.6B-Q4_K_M.gguf",
+     "n_ctx": 16384,
+     "total_slots": 4,
+     "build": {
+      "engine": "llama.cpp",
+      "build": "b50-5266f24"
+     },
+     "capacity": {
+      "slots": 4,
+      "context": 16384,
+      "pool": 16384
+     },
+     "weights": "02a8b7e17487d326e46d68ce0ba24211e1b80a14c4cd0597fa73c1cd697f52ed",
+     "probe": {
+      "error": "NameError(\"name 'request_kwargs' is not defined\")"
+     }
+    },
+    "history": [
+     {
+      "id": "20260916-232854-lfm2_5-2_6b-gguf",
+      "suite": "full/v1",
+      "effort": "medium",
+      "finished": 1789605482.7678318,
+      "index": 34.76197461646561,
+      "decode": 436.99666666666667
+     }
+    ]
+   },
+   {
+    "id": "qwen3-4b-instruct-gguf",
+    "name": "Qwen3 4B Instruct \u00b7 llama.cpp \u00b7 Q4_K_M \u00b7 16k",
+    "engine": "llama.cpp",
+    "quantization": "Q4_K_M",
+    "spec": null,
+    "context": 16384,
+    "fingerprint": "2a08a20514a26923",
+    "stack": {
+     "host": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition|610.57.04",
+     "hostLabel": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition \u00b7 driver 610.57.04",
+     "gpu": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+     "driver": "610.57.04",
+     "vramMib": 97887,
+     "deviceClass": "gpu",
+     "device": null,
+     "soc": null,
+     "bandwidthGbs": null,
+     "ramGb": null,
+     "engine": "llama.cpp",
+     "build": "llama.cpp b50-5266f24",
+     "source": null
+    },
+    "run": {
+     "id": "20260915-095921-qwen3-4b-instruct-gguf",
+     "suite": "full/v1",
+     "kind": "full",
+     "finished": 1789466930.1310904,
+     "effort": "medium",
+     "harness": "1.1.0+12b29fe",
+     "contended": [],
+     "failedItems": 3,
+     "notes": null,
+     "reused": null,
+     "stackChange": []
+    },
+    "index": {
+     "value": 39.56411969575936,
+     "unit": "%",
+     "n": 5,
+     "lo": 35.51540125789504,
+     "hi": 43.45954354280014
+    },
+    "tasks": {
+     "supergpqa": {
+      "value": 39.575289575289574,
+      "unit": "%",
+      "n": 518,
+      "lo": 35.45561476692202,
+      "hi": 43.8484499147745,
+      "tokens": 2569.046332046332,
+      "latency": 3.0549999999999997,
+      "truncated": 4.247104247104247,
+      "unreachable": null,
+      "malformed": null,
+      "parts": {}
+     },
+     "math": {
+      "value": 42.06349206349206,
+      "unit": "%",
+      "n": 63,
+      "lo": 30.93003782567211,
+      "hi": 53.19694630131202,
+      "tokens": 7659.341269841269,
+      "latency": 29.814999999999998,
+      "truncated": 15.079365079365079,
+      "unreachable": null,
+      "malformed": null,
+      "parts": {
+       "aime": 55.00000000000001,
+       "hmmt": 30.303030303030305
+      }
+     },
+     "lcb": {
+      "value": 36.633663366336634,
+      "unit": "%",
+      "n": 101,
+      "lo": 27.887722904962388,
+      "hi": 46.359140935345266,
+      "tokens": 2741.0,
+      "latency": 7.38,
+      "truncated": 0.0,
+      "unreachable": null,
+      "malformed": null,
+      "parts": {}
+     },
+     "mrcr": {
+      "value": 2.627008701743005,
+      "unit": "%",
+      "n": 60,
+      "lo": 0.0,
+      "hi": 5.926055525190442,
+      "tokens": 372.6363636363636,
+      "latency": 3.11,
+      "truncated": 0.0,
+      "unreachable": 81.66666666666667,
+      "malformed": null,
+      "parts": {
+       "131072": 0.0,
+       "16384": 10.50803480697202,
+       "32768": 0.0,
+       "65536": 0.0
+      }
+     },
+     "graphwalks": {
+      "value": 2.083333333333333,
+      "unit": "%",
+      "n": 48,
+      "lo": 0.0,
+      "hi": 6.166666666666666,
+      "tokens": 4720.0,
+      "latency": 27.4,
+      "truncated": 20.833333333333336,
+      "unreachable": 75.0,
+      "malformed": null,
+      "parts": {
+       "16384": 0.0,
+       "32768": 0.0,
+       "65536": 0.0,
+       "8192": 8.333333333333332
+      }
+     },
+     "tools": {
+      "value": 77.19298245614034,
+      "unit": "%",
+      "n": 38,
+      "lo": 64.60311401616798,
+      "hi": 89.7828508961127,
+      "tokens": 131.30701754385964,
+      "latency": 0.41,
+      "truncated": 0.0,
+      "unreachable": null,
+      "malformed": 0.0,
+      "parts": {
+       "clarify": 77.77777777777779,
+       "conditional": 100.0,
+       "distractor": 100.0,
+       "irrelevant": 100.0,
+       "multi-turn": 100.0,
+       "parallel": 100.0,
+       "policy": 83.33333333333334,
+       "recovery": 50.0,
        "sequential": 54.54545454545454,
        "single": 73.33333333333333
       }
@@ -7481,25 +9696,25 @@
     "qualityFrom": null,
     "deviceClass": "gpu",
     "capacity": {
-     "slots": 8,
+     "slots": 4,
      "context": 16384,
-     "pool": 131072
+     "pool": 16384
     },
     "warnings": [
      "Capped at 16k tokens per request: MRCR 8-needle 82% out of reach, Graphwalks 75% out of reach"
     ],
     "energy": {
      "perCorrect": {
-      "value": 1.899897435897436,
+      "value": 2.9958150538303774,
       "unit": "Wh",
-      "n": 39,
+      "n": 386,
       "lo": null,
       "hi": null
      },
      "quality": {
-      "value": 74.096,
+      "value": 1155.115,
       "unit": "Wh",
-      "n": 1,
+      "n": 6,
       "lo": null,
       "hi": null
      }
@@ -7518,15 +9733,15 @@
      "load_s": 2.3,
      "model_path": "/mnt/nvme8tb/Downloads/phone-models/Qwen3-4B-Instruct-2507-Q4_K_M.gguf",
      "n_ctx": 16384,
-     "total_slots": 8,
+     "total_slots": 4,
      "build": {
       "engine": "llama.cpp",
       "build": "b50-5266f24"
      },
      "capacity": {
-      "slots": 8,
+      "slots": 4,
       "context": 16384,
-      "pool": 131072
+      "pool": 16384
      },
      "weights": "3605803b982cb64aead44f6c1b2ae36e3acdb41d8e46c8a94c6533bc4c67e597",
      "probe": {
@@ -7534,6 +9749,14 @@
      }
     },
     "history": [
+     {
+      "id": "20260915-095921-qwen3-4b-instruct-gguf",
+      "suite": "full/v1",
+      "effort": "medium",
+      "finished": 1789466930.1310904,
+      "index": 39.56411969575936,
+      "decode": null
+     },
      {
       "id": "20260915-012817-qwen3-4b-instruct-gguf",
       "suite": "full/v1",
@@ -12362,69 +14585,69 @@
      "stackChange": []
     },
     "index": {
-     "value": 39.76512645313105,
+     "value": 39.56411969575936,
      "unit": "%",
      "n": 5,
-     "lo": 35.72583331351524,
-     "hi": 43.72446393370467
+     "lo": 35.51540125789504,
+     "hi": 43.45954354280014
     },
     "tasks": {
      "supergpqa": {
-      "value": 37.81190019193858,
+      "value": 39.575289575289574,
       "unit": "%",
-      "n": 521,
-      "lo": 33.751473353656294,
-      "hi": 42.05074964086244,
-      "tokens": 2515.593090211132,
-      "latency": 23.91,
-      "truncated": 3.45489443378119,
+      "n": 518,
+      "lo": 35.45561476692202,
+      "hi": 43.8484499147745,
+      "tokens": 2569.046332046332,
+      "latency": 3.0549999999999997,
+      "truncated": 4.247104247104247,
       "unreachable": null,
       "malformed": null,
       "parts": {}
      },
      "math": {
-      "value": 43.65079365079365,
+      "value": 42.06349206349206,
       "unit": "%",
       "n": 63,
-      "lo": 32.02350047332509,
-      "hi": 55.278086828262204,
-      "tokens": 7599.547619047619,
-      "latency": 182.02499999999998,
+      "lo": 30.93003782567211,
+      "hi": 53.19694630131202,
+      "tokens": 7659.341269841269,
+      "latency": 29.814999999999998,
       "truncated": 15.079365079365079,
       "unreachable": null,
       "malformed": null,
       "parts": {
-       "aime": 60.0,
-       "hmmt": 28.78787878787879
+       "aime": 55.00000000000001,
+       "hmmt": 30.303030303030305
       }
      },
      "lcb": {
-      "value": 38.613861386138616,
+      "value": 36.633663366336634,
       "unit": "%",
       "n": 101,
-      "lo": 29.702164422098594,
-      "hi": 48.35997884927459,
-      "tokens": 2375.4455445544554,
-      "latency": 49.54,
+      "lo": 27.887722904962388,
+      "hi": 46.359140935345266,
+      "tokens": 2741.0,
+      "latency": 7.38,
       "truncated": 0.0,
       "unreachable": null,
       "malformed": null,
       "parts": {}
      },
      "mrcr": {
-      "value": 2.783241792866998,
+      "value": 2.627008701743005,
       "unit": "%",
       "n": 60,
       "lo": 0.0,
-      "hi": 6.1080159449985985,
-      "tokens": 372.8181818181818,
-      "latency": 18.17,
+      "hi": 5.926055525190442,
+      "tokens": 372.6363636363636,
+      "latency": 3.11,
       "truncated": 0.0,
       "unreachable": 81.66666666666667,
       "malformed": null,
       "parts": {
        "131072": 0.0,
-       "16384": 11.132967171467993,
+       "16384": 10.50803480697202,
        "32768": 0.0,
        "65536": 0.0
       }
@@ -12435,9 +14658,9 @@
       "n": 48,
       "lo": 0.0,
       "hi": 6.166666666666666,
-      "tokens": 5241.833333333333,
-      "latency": 137.26,
-      "truncated": 22.916666666666664,
+      "tokens": 4720.0,
+      "latency": 27.4,
+      "truncated": 20.833333333333336,
       "unreachable": 75.0,
       "malformed": null,
       "parts": {
@@ -12448,32 +14671,32 @@
       }
      },
      "tools": {
-      "value": 76.31578947368422,
+      "value": 77.19298245614034,
       "unit": "%",
       "n": 38,
-      "lo": 63.77360408007403,
-      "hi": 88.8579748672944,
-      "tokens": 130.8421052631579,
-      "latency": 2.5549999999999997,
+      "lo": 64.60311401616798,
+      "hi": 89.7828508961127,
+      "tokens": 131.30701754385964,
+      "latency": 0.41,
       "truncated": 0.0,
       "unreachable": null,
       "malformed": 0.0,
       "parts": {
-       "clarify": 88.88888888888889,
-       "conditional": 83.33333333333334,
+       "clarify": 77.77777777777779,
+       "conditional": 100.0,
        "distractor": 100.0,
        "irrelevant": 100.0,
        "multi-turn": 100.0,
        "parallel": 100.0,
-       "policy": 91.66666666666666,
-       "recovery": 16.666666666666664,
+       "policy": 83.33333333333334,
+       "recovery": 50.0,
        "sequential": 54.54545454545454,
        "single": 73.33333333333333
       }
      }
     },
     "qualityFrom": {
-     "run": "20260915-012817-qwen3-4b-instruct-gguf",
+     "run": "20260915-095921-qwen3-4b-instruct-gguf",
      "model": "qwen3-4b-instruct-gguf",
      "suite": "full/v1",
      "host": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition \u00b7 driver 610.57.04",
