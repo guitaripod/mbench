@@ -26,8 +26,16 @@ class Profile:
     fingerprint: str = ""
     sources: dict = field(default_factory=dict)
     phone: dict = field(default_factory=dict)
+    remote: dict = field(default_factory=dict)
     base_url: str | None = None
     twin: str | None = None
+    served_as: str | None = None
+
+    @property
+    def served(self):
+        """The name the server answering for this model knows it by. A llama-swap model is its own id; a server
+        somewhere else on the network was started with a path or a repo id of its own."""
+        return self.served_as or self.id
 
     def to_dict(self):
         return asdict(self)
@@ -148,10 +156,38 @@ def phone_profile(model_id, user):
     )
 
 
+def remote_profile(model_id, user):
+    """A model served by an OpenAI-compatible server on another machine — a Mac running MLX, say. There is no
+    llama-swap entry and nothing to launch: models.toml says where the server is and what it calls the model."""
+    settings = dict(user["remote"])
+    body = json.dumps({key: value for key, value in sorted(settings.items()) if key != "base_url"}, sort_keys=True)
+    return Profile(
+        id=model_id,
+        name=user.get("name") or model_id,
+        engine=user.get("engine_kind") or "mlx",
+        thinking=user.get("thinking") or "none",
+        context=user.get("context"),
+        efforts=list(user.get("efforts") or []),
+        hf_id=user.get("hf_id"),
+        quantization=user.get("quantization"),
+        spec=user.get("spec") or {},
+        engine_meta=user.get("engine") or {},
+        cmd=body,
+        fingerprint=hashlib.sha256(body.encode()).hexdigest()[:16],
+        sources={key: "models.toml" for key in ("name", "thinking", "context", "efforts", "hf_id")},
+        remote=settings,
+        twin=user.get("twin"),
+        base_url=settings.get("base_url"),
+        served_as=settings.get("model"),
+    )
+
+
 def resolve(model_id):
     declared = user_profiles().get(model_id, {})
     if declared.get("phone"):
         return phone_profile(model_id, declared)
+    if declared.get("remote"):
+        return remote_profile(model_id, declared)
     config = swap_config()
     models = config.get("models") or {}
     entry = models.get(model_id)

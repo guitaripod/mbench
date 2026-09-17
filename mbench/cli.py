@@ -214,13 +214,25 @@ def selected_tasks(args):
     return [task for task in tasks if task in chosen and task not in skipped]
 
 
-def phone_run(chosen):
-    """Phone models and desktop models can't share a run: they answer on different servers and are measured under
+DEVICE_NAMES = {"phone": "mbenchd", "remote": "the server", "gpu": "llama-swap"}
+
+
+def device_of(profile):
+    """Which machine answers for a model: the phone on the cable, a server somewhere else, or llama-swap here."""
+    if profile.phone:
+        return "phone"
+    if profile.remote:
+        return "remote"
+    return "gpu"
+
+
+def one_device(chosen):
+    """Models on different machines can't share a run: they answer on different servers and are measured under
     different suites."""
-    phones = [profile for profile in chosen if profile.phone]
-    if phones and len(phones) != len(chosen):
-        fail("a phone model and a desktop model can't be queued together; run them separately")
-    return bool(phones)
+    devices = {device_of(profile) for profile in chosen}
+    if len(devices) > 1:
+        fail("models on different machines can't be queued together; run them separately")
+    return devices.pop() if devices else "gpu"
 
 
 def cmd_run(args):
@@ -229,12 +241,13 @@ def cmd_run(args):
         fail("--reuse with a run id works for one model; with several, --reuse picks each model's newest run")
     at, window = window_of(args)
     chosen = [resolve_profile(model) for model in models]
-    on_phone = phone_run(chosen)
+    device = one_device(chosen)
+    on_phone = device == "phone"
     for profile in chosen:
         host = hosts.for_profile(profile)
         if not host.reachable():
             where = host.device.control_url if on_phone else host.base_url()
-            fail(f"{'mbenchd' if on_phone else 'llama-swap'} is not answering at {where}")
+            fail(f"{DEVICE_NAMES[device]} is not answering at {where}")
     tasks = selected_tasks(args)
     if on_phone:
         asked = [task for task in tasks if task not in suite.PHONE_TASKS]
@@ -252,7 +265,7 @@ def cmd_run(args):
             fail(f"--submit needs {', '.join(lmx.missing_fields(profile))} for {profile.id} in {paths.PROFILES}")
     db = store.connect()
     reconcile(db)
-    active = busy(store.list_runs(db), "phone" if on_phone else "gpu", speed="speed" in tasks)
+    active = busy(store.list_runs(db), units.class_of(device), speed="speed" in tasks)
     suite_name = "smoke" if args.smoke else "phone" if on_phone else "quick" if args.quick else "full"
     now = datetime.now()
     begins = schedule.first_start(now, window, at).timestamp() if window else now.timestamp()
@@ -268,7 +281,7 @@ def cmd_run(args):
             flags["quality_from"] = args.quality_from or {"twin": profile.twin}
         if carried:
             flags["reused"] = {"run": source["id"], "tasks": carried}
-        sharing = "speed" not in tasks and not on_phone
+        sharing = "speed" not in tasks and device == "gpu"
         starts_now = (window is None and not active
                       and (position == 0 or (sharing and position < MAX_SHARED_RUNS)))
         if not starts_now:
@@ -304,12 +317,12 @@ def cmd_run(args):
     if not immediate:
         print("`mbench status` lists the schedule; `mbench cancel <run>` takes a run off it.")
         return
-    config = {} if on_phone else profiles.swap_config()
+    config = profiles.swap_config() if device == "gpu" else {}
     resident = {profile.id for profile in chosen}
     resident |= {model for model in (config.get("models") or {})
                  if profiles.group_of(model, config)
                  and profiles.group_of(model, config) in {profiles.group_of(profile.id, config) for profile in chosen}}
-    others = [] if on_phone else [entry["model"] for entry in swap.running() if entry["model"] not in resident]
+    others = [entry["model"] for entry in swap.running() if entry["model"] not in resident] if device == "gpu" else []
     if others:
         print(f"llama-swap will unload {', '.join(others)} to make room.")
     for run_id in starting[1:]:
@@ -725,13 +738,13 @@ def cmd_doctor(args):
         fail(str(error))
     host = hosts.for_profile(profile)
     if not host.reachable():
-        fail(f"{'mbenchd' if profile.phone else 'llama-swap'} is not answering at {host.base_url()}")
+        fail(f"{DEVICE_NAMES[device_of(profile)]} is not answering at {host.base_url()}")
     db = store.connect()
     reconcile(db)
     active = [run for run in store.list_runs(db) if run["status"] in ACTIVE]
     if active:
         fail(f"{active[0]['id']} is running; the checks would compete with it")
-    others = [] if profile.phone else [entry["model"] for entry in swap.running() if entry["model"] != profile.id]
+    others = [] if (profile.phone or profile.remote) else [entry["model"] for entry in swap.running() if entry["model"] != profile.id]
     if others:
         print(f"llama-swap will unload {', '.join(others)} to make room.")
     seconds = host.ensure_loaded()
@@ -944,7 +957,7 @@ def parser():
     resume.add_argument("--until", metavar="TIME", help="with --at: stop at this time each day and continue the next")
     resume.set_defaults(handler=cmd_resume)
     ls = commands.add_parser("ls", help="ranked table of every model in the terminal")
-    ls.add_argument("--device", choices=("gpu", "phone"), default="gpu",
+    ls.add_argument("--device", choices=("gpu", "phone", "mac"), default="gpu",
                     help="which tier to rank: the card's models or the phone's (default: gpu)")
     ls.add_argument("--effort", default="medium", metavar="LEVEL", help="which effort's ranking, e.g. medium or max (default medium)")
     ls.add_argument("--suite", metavar="VERSION", help=f"which suite version's ranking (default {suite.VERSION})")

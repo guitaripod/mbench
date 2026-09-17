@@ -74,7 +74,7 @@ class SpeedRun:
         finish = None
         try:
             stream = await self.client.chat.completions.create(
-                model=self.profile.id, messages=messages, max_tokens=max_tokens, stream=True,
+                model=self.profile.served, messages=messages, max_tokens=max_tokens, stream=True,
                 stream_options={"include_usage": True}, **request_kwargs(self.profile, self.effort, greedy=True),
             )
             async for chunk in stream:

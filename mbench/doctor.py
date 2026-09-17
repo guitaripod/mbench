@@ -33,7 +33,7 @@ async def ask(client, profile, effort, messages, max_tokens, tools=None):
     kwargs = engine.request_kwargs(profile, effort)
     if tools:
         kwargs.update(tools=tools, tool_choice="auto")
-    return await client.chat.completions.create(model=profile.id, messages=messages, max_tokens=max_tokens, **kwargs)
+    return await client.chat.completions.create(model=profile.served, messages=messages, max_tokens=max_tokens, **kwargs)
 
 
 async def check_answer(client, profile, effort):
@@ -167,7 +167,7 @@ async def fingerprint(profile, effort):
                          max_retries=0)
     try:
         answer = await client.chat.completions.create(
-            model=profile.id, messages=[{"role": "user", "content": FINGERPRINT_PROMPT}], max_tokens=64,
+            model=profile.served, messages=[{"role": "user", "content": FINGERPRINT_PROMPT}], max_tokens=64,
             **request_kwargs(profile, effort, greedy=True))
     except Exception as error:
         return {"error": repr(error)[:200]}

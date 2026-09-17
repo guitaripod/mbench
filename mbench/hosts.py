@@ -1,3 +1,6 @@
+import urllib.error
+import urllib.request
+
 from . import gpu, paths, phone, profiles, stack, swap
 
 
@@ -129,5 +132,91 @@ class PhoneHost:
         return phone.Guard(self.device, halt, events)
 
 
+class NullSampler:
+    """Nothing to sample: a machine across the network reports no power of its own, so a run records none rather than
+    guessing one."""
+
+    def window(self, start, end):
+        return {}
+
+    def energy_wh(self, start, end):
+        return None
+
+    def timeline(self):
+        return []
+
+    def close(self):
+        return None
+
+
+class RemoteHost:
+    """An OpenAI-compatible server on another machine — the Mac running MLX. Nothing here is launched or unloaded:
+    the server holds the model, and mbench only measures what it answers."""
+
+    kind = "remote"
+
+    def __init__(self, profile):
+        self.profile = profile
+        self.settings = profile.remote or {}
+
+    def base_url(self):
+        return (self.settings.get("base_url") or "").rstrip("/")
+
+    def reachable(self):
+        try:
+            with urllib.request.urlopen(self.base_url() + "/v1/models", timeout=10):
+                return True
+        except (OSError, urllib.error.HTTPError):
+            return False
+
+    def ensure_loaded(self):
+        """The server loads what a request names, so a run only waits for it to answer one."""
+        return None
+
+    def unload(self):
+        return None
+
+    def server_info(self):
+        return swap.direct_info(self.base_url())
+
+    def kv_unified(self):
+        return False
+
+    def describe(self):
+        return {
+            "class": self.settings.get("class") or "mac",
+            "device": self.settings.get("device") or "remote server",
+            "soc": self.settings.get("soc"),
+            "ram_gb": self.settings.get("ram_gb"),
+            "bandwidth_gbs": self.settings.get("bandwidth_gbs"),
+            "os": self.settings.get("os"),
+        }
+
+    def build(self, info):
+        return stack.build(self.profile.engine, info)
+
+    def digest(self, info):
+        return None
+
+    def sampler(self, interval_ms=1000):
+        return NullSampler()
+
+    def contention(self, samples=3):
+        return []
+
+    def describe_contention(self, found):
+        return ""
+
+    def cooldown(self, report=None):
+        return {}
+
+    def guard(self, halt, events):
+        return None
+
+
 def for_profile(profile):
-    return PhoneHost(profile) if profile.phone else GpuHost(profile)
+    if profile.phone:
+        return PhoneHost(profile)
+    if profile.remote:
+        return RemoteHost(profile)
+    return GpuHost(profile)

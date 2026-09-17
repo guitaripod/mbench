@@ -169,7 +169,7 @@ final class MLXRunner: @unchecked Sendable {
         lock.unlock()
 
         AppLogger.info(.server, "loading MLX model: \(arguments.joined(separator: " "))")
-        MLX.GPU.set(cacheLimit: 64 * 1024 * 1024)
+        MLXRunner.holdMemoryBelowTheLimit()
         do {
             let loaded = try await MLXRunner.container(for: directory)
             let listening = InferenceServer(port: UInt16(port))
@@ -190,6 +190,20 @@ final class MLXRunner: @unchecked Sendable {
             AppLogger.error(.server, "MLX load failed: \(error)")
             throw error
         }
+    }
+
+    /// iOS kills an app that asks for more memory than it is given, and MLX will happily ask: it keeps a buffer
+    /// cache and allocates whatever a prompt needs. A ceiling well under what the app is allowed turns that into a
+    /// failed request — which a run records and reports — instead of a dead app and a lost run.
+    private static func holdMemoryBelowTheLimit() {
+        MLX.GPU.set(cacheLimit: 32 * 1024 * 1024)
+        MLX.GPU.set(memoryLimit: memoryCeiling, relaxed: false)
+        MLX.GPU.clearCache()
+    }
+
+    private static var memoryCeiling: Int {
+        let available = Int(DeviceTelemetry.shared.snapshot().availableMib * 1024 * 1024)
+        return max(768 * 1024 * 1024, Int(Double(available) * 0.7))
     }
 
     /// Text models load through the LLM factory and multimodal ones through the VLM factory. A folder says which
@@ -243,10 +257,12 @@ final class MLXRunner: @unchecked Sendable {
 
         let parameters = GenerateParameters(
             maxTokens: sampling.maxTokens,
+            maxKVSize: limit,
             temperature: sampling.temperature ?? settings.temperature,
             topP: sampling.topP ?? settings.topP,
             topK: sampling.topK ?? settings.topK,
             repetitionPenalty: settings.repetitionPenalty,
+            prefillStepSize: 256,
             seed: sampling.seed)
 
         var splitter = ReasoningSplitter(open: open)
@@ -267,6 +283,7 @@ final class MLXRunner: @unchecked Sendable {
                 if info.stopReason == .length { reason = "length" }
             }
         }
+        MLX.GPU.clearCache()
         let tail = splitter.flush()
         if !tail.reasoning.isEmpty { await emit(.reasoning(tail.reasoning)) }
         if !tail.content.isEmpty { await emit(.content(tail.content)) }

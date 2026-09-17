@@ -11,6 +11,12 @@ MAX_SHARED_RUNS = 3
 RECONCILE_GRACE_S = 300
 
 
+def class_of(device):
+    """The hardware class a run of this kind records. A remote server is named by the machine it runs on, which is
+    what the board groups and compares within."""
+    return {"remote": "mac"}.get(device, device)
+
+
 def device_class(run):
     return ((run or {}).get("hardware") or {}).get("class") or GPU_CLASS
 

@@ -253,7 +253,7 @@ class QualityRunner:
         if item.get("tools"):
             kwargs.update(tools=item["tools"], tool_choice="auto")
         return await self.client.chat.completions.create(
-            model=self.profile.id, messages=messages or item["messages"], max_tokens=item["max_tokens"], **kwargs
+            model=self.profile.served, messages=messages or item["messages"], max_tokens=item["max_tokens"], **kwargs
         )
 
     async def episode(self, item, started):

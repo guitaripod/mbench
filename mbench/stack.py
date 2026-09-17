@@ -118,15 +118,15 @@ def build_label(found):
 
 def host_key(hardware):
     hardware = hardware or {}
-    if hardware.get("class") == "phone":
+    if hardware.get("class") in ("phone", "mac"):
         return f"{hardware.get('device') or '?'}|{hardware.get('os') or '?'}"
     return f"{hardware.get('gpu') or '?'}|{hardware.get('driver') or '?'}"
 
 
 def host_label(hardware):
     hardware = hardware or {}
-    if hardware.get("class") == "phone":
-        parts = [hardware.get("device") or "unknown phone", hardware.get("soc"), hardware.get("os")]
+    if hardware.get("class") in ("phone", "mac"):
+        parts = [hardware.get("device") or "unknown machine", hardware.get("soc"), hardware.get("os")]
         return " · ".join(part for part in parts if part)
     parts = [hardware.get("gpu") or "unknown GPU"]
     if hardware.get("driver"):
