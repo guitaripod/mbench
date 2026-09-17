@@ -86,7 +86,7 @@ final class ControlServer: @unchecked Sendable {
         connection.send(content: payload, completion: .contentProcessed { _ in connection.cancel() })
     }
 
-    private static func parse(_ data: Data) -> HTTPRequest? {
+    static func parse(_ data: Data) -> HTTPRequest? {
         guard let separator = data.range(of: Data("\r\n\r\n".utf8)) else { return nil }
         let header = String(decoding: data[..<separator.lowerBound], as: UTF8.self)
         let lines = header.split(separator: "\r\n", omittingEmptySubsequences: false)

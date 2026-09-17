@@ -269,8 +269,8 @@ def tool():
     return found
 
 
-def run_tool(*args, timeout=600, capture=True):
-    return subprocess.run([tool(), *args], capture_output=capture, text=True, timeout=timeout)
+def run_tool(*args, timeout=600, capture=True, feed=None):
+    return subprocess.run([tool(), *args], capture_output=capture, text=True, timeout=timeout, input=feed)
 
 
 def complain(completed):
@@ -320,13 +320,47 @@ def launch(kill_existing=True):
     return int(text.rsplit("pid", 1)[-1].split()[0])
 
 
+def kill():
+    """Stops the app on the phone. An install over a running app leaves the old binary running until something stops
+    it, so a new build is never the one answering until this has happened."""
+    completed = run_tool("developer", "dvt", "pkill", "--bundle", bundle_id(), timeout=120)
+    return completed.returncode == 0
+
+
+def weight_of(path):
+    """What a push will carry: one file, or every file in a model's folder."""
+    if path.is_file():
+        return path.stat().st_size
+    return sum(entry.stat().st_size for entry in path.iterdir() if entry.is_file())
+
+
 def push(path, name=None):
-    """Copies a .gguf into the app's Documents/models over USB."""
+    """Copies a .gguf, or an MLX model's folder, into the app's Documents/models over USB."""
+    if path.is_dir():
+        return push_folder(path, name)
     target = f"Documents/models/{name or path.name}"
     completed = run_tool("apps", "push", bundle_id(), str(path), target, timeout=7200)
     if completed.returncode != 0:
-        raise RuntimeError(f"push failed: {completed.stderr.strip()[:300]}")
+        raise RuntimeError(f"push failed: {complain(completed)}")
     return target
+
+
+def push_folder(path, name=None):
+    """MLX keeps a model as a folder — weights, config and tokenizer — and AFC copies one file at a time, so the
+    folder is made first and its files sent into it."""
+    folder = name or path.name
+    make_folder(f"Documents/models/{folder}")
+    for file in sorted(entry for entry in path.iterdir() if entry.is_file()):
+        push(file, f"{folder}/{file.name}")
+    return f"Documents/models/{folder}"
+
+
+def make_folder(remote):
+    """AFC's shell is the only way pymobiledevice3 offers to make a directory inside an app container."""
+    completed = run_tool("apps", "afc", bundle_id(), feed=f"mkdir {remote}\nexit\n")
+    if completed.returncode != 0:
+        raise RuntimeError(f"could not make {remote} on the phone: {complain(completed)}")
+    return remote
 
 
 def pull(remote, local):

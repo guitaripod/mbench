@@ -14,6 +14,8 @@ struct LoadRequest: Codable, Sendable {
     var chatTemplate: String?
     var port: Int?
     var extraArgs: [String]?
+    var engine: String?
+    var reasoningOpen: Bool?
 }
 
 struct ServerStatus: Codable, Sendable {
@@ -27,6 +29,8 @@ struct ServerStatus: Codable, Sendable {
     var modelSha256: String?
     var exitCode: Int32?
     var error: String?
+    var engine: String?
+    var slots: Int?
 }
 
 enum LoadError: Error {
@@ -48,7 +52,7 @@ final class LlamaServerRunner: @unchecked Sendable {
 
     private let gate = LoadGate()
     private let lock = NSLock()
-    private var status = ServerStatus(state: "idle", args: [])
+    private var status = ServerStatus(state: "idle", args: [], engine: "llama.cpp")
     private var thread: Thread?
     private var finished = DispatchSemaphore(value: 0)
     private var argumentStorage: [UnsafeMutablePointer<CChar>?] = []
@@ -86,7 +90,8 @@ final class LlamaServerRunner: @unchecked Sendable {
         let digest = ModelDigest.of(model)
         lock.lock()
         status = ServerStatus(state: "loading", model: request.model, modelPath: model.path, port: port,
-                              args: arguments, startedAt: started.timeIntervalSince1970, modelSha256: digest)
+                              args: arguments, startedAt: started.timeIntervalSince1970, modelSha256: digest,
+                              engine: "llama.cpp", slots: request.parallel ?? 1)
         finished = DispatchSemaphore(value: 0)
         lock.unlock()
 
@@ -126,7 +131,7 @@ final class LlamaServerRunner: @unchecked Sendable {
         thread = nil
         argumentStorage.forEach { free($0) }
         argumentStorage = []
-        status = ServerStatus(state: "idle", args: [], exitCode: status.exitCode)
+        status = ServerStatus(state: "idle", args: [], exitCode: status.exitCode, engine: "llama.cpp")
         lock.unlock()
         AppLogger.info(.server, "llama-server stopped")
     }

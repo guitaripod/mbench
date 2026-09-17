@@ -9,6 +9,7 @@ struct AppInfo: Codable, Sendable {
     let logPath: String
     let serverLogPath: String
     let modelsPath: String
+    let engines: [String]
 }
 
 struct DeviceInfo: Codable, Sendable {
@@ -42,7 +43,7 @@ enum Router {
         case ("POST", "/mb/load"):
             return await load(request)
         case ("POST", "/mb/unload"), ("GET", "/unload"):
-            await LlamaServerRunner.shared.unload()
+            await unloadAll()
             return HTTPResponse.json(["ok": true])
         case ("GET", "/running"):
             return HTTPResponse.json(["running": running()])
@@ -59,7 +60,8 @@ enum Router {
                 llamaBuild: mb_llama_build_number(),
                 logPath: LogFileWriter.shared.path,
                 serverLogPath: ModelStore.logDirectory.appendingPathComponent("llama-server.log").path,
-                modelsPath: ModelStore.directory.path
+                modelsPath: ModelStore.directory.path,
+                engines: engines
             ),
             device: DeviceInfo(
                 hardware: DeviceTelemetry.hardware(),
@@ -67,8 +69,45 @@ enum Router {
                 processors: ProcessInfo.processInfo.processorCount
             ),
             telemetry: DeviceTelemetry.shared.snapshot(),
-            server: LlamaServerRunner.shared.snapshot()
+            server: active()
         )
+    }
+
+    /// The engine that is loaded, or llama.cpp when nothing is: a run reads one server status, whichever engine
+    /// answered it.
+    static func active() -> ServerStatus {
+        #if MBENCHD_MLX
+        if MLXRunner.shared.isRunning { return MLXRunner.shared.snapshot() }
+        #endif
+        return LlamaServerRunner.shared.snapshot()
+    }
+
+    static var engines: [String] {
+        #if MBENCHD_MLX
+        return ["llama.cpp", "mlx"]
+        #else
+        return ["llama.cpp"]
+        #endif
+    }
+
+    /// Loads a model into the engine the request names, leaving nothing of the other engine behind: two engines
+    /// cannot hold the port, and a phone has room for one model at a time.
+    static func loadEngine(_ request: LoadRequest) async throws -> ServerStatus {
+        #if MBENCHD_MLX
+        if request.engine == "mlx" {
+            await LlamaServerRunner.shared.unload()
+            return try await MLXRunner.shared.load(request)
+        }
+        await MLXRunner.shared.unload()
+        #endif
+        return try await LlamaServerRunner.shared.load(request)
+    }
+
+    static func unloadAll() async {
+        await LlamaServerRunner.shared.unload()
+        #if MBENCHD_MLX
+        await MLXRunner.shared.unload()
+        #endif
     }
 
     private static func load(_ request: HTTPRequest) async -> HTTPResponse {
@@ -78,7 +117,7 @@ enum Router {
             return HTTPResponse.error("bad load request", status: 400)
         }
         do {
-            let status = try await LlamaServerRunner.shared.load(payload)
+            let status = try await loadEngine(payload)
             return HTTPResponse.json(status)
         } catch let error as LoadError {
             AppLogger.error(.server, "load failed: \(error)")
@@ -90,7 +129,7 @@ enum Router {
     }
 
     private static func running() -> [[String: String]] {
-        let status = LlamaServerRunner.shared.snapshot()
+        let status = active()
         guard status.state == "running", let model = status.model else { return [] }
         return [["model": model, "state": "ready"]]
     }

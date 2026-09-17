@@ -60,7 +60,7 @@ final class AppState: @unchecked Sendable {
     @MainActor
     func refresh() {
         telemetry = DeviceTelemetry.shared.snapshot()
-        server = LlamaServerRunner.shared.snapshot()
+        server = Router.active()
         models = ModelStore.all()
         logLines = LogFileWriter.shared.tail(lines: 40)
         guard server.state == "running", let port = server.port else {
@@ -77,9 +77,11 @@ final class AppState: @unchecked Sendable {
     func load(_ model: StoredModel) {
         Task {
             do {
-                _ = try await LlamaServerRunner.shared.load(LoadRequest(model: model.file, nCtx: 8192, parallel: 4,
-                                                                       flashAttn: "on", cacheTypeK: "q8_0",
-                                                                       cacheTypeV: "q8_0", extraArgs: ["-kvu"]))
+                let request = LoadRequest(model: model.file, nCtx: 8192, parallel: 4, flashAttn: "on",
+                                          cacheTypeK: "q8_0", cacheTypeV: "q8_0", extraArgs: ["-kvu"],
+                                          engine: ModelStore.isModelDirectory(ModelStore.directory
+                                              .appendingPathComponent(model.file)) ? "mlx" : "llama.cpp")
+                _ = try await Router.loadEngine(request)
             } catch {
                 AppLogger.error(.server, "load from the screen failed: \(error)")
             }
@@ -88,7 +90,7 @@ final class AppState: @unchecked Sendable {
 
     @MainActor
     func unload() {
-        Task { await LlamaServerRunner.shared.unload() }
+        Task { await Router.unloadAll() }
     }
 
     /// Keeps the last minute of decode speed so the screen can show the shape of the throttle, not just a number.

@@ -9,7 +9,7 @@ from . import __version__ as VERSION
 from . import gpu, paths
 
 PLACEHOLDER_VERSIONS = ("", "0.0.0", "0.0.0.dev0", "unknown", "dev")
-ENGINE_LABELS = {"sglang": "SGLang", "llama.cpp": "llama.cpp", "vllm": "vLLM"}
+ENGINE_LABELS = {"sglang": "SGLang", "llama.cpp": "llama.cpp", "vllm": "vLLM", "mlx": "MLX"}
 ENGINE_PACKAGES = {"sglang": "sglang", "vllm": "vllm"}
 
 

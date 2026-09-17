@@ -820,3 +820,51 @@ def test_a_finished_gpu_run_leaves_llama_swap_alone():
             raise AssertionError("a run sharing the box may still be using what llama-swap holds")
 
     worker.free_the_phone(Host(), Events())
+
+
+def test_a_model_folder_is_made_before_its_files_are_pushed(tmp_path, monkeypatch):
+    folder = tmp_path / "LFM2.5-2.6B-MLX-4bit"
+    folder.mkdir()
+    (folder / "config.json").write_text("{}")
+    (folder / "model.safetensors").write_bytes(b"0" * 2048)
+    said = []
+
+    class Completed:
+        returncode = 0
+        stdout = ""
+        stderr = ""
+
+    def record(*args, **kwargs):
+        said.append(args)
+        return Completed()
+
+    monkeypatch.setattr(phone, "bundle_id", lambda: "com.example.mbenchd")
+    monkeypatch.setattr(phone, "run_tool", record)
+    assert phone.push(folder) == "Documents/models/LFM2.5-2.6B-MLX-4bit"
+    assert said[0][:3] == ("apps", "afc", "com.example.mbenchd")
+    pushed = [call[4] for call in said[1:]]
+    assert pushed == ["Documents/models/LFM2.5-2.6B-MLX-4bit/config.json",
+                      "Documents/models/LFM2.5-2.6B-MLX-4bit/model.safetensors"]
+
+
+def test_a_folder_weighs_what_its_files_weigh(tmp_path):
+    folder = tmp_path / "model"
+    folder.mkdir()
+    (folder / "one").write_bytes(b"0" * 100)
+    (folder / "two").write_bytes(b"0" * 200)
+    assert phone.weight_of(folder) == 300
+    assert phone.weight_of(folder / "one") == 100
+
+
+def test_the_app_is_stopped_by_bundle_id(monkeypatch):
+    said = []
+
+    class Completed:
+        returncode = 0
+        stdout = ""
+        stderr = ""
+
+    monkeypatch.setattr(phone, "bundle_id", lambda: "com.example.mbenchd")
+    monkeypatch.setattr(phone, "run_tool", lambda *args, **kwargs: said.append(args) or Completed())
+    assert phone.kill()
+    assert said[0] == ("developer", "dvt", "pkill", "--bundle", "com.example.mbenchd")

@@ -349,6 +349,9 @@ def phone_action(args):
                 return
             time.sleep(1)
         fail("the app launched but never answered; `mbench phone logs` may say why")
+    if args.action == "kill":
+        print("stopped" if phone.kill() else "was not running")
+        return
     if args.action == "installed":
         app = phone.installed()
         print(f"{app['name'] or '?'} {app['version'] or '?'} ({app['build'] or '?'}) as {app['bundle']}")
@@ -358,7 +361,7 @@ def phone_action(args):
             source = Path(path)
             if not source.exists():
                 fail(f"no file {source}")
-            print(f"Pushing {source.name} ({source.stat().st_size / 2**30:.2f} GB) to the phone…")
+            print(f"Pushing {source.name} ({phone.weight_of(source) / 2**30:.2f} GB) to the phone…")
             print("  " + phone.push(source))
         return
     if args.action == "logs":
@@ -969,7 +972,7 @@ def parser():
     profile.add_argument("model", help="llama-swap model id or alias")
     profile.set_defaults(handler=cmd_profile)
     phone_parser = commands.add_parser("phone", help="the phone mbenchd runs on: forward its ports, push models, read its logs")
-    phone_parser.add_argument("action", choices=("health", "installed", "launch", "forward", "push", "logs"), nargs="?", default="health")
+    phone_parser.add_argument("action", choices=("health", "installed", "launch", "kill", "forward", "push", "logs"), nargs="?", default="health")
     phone_parser.add_argument("files", nargs="*", help="for push: the .gguf files to copy into the app")
     phone_parser.add_argument("--into", help="for logs: where to write them (default: here)")
     phone_parser.set_defaults(handler=cmd_phone)
