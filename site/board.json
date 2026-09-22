@@ -1,11 +1,16 @@
 {
- "generated": 1790062892.6252286,
+ "generated": 1790065567.3616364,
  "suite": "full/v1",
  "current": "1",
  "hardware": {
-  "gpu": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
-  "driver": "615.71.09",
-  "vram_mib": 97887
+  "class": "phone",
+  "hardware": "iPhone18,4",
+  "device": "iPhone Air",
+  "soc": "A19 Pro",
+  "ram_gb": 12,
+  "bandwidth_gbs": 68.3,
+  "os": "iOS 27.2",
+  "app": "0.1.0"
  },
  "suites": {
   "1": {
@@ -66,6 +71,371 @@
    ],
    "rankings": {
     "medium": [
+     {
+      "id": "lfm2.5-2.6b-mlx-air",
+      "name": "LFM2.5 2.6B \u00b7 MLX \u00b7 4bit \u00b7 iPhone Air",
+      "engine": "mlx",
+      "quantization": "4bit",
+      "spec": null,
+      "context": 16384,
+      "fingerprint": "6d10319653687ff8",
+      "stack": {
+       "host": "iPhone Air|iOS 27.2",
+       "hostLabel": "iPhone Air \u00b7 A19 Pro \u00b7 iOS 27.2",
+       "gpu": null,
+       "driver": null,
+       "vramMib": null,
+       "deviceClass": "phone",
+       "device": "iPhone Air",
+       "soc": "A19 Pro",
+       "bandwidthGbs": 68.3,
+       "ramGb": 12,
+       "engine": "llama.cpp",
+       "build": "llama.cpp b50",
+       "source": null
+      },
+      "run": {
+       "id": "20260922-105308-lfm2.5-2.6b-mlx-air",
+       "suite": "phone/v1",
+       "kind": "phone",
+       "finished": 1790065504.6361113,
+       "effort": "medium",
+       "harness": "1.1.0+d0d52c1",
+       "contended": [],
+       "failedItems": 0,
+       "notes": null,
+       "reused": null,
+       "stackChange": []
+      },
+      "index": {
+       "value": 34.76197461646561,
+       "unit": "%",
+       "n": 5,
+       "lo": 31.007400951553134,
+       "hi": 38.30008734839825
+      },
+      "tasks": {
+       "supergpqa": {
+        "value": 27.2552783109405,
+        "unit": "%",
+        "n": 521,
+        "lo": 23.60862305875647,
+        "hi": 31.234895442825728,
+        "tokens": 6839.174664107486,
+        "latency": 8.82,
+        "truncated": 24.184261036468328,
+        "unreachable": null,
+        "malformed": null,
+        "parts": {}
+       },
+       "math": {
+        "value": 26.984126984126984,
+        "unit": "%",
+        "n": 63,
+        "lo": 17.110291234158097,
+        "hi": 36.857962734095864,
+        "tokens": 11474.833333333334,
+        "latency": 36.67,
+        "truncated": 54.761904761904766,
+        "unreachable": null,
+        "malformed": null,
+        "parts": {
+         "aime": 31.666666666666664,
+         "hmmt": 22.727272727272727
+        }
+       },
+       "lcb": {
+        "value": 35.64356435643564,
+        "unit": "%",
+        "n": 101,
+        "lo": 26.986507179349307,
+        "hi": 45.35271694542558,
+        "tokens": 10838.455445544554,
+        "latency": 34.86,
+        "truncated": 51.48514851485149,
+        "unreachable": null,
+        "malformed": null,
+        "parts": {}
+       },
+       "mrcr": {
+        "value": 0.8581928265621473,
+        "unit": "%",
+        "n": 60,
+        "lo": 0.19827238857713214,
+        "hi": 1.5181132645471627,
+        "tokens": 1940.090909090909,
+        "latency": 4.61,
+        "truncated": 5.0,
+        "unreachable": 81.66666666666667,
+        "malformed": null,
+        "parts": {
+         "131072": 0.0,
+         "16384": 3.4327713062485894,
+         "32768": 0.0,
+         "65536": 0.0
+        }
+       },
+       "graphwalks": {
+        "value": 2.083333333333333,
+        "unit": "%",
+        "n": 48,
+        "lo": 0.0,
+        "hi": 6.166666666666666,
+        "tokens": 7603.0,
+        "latency": 18.759999999999998,
+        "truncated": 22.916666666666664,
+        "unreachable": 75.0,
+        "malformed": null,
+        "parts": {
+         "16384": 0.0,
+         "32768": 0.0,
+         "65536": 0.0,
+         "8192": 8.333333333333332
+        }
+       },
+       "tools": {
+        "value": 82.45614035087719,
+        "unit": "%",
+        "n": 38,
+        "lo": 70.96785062849712,
+        "hi": 93.94443007325727,
+        "tokens": 608.859649122807,
+        "latency": 0.73,
+        "truncated": 0.0,
+        "unreachable": null,
+        "malformed": 0.0,
+        "parts": {
+         "clarify": 66.66666666666666,
+         "conditional": 100.0,
+         "distractor": 100.0,
+         "irrelevant": 100.0,
+         "multi-turn": 100.0,
+         "parallel": 100.0,
+         "policy": 100.0,
+         "recovery": 50.0,
+         "sequential": 57.57575757575758,
+         "single": 100.0
+        }
+       }
+      },
+      "qualityFrom": {
+       "run": "20260916-232854-lfm2_5-2_6b-gguf",
+       "model": "lfm2_5-2_6b-gguf",
+       "suite": "full/v1",
+       "host": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition \u00b7 driver 610.57.04",
+       "verified": false,
+       "agreement": null
+      },
+      "deviceClass": "phone",
+      "capacity": {
+       "slots": 4,
+       "context": 16384,
+       "pool": 65536
+      },
+      "warnings": [],
+      "energy": {
+       "perCorrect": null,
+       "quality": null
+      },
+      "speed": {
+       "conc.1": {
+        "value": 16.55,
+        "unit": "tok/s",
+        "n": 2,
+        "lo": 16.5,
+        "hi": 16.6
+       },
+       "conc.2": {
+        "value": 16.6,
+        "unit": "tok/s",
+        "n": 2,
+        "lo": 16.5,
+        "hi": 16.7
+       },
+       "conc.4": {
+        "value": 16.6,
+        "unit": "tok/s",
+        "n": 2,
+        "lo": 16.5,
+        "hi": 16.7
+       },
+       "cooldown_s": {
+        "value": 380.2,
+        "unit": "s",
+        "n": 2,
+        "lo": null,
+        "hi": null
+       },
+       "cooled": {
+        "value": 100.0,
+        "unit": "%",
+        "n": 2,
+        "lo": null,
+        "hi": null
+       },
+       "footprint": {
+        "value": 2164.0,
+        "unit": "MiB",
+        "n": 43,
+        "lo": null,
+        "hi": null
+       },
+       "headroom": {
+        "value": 1212.4966659545898,
+        "unit": "MiB",
+        "n": 1815,
+        "lo": null,
+        "hi": null
+       },
+       "memory_used": {
+        "value": 64.0900973431941,
+        "unit": "%",
+        "n": 1815,
+        "lo": null,
+        "hi": null
+       },
+       "peak": {
+        "value": 16.6,
+        "unit": "tok/s",
+        "n": 2,
+        "lo": 16.5,
+        "hi": 16.7
+       },
+       "peak_at": {
+        "value": 2.0,
+        "unit": "requests",
+        "n": 2,
+        "lo": null,
+        "hi": null
+       },
+       "prefill.1000": {
+        "value": 63.25,
+        "unit": "tok/s",
+        "n": 2,
+        "lo": 62.7,
+        "hi": 63.8
+       },
+       "prefill.12000": {
+        "value": 279.70000000000005,
+        "unit": "tok/s",
+        "n": 2,
+        "lo": 279.6,
+        "hi": 279.8
+       },
+       "prefill.4000": {
+        "value": 170.55,
+        "unit": "tok/s",
+        "n": 2,
+        "lo": 169.3,
+        "hi": 171.8
+       },
+       "prefill.8000": {
+        "value": 242.75,
+        "unit": "tok/s",
+        "n": 2,
+        "lo": 242.0,
+        "hi": 243.5
+       },
+       "ttft.1000": {
+        "value": 17.118949999999998,
+        "unit": "s",
+        "n": 2,
+        "lo": 16.7774,
+        "hi": 17.4605
+       },
+       "ttft.12000": {
+        "value": 43.92855,
+        "unit": "s",
+        "n": 2,
+        "lo": 43.7521,
+        "hi": 44.105
+       },
+       "ttft.4000": {
+        "value": 24.65235,
+        "unit": "s",
+        "n": 2,
+        "lo": 24.3428,
+        "hi": 24.9619
+       },
+       "ttft.8000": {
+        "value": 33.8645,
+        "unit": "s",
+        "n": 2,
+        "lo": 33.7877,
+        "hi": 33.9413
+       }
+      },
+      "thermal": {
+       "share_hot": {
+        "value": 94.86277269528502,
+        "unit": "%",
+        "n": 1421,
+        "lo": null,
+        "hi": null
+       },
+       "to_fair_s": {
+        "value": 30.1,
+        "unit": "s",
+        "n": 1,
+        "lo": null,
+        "hi": null
+       },
+       "to_serious_s": {
+        "value": 40.2,
+        "unit": "s",
+        "n": 1,
+        "lo": null,
+        "hi": null
+       },
+       "worst": {
+        "value": 2.0,
+        "unit": "state",
+        "n": 1421,
+        "lo": null,
+        "hi": null
+       }
+      },
+      "battery": {},
+      "verdict": null,
+      "repeats": {
+       "runs": 1,
+       "spread": null
+      },
+      "lmx": {},
+      "submissions": [],
+      "server": {
+       "load_s": 0.67,
+       "model_path": "/var/mobile/Containers/Data/Application/EAC74868-4FE3-47FB-A7B6-D4FB45E9878E/Documents/models/LFM2.5-2.6B-MLX-4bit",
+       "n_ctx": 16384,
+       "total_slots": 4,
+       "build": {
+        "engine": "llama.cpp",
+        "version": "b50",
+        "build": "mlx-swift-lm 3.31.4",
+        "commit": "5266f24",
+        "app": "0.1.0"
+       },
+       "capacity": {
+        "slots": 4,
+        "context": 16384,
+        "pool": 65536
+       },
+       "weights": null,
+       "probe": {
+        "error": "NameError(\"name 'request_kwargs' is not defined\")"
+       }
+      },
+      "history": [
+       {
+        "id": "20260922-105308-lfm2.5-2.6b-mlx-air",
+        "suite": "phone/v1",
+        "effort": "medium",
+        "finished": 1790065504.6361113,
+        "index": null,
+        "decode": null
+       }
+      ]
+     },
      {
       "id": "gemma4-e2b-gguf",
       "name": "Gemma 4 E2B \u00b7 llama.cpp \u00b7 Q4_K_M \u00b7 128k",
@@ -8803,6 +9173,11 @@
       "models": 7
      },
      {
+      "key": "iPhone Air|iOS 27.2",
+      "label": "iPhone Air \u00b7 A19 Pro \u00b7 iOS 27.2",
+      "models": 1
+     },
+     {
       "key": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition|615.71.09",
       "label": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition \u00b7 driver 615.71.09",
       "models": 1
@@ -8848,6 +9223,371 @@
  ],
  "rankings": {
   "medium": [
+   {
+    "id": "lfm2.5-2.6b-mlx-air",
+    "name": "LFM2.5 2.6B \u00b7 MLX \u00b7 4bit \u00b7 iPhone Air",
+    "engine": "mlx",
+    "quantization": "4bit",
+    "spec": null,
+    "context": 16384,
+    "fingerprint": "6d10319653687ff8",
+    "stack": {
+     "host": "iPhone Air|iOS 27.2",
+     "hostLabel": "iPhone Air \u00b7 A19 Pro \u00b7 iOS 27.2",
+     "gpu": null,
+     "driver": null,
+     "vramMib": null,
+     "deviceClass": "phone",
+     "device": "iPhone Air",
+     "soc": "A19 Pro",
+     "bandwidthGbs": 68.3,
+     "ramGb": 12,
+     "engine": "llama.cpp",
+     "build": "llama.cpp b50",
+     "source": null
+    },
+    "run": {
+     "id": "20260922-105308-lfm2.5-2.6b-mlx-air",
+     "suite": "phone/v1",
+     "kind": "phone",
+     "finished": 1790065504.6361113,
+     "effort": "medium",
+     "harness": "1.1.0+d0d52c1",
+     "contended": [],
+     "failedItems": 0,
+     "notes": null,
+     "reused": null,
+     "stackChange": []
+    },
+    "index": {
+     "value": 34.76197461646561,
+     "unit": "%",
+     "n": 5,
+     "lo": 31.007400951553134,
+     "hi": 38.30008734839825
+    },
+    "tasks": {
+     "supergpqa": {
+      "value": 27.2552783109405,
+      "unit": "%",
+      "n": 521,
+      "lo": 23.60862305875647,
+      "hi": 31.234895442825728,
+      "tokens": 6839.174664107486,
+      "latency": 8.82,
+      "truncated": 24.184261036468328,
+      "unreachable": null,
+      "malformed": null,
+      "parts": {}
+     },
+     "math": {
+      "value": 26.984126984126984,
+      "unit": "%",
+      "n": 63,
+      "lo": 17.110291234158097,
+      "hi": 36.857962734095864,
+      "tokens": 11474.833333333334,
+      "latency": 36.67,
+      "truncated": 54.761904761904766,
+      "unreachable": null,
+      "malformed": null,
+      "parts": {
+       "aime": 31.666666666666664,
+       "hmmt": 22.727272727272727
+      }
+     },
+     "lcb": {
+      "value": 35.64356435643564,
+      "unit": "%",
+      "n": 101,
+      "lo": 26.986507179349307,
+      "hi": 45.35271694542558,
+      "tokens": 10838.455445544554,
+      "latency": 34.86,
+      "truncated": 51.48514851485149,
+      "unreachable": null,
+      "malformed": null,
+      "parts": {}
+     },
+     "mrcr": {
+      "value": 0.8581928265621473,
+      "unit": "%",
+      "n": 60,
+      "lo": 0.19827238857713214,
+      "hi": 1.5181132645471627,
+      "tokens": 1940.090909090909,
+      "latency": 4.61,
+      "truncated": 5.0,
+      "unreachable": 81.66666666666667,
+      "malformed": null,
+      "parts": {
+       "131072": 0.0,
+       "16384": 3.4327713062485894,
+       "32768": 0.0,
+       "65536": 0.0
+      }
+     },
+     "graphwalks": {
+      "value": 2.083333333333333,
+      "unit": "%",
+      "n": 48,
+      "lo": 0.0,
+      "hi": 6.166666666666666,
+      "tokens": 7603.0,
+      "latency": 18.759999999999998,
+      "truncated": 22.916666666666664,
+      "unreachable": 75.0,
+      "malformed": null,
+      "parts": {
+       "16384": 0.0,
+       "32768": 0.0,
+       "65536": 0.0,
+       "8192": 8.333333333333332
+      }
+     },
+     "tools": {
+      "value": 82.45614035087719,
+      "unit": "%",
+      "n": 38,
+      "lo": 70.96785062849712,
+      "hi": 93.94443007325727,
+      "tokens": 608.859649122807,
+      "latency": 0.73,
+      "truncated": 0.0,
+      "unreachable": null,
+      "malformed": 0.0,
+      "parts": {
+       "clarify": 66.66666666666666,
+       "conditional": 100.0,
+       "distractor": 100.0,
+       "irrelevant": 100.0,
+       "multi-turn": 100.0,
+       "parallel": 100.0,
+       "policy": 100.0,
+       "recovery": 50.0,
+       "sequential": 57.57575757575758,
+       "single": 100.0
+      }
+     }
+    },
+    "qualityFrom": {
+     "run": "20260916-232854-lfm2_5-2_6b-gguf",
+     "model": "lfm2_5-2_6b-gguf",
+     "suite": "full/v1",
+     "host": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition \u00b7 driver 610.57.04",
+     "verified": false,
+     "agreement": null
+    },
+    "deviceClass": "phone",
+    "capacity": {
+     "slots": 4,
+     "context": 16384,
+     "pool": 65536
+    },
+    "warnings": [],
+    "energy": {
+     "perCorrect": null,
+     "quality": null
+    },
+    "speed": {
+     "conc.1": {
+      "value": 16.55,
+      "unit": "tok/s",
+      "n": 2,
+      "lo": 16.5,
+      "hi": 16.6
+     },
+     "conc.2": {
+      "value": 16.6,
+      "unit": "tok/s",
+      "n": 2,
+      "lo": 16.5,
+      "hi": 16.7
+     },
+     "conc.4": {
+      "value": 16.6,
+      "unit": "tok/s",
+      "n": 2,
+      "lo": 16.5,
+      "hi": 16.7
+     },
+     "cooldown_s": {
+      "value": 380.2,
+      "unit": "s",
+      "n": 2,
+      "lo": null,
+      "hi": null
+     },
+     "cooled": {
+      "value": 100.0,
+      "unit": "%",
+      "n": 2,
+      "lo": null,
+      "hi": null
+     },
+     "footprint": {
+      "value": 2164.0,
+      "unit": "MiB",
+      "n": 43,
+      "lo": null,
+      "hi": null
+     },
+     "headroom": {
+      "value": 1212.4966659545898,
+      "unit": "MiB",
+      "n": 1815,
+      "lo": null,
+      "hi": null
+     },
+     "memory_used": {
+      "value": 64.0900973431941,
+      "unit": "%",
+      "n": 1815,
+      "lo": null,
+      "hi": null
+     },
+     "peak": {
+      "value": 16.6,
+      "unit": "tok/s",
+      "n": 2,
+      "lo": 16.5,
+      "hi": 16.7
+     },
+     "peak_at": {
+      "value": 2.0,
+      "unit": "requests",
+      "n": 2,
+      "lo": null,
+      "hi": null
+     },
+     "prefill.1000": {
+      "value": 63.25,
+      "unit": "tok/s",
+      "n": 2,
+      "lo": 62.7,
+      "hi": 63.8
+     },
+     "prefill.12000": {
+      "value": 279.70000000000005,
+      "unit": "tok/s",
+      "n": 2,
+      "lo": 279.6,
+      "hi": 279.8
+     },
+     "prefill.4000": {
+      "value": 170.55,
+      "unit": "tok/s",
+      "n": 2,
+      "lo": 169.3,
+      "hi": 171.8
+     },
+     "prefill.8000": {
+      "value": 242.75,
+      "unit": "tok/s",
+      "n": 2,
+      "lo": 242.0,
+      "hi": 243.5
+     },
+     "ttft.1000": {
+      "value": 17.118949999999998,
+      "unit": "s",
+      "n": 2,
+      "lo": 16.7774,
+      "hi": 17.4605
+     },
+     "ttft.12000": {
+      "value": 43.92855,
+      "unit": "s",
+      "n": 2,
+      "lo": 43.7521,
+      "hi": 44.105
+     },
+     "ttft.4000": {
+      "value": 24.65235,
+      "unit": "s",
+      "n": 2,
+      "lo": 24.3428,
+      "hi": 24.9619
+     },
+     "ttft.8000": {
+      "value": 33.8645,
+      "unit": "s",
+      "n": 2,
+      "lo": 33.7877,
+      "hi": 33.9413
+     }
+    },
+    "thermal": {
+     "share_hot": {
+      "value": 94.86277269528502,
+      "unit": "%",
+      "n": 1421,
+      "lo": null,
+      "hi": null
+     },
+     "to_fair_s": {
+      "value": 30.1,
+      "unit": "s",
+      "n": 1,
+      "lo": null,
+      "hi": null
+     },
+     "to_serious_s": {
+      "value": 40.2,
+      "unit": "s",
+      "n": 1,
+      "lo": null,
+      "hi": null
+     },
+     "worst": {
+      "value": 2.0,
+      "unit": "state",
+      "n": 1421,
+      "lo": null,
+      "hi": null
+     }
+    },
+    "battery": {},
+    "verdict": null,
+    "repeats": {
+     "runs": 1,
+     "spread": null
+    },
+    "lmx": {},
+    "submissions": [],
+    "server": {
+     "load_s": 0.67,
+     "model_path": "/var/mobile/Containers/Data/Application/EAC74868-4FE3-47FB-A7B6-D4FB45E9878E/Documents/models/LFM2.5-2.6B-MLX-4bit",
+     "n_ctx": 16384,
+     "total_slots": 4,
+     "build": {
+      "engine": "llama.cpp",
+      "version": "b50",
+      "build": "mlx-swift-lm 3.31.4",
+      "commit": "5266f24",
+      "app": "0.1.0"
+     },
+     "capacity": {
+      "slots": 4,
+      "context": 16384,
+      "pool": 65536
+     },
+     "weights": null,
+     "probe": {
+      "error": "NameError(\"name 'request_kwargs' is not defined\")"
+     }
+    },
+    "history": [
+     {
+      "id": "20260922-105308-lfm2.5-2.6b-mlx-air",
+      "suite": "phone/v1",
+      "effort": "medium",
+      "finished": 1790065504.6361113,
+      "index": null,
+      "decode": null
+     }
+    ]
+   },
    {
     "id": "gemma4-e2b-gguf",
     "name": "Gemma 4 E2B \u00b7 llama.cpp \u00b7 Q4_K_M \u00b7 128k",

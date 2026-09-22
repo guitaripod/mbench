@@ -37,6 +37,7 @@ _3 models on NVIDIA RTX PRO 6000 Blackwell Workstation Edition, suite full/v1, m
 | Model | Quality | SuperGPQA | Math | LCB | MRCR | Graphwalks | Tools | Settled | Cold | Holds | Peak RAM | Verdict | Run |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
 | Qwen3 4B Instruct · llama.cpp · Q4_K_M · iPhone Air | 39.6 | 39.6 | 42.1 | 36.6 | 2.6 | 2.1 | 77.2 | 9 | 20 | 34 | 3373 | fades | 14 Sep phone |
+| LFM2.5 2.6B · MLX · 4bit · iPhone Air | 34.8 | 27.3 | 27.0 | 35.6 | 0.9 | 2.1 | 82.5 | – | – | – | 2164 | – | 22 Sep phone |
 | LFM2.5 2.6B · llama.cpp · Q4_K_M · iPhone Air | 34.8 | 27.3 | 27.0 | 35.6 | 0.9 | 2.1 | 82.5 | 13 | 34 | 26 | 1026 | fades | 17 Sep phone |
 | Qwen3 1.7B · llama.cpp · Q4_K_M · iPhone Air | 27.0 | 26.9 | 24.6 | 25.7 | 3.6 | 0.0 | 56.1 | 19 | 47 | 25 | 3349 | fades | 14 Sep phone |
 | Qwen3.5 2B · llama.cpp · Q4_K_M · iPhone Air | 26.8 | 29.4 | 7.9 | 17.8 | 12.0 | 16.3 | 64.9 | 17 | 39 | 42 | 3305 | fades | 15 Sep phone |
@@ -44,9 +45,9 @@ _3 models on NVIDIA RTX PRO 6000 Blackwell Workstation Edition, suite full/v1, m
 | LFM2 1.2B · llama.cpp · Q4_K_M · iPhone Air | 7.7 | 14.0 | 1.6 | 5.0 | 0.4 | 0.3 | 17.5 | 30 | 78 | 26 | 793 | holds up | 14 Sep phone |
 | Gemma 3 1B · llama.cpp · Q4_K_M · iPhone Air | 6.3 | 12.3 | 0.0 | 1.0 | 0.0 | 0.0 | 18.4 | 29 | 66 | 28 | 854 | holds up | 14 Sep phone |
 
-_7 models on 3 setups, suite full/v1, medium effort, newest run 17 Sep 2026._
+_8 models on 4 setups, suite full/v1, medium effort, newest run 22 Sep 2026._
 
-_tok/s, Peak and Wh/correct come from 3 setups — iPhone Air · A19 Pro · iOS 27.0 (7), NVIDIA RTX PRO 6000 Blackwell Workstation Edition · driver 610.57.04 (7), NVIDIA RTX PRO 6000 Blackwell Workstation Edition · driver 615.71.09 (1) — and only compare within one_
+_tok/s, Peak and Wh/correct come from 4 setups — iPhone Air · A19 Pro · iOS 27.0 (7), NVIDIA RTX PRO 6000 Blackwell Workstation Edition · driver 610.57.04 (7), iPhone Air · A19 Pro · iOS 27.2 (1), NVIDIA RTX PRO 6000 Blackwell Workstation Edition · driver 615.71.09 (1) — and only compare within one_
 <!--/LEADERBOARD-->
 
 Quality is the index; then one column per task, single-request decode speed, peak throughput across all requests, first-token wait on a 32k prompt, and board watt-hours per correct answer. The [live page](https://guitaripod.github.io/mbench/) adds 95% intervals, per-length breakdowns and every server setting behind each run. Those are one GPU's numbers — yours will differ with your hardware, quantization and server settings.
