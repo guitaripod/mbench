@@ -83,7 +83,19 @@ struct ReasoningSplitter {
             thinking = false
             return (reasoning, content)
         }
-        return ("", "")
+        return (released(), "")
+    }
+
+    /// Thinking is reported as it is written, holding back only enough characters that a closing tag split across
+    /// two chunks is still recognised. Holding all of it back instead would land the whole answer in one delta, and
+    /// a client measuring time to first token would measure the whole generation.
+    private mutating func released() -> String {
+        let keep = Self.close.count - 1
+        guard buffer.count > keep else { return "" }
+        let cut = buffer.index(buffer.endIndex, offsetBy: -keep)
+        let ready = String(buffer[buffer.startIndex ..< cut])
+        buffer = String(buffer[cut...])
+        return ready
     }
 
     /// What is still held back, released once the model has stopped: a tail that never closed its thinking is

@@ -6,10 +6,18 @@ import PackageDescription
 let mlx = Context.environment["MBENCHD_MLX"] == "1"
 
 let vendorLib = Context.packageDirectory + "/Vendor/lib"
-let archives = ((try? FileManager.default.contentsOfDirectory(atPath: vendorLib)) ?? [])
-    .filter { $0.hasSuffix(".a") }
-    .sorted()
-    .map { vendorLib + "/" + $0 }
+
+/// The archives to link, named by whoever built them: macOS evaluates a manifest inside a sandbox that never
+/// answers a directory read, so the build script lists Vendor/lib and passes the names in. The fallback is what a
+/// Linux cross-build leaves behind.
+let named = Context.environment["MBENCHD_ARCHIVES"]?
+    .split(separator: ",")
+    .map(String.init)
+    .filter { $0.hasSuffix(".a") } ?? []
+let archives = (named.isEmpty ? [
+    "libcpp-httplib.a", "libggml-base.a", "libggml-cpu.a", "libggml-metal.a",
+    "libggml.a", "libllama-common.a", "libllama.a",
+] : named).sorted().map { vendorLib + "/" + $0 }
 
 let package = Package(
     name: "mbenchd",

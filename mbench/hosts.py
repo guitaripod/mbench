@@ -24,6 +24,9 @@ class GpuHost:
     def unload(self):
         swap.unload()
 
+    def report(self, progress):
+        return None
+
     def server_info(self):
         return swap.server_info(self.profile.id)
 
@@ -100,6 +103,9 @@ class PhoneHost:
     def unload(self):
         self.device.unload()
 
+    def report(self, progress):
+        self.device.report(progress)
+
     def server_info(self):
         return swap.direct_info(self.device.server_url)
 
@@ -171,6 +177,9 @@ class RemoteHost:
 
     def ensure_loaded(self):
         """The server loads what a request names, so a run only waits for it to answer one."""
+        return None
+
+    def report(self, progress):
         return None
 
     def unload(self):

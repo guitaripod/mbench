@@ -868,3 +868,30 @@ def test_the_app_is_stopped_by_bundle_id(monkeypatch):
     monkeypatch.setattr(phone, "run_tool", lambda *args, **kwargs: said.append(args) or Completed())
     assert phone.kill()
     assert said[0] == ("developer", "dvt", "pkill", "--bundle", "com.example.mbenchd")
+
+
+def test_the_phone_is_told_where_the_run_has_got_to(tmp_path):
+    from mbench import worker
+
+    class Host:
+        def __init__(self):
+            self.reports = []
+
+        def report(self, progress):
+            self.reports.append(progress)
+
+    host = Host()
+    events = worker.Events(tmp_path)
+    events.watched_by(host, {"id": "r1", "model": "m-air", "name": "M · iPhone Air", "suite": "phone/v1"})
+    events.progress("speed", 3, 43)
+
+    assert host.reports == [{"run": "r1", "model": "M · iPhone Air", "suite": "phone/v1",
+                             "phase": "speed", "done": 3, "total": 43, "note": None}]
+
+
+def test_a_run_nobody_watches_reports_to_nobody(tmp_path):
+    from mbench import worker
+
+    events = worker.Events(tmp_path)
+    events.progress("speed", 1, 43)
+    assert (tmp_path / "events.jsonl").exists()

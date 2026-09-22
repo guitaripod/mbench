@@ -11,6 +11,9 @@ struct ContentView: View {
                 VStack(spacing: 14) {
                     header
                     StatusCard(server: state.server, accent: accent)
+                    if state.progress.fresh {
+                        ProgressCard(progress: state.progress, accent: accent)
+                    }
                     if state.server.state == "running" {
                         LiveCard(metrics: state.metrics, history: state.history, last: state.lastDecode, accent: accent)
                     }
@@ -210,6 +213,66 @@ struct Stat: View {
             Text(name).font(.system(size: 9, weight: .medium)).foregroundStyle(.white.opacity(0.35))
             Text(value).font(Theme.value)
         }
+    }
+}
+
+/// What the run on the host is doing right now: which task, how far through it, and how long it has been going.
+struct ProgressCard: View {
+    let progress: RunProgress
+    let accent: Color
+
+    var body: some View {
+        Card {
+            VStack(alignment: .leading, spacing: 9) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(progress.phase ?? "starting")
+                        .font(.system(size: 20, weight: .bold, design: .rounded))
+                        .foregroundStyle(accent)
+                    Spacer()
+                    if let done = progress.done, let total = progress.total, total > 0 {
+                        Text("\(done)/\(total)")
+                            .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                            .foregroundStyle(.white.opacity(0.75))
+                            .contentTransition(.numericText())
+                    }
+                }
+                if let share = progress.share {
+                    GeometryReader { frame in
+                        ZStack(alignment: .leading) {
+                            Capsule().fill(.white.opacity(0.09))
+                            Capsule().fill(accent.opacity(0.85))
+                                .frame(width: max(3, frame.size.width * share))
+                        }
+                    }
+                    .frame(height: 6)
+                    .animation(.easeOut(duration: 0.4), value: share)
+                }
+                HStack(spacing: 10) {
+                    if let model = progress.model {
+                        Text(model).font(Theme.label).foregroundStyle(.white.opacity(0.5))
+                            .lineLimit(1).truncationMode(.middle)
+                    }
+                    Spacer()
+                    if let suite = progress.suite {
+                        Text(suite).font(Theme.label).foregroundStyle(.white.opacity(0.35))
+                    }
+                    Text(elapsed).font(Theme.label).foregroundStyle(.white.opacity(0.5))
+                        .monospacedDigit()
+                }
+                if let note = progress.note, !note.isEmpty {
+                    Text(note).font(.system(size: 11)).foregroundStyle(.white.opacity(0.45))
+                        .lineLimit(2)
+                }
+            }
+        }
+    }
+
+    private var elapsed: String {
+        guard let started = progress.startedAt else { return "–" }
+        let seconds = Int(max(0, Date().timeIntervalSince1970 - started))
+        let hours = seconds / 3600, minutes = (seconds % 3600) / 60
+        return hours > 0 ? "\(hours)h\(String(format: "%02d", minutes))m"
+                         : "\(minutes)m\(String(format: "%02d", seconds % 60))s"
     }
 }
 

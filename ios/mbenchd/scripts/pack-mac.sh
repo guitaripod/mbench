@@ -5,15 +5,27 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 XTOOL=${XTOOL:-/opt/homebrew/bin/xtool}
+
+# The beta SDK refuses to let an app link SwiftUICore, which is what an app using SwiftUI links implicitly; the
+# released Xcode has no such restriction, so the build uses it unless something else is asked for.
+export DEVELOPER_DIR=${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}
 PRODUCTS=.build/out/Products/Release-iphoneos
+BUILD_LOG=${BUILD_LOG:-build-output.log}
 
 mkdir -p .build/arm64-apple-ios
 ln -sfn ../out/Products/Release-iphoneos .build/arm64-apple-ios/release
 
 for attempt in $(seq 1 15); do
-  said=$(MBENCHD_MLX=1 "$XTOOL" dev build -c release 2>&1 | tail -4)
+  archives=$(cd "$(dirname "${BASH_SOURCE[0]}")/../Vendor/lib" && ls *.a | tr '\n' ',')
+  MBENCHD_MLX=1 MBENCHD_ARCHIVES="$archives" "$XTOOL" dev build -c release > "$BUILD_LOG" 2>&1 || true
+  said=$(tail -6 "$BUILD_LOG")
   missing=$(printf '%s' "$said" | grep -o '[A-Za-z0-9_.-]*\.bundle' | head -1 || true)
   if [[ -z "$missing" ]]; then
+    if [[ ! -d xtool/mbenchd.app ]]; then
+      echo "pack-mac.sh: the build wrote no app; its output is in $BUILD_LOG" >&2
+      tail -20 "$BUILD_LOG" >&2
+      exit 1
+    fi
     cp -R "$PRODUCTS/mlx-swift_Cmlx.bundle" xtool/mbenchd.app/
     printf '%s\n' "$said"
     exit 0

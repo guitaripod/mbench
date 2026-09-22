@@ -29,12 +29,28 @@ class Events:
         self.events = run_dir / "events.jsonl"
         self.log_path = run_dir / "worker.log"
         self.last = (None, None)
+        self.audience = None
+        self.run = {}
+
+    def watched_by(self, host, run):
+        """A host that can show a run its own progress — the phone's screen — is told about every phase from here,
+        so the app never has to guess what the box is doing."""
+        self.audience = host
+        self.run = {"run": run["id"], "model": run.get("name") or run["model"], "suite": run["suite"]}
 
     def emit(self, phase, **fields):
         entry = {"t": round(time.time(), 1), "phase": phase, **fields}
         with self.events.open("a") as handle:
             handle.write(json.dumps(entry) + "\n")
         self.log(f"{phase} " + " ".join(f"{key}={value}" for key, value in fields.items()))
+        self.show(phase, fields)
+
+    def show(self, phase, fields):
+        if self.audience is None:
+            return
+        note = fields.get("reason") or fields.get("detail") or fields.get("error")
+        self.audience.report({**self.run, "phase": phase, "done": fields.get("done"),
+                              "total": fields.get("total"), "note": str(note)[:160] if note else None})
 
     def log(self, message):
         with self.log_path.open("a") as handle:
@@ -320,6 +336,7 @@ def execute(run_id):
         each.start()
     card = next((each for each in guards if isinstance(each, (CardGuard, phone.Guard))), None)
     watch = sampler = None
+    events.watched_by(host, run)
     store.update_run(db, run_id, status="running", started=time.time(), error=None)
     events.emit("started", model=profile.id, suite=run["suite"], effort=f"{run['effort']} ({level})")
     contention = []

@@ -15,6 +15,7 @@ final class AppState: @unchecked Sendable {
     @MainActor var models: [StoredModel] = []
     @MainActor var logLines: [String] = []
     @MainActor var controlError: String?
+    @MainActor var progress: RunProgress = RunProgress()
 
     private let lock = NSLock()
     private var control: ControlServer?
@@ -61,6 +62,7 @@ final class AppState: @unchecked Sendable {
     func refresh() {
         telemetry = DeviceTelemetry.shared.snapshot()
         server = Router.active()
+        progress = ProgressStore.shared.snapshot()
         models = ModelStore.all()
         logLines = LogFileWriter.shared.tail(lines: 40)
         guard server.state == "running", let port = server.port else {

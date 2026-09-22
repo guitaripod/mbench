@@ -101,6 +101,15 @@ class Device:
                     raise Unreachable(f"{self.control_url} did not load the model: {error!r}") from error
                 time.sleep(SETTLE_S)
 
+    def report(self, progress):
+        """Tells the app where the run has got to. The phone measures the model but never drives the run, so its
+        screen can only show a phase if the host sends one; a report that does not arrive is not worth a failed run,
+        so the error is swallowed."""
+        try:
+            self.post("/mb/progress", progress, timeout=4)
+        except (OSError, urllib.error.HTTPError, json.JSONDecodeError):
+            return None
+
     def unload(self):
         """Asks the app to stop the server and waits for it to say it has, so the next load does not race the
         teardown."""

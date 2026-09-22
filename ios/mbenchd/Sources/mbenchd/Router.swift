@@ -28,6 +28,7 @@ struct HealthPayload: Codable, Sendable {
     let device: DeviceInfo
     let telemetry: TelemetrySnapshot
     let server: ServerStatus
+    let progress: RunProgress
 }
 
 enum Router {
@@ -42,6 +43,8 @@ enum Router {
             return HTTPResponse.json(ModelList(object: "list", data: ModelStore.all()))
         case ("POST", "/mb/load"):
             return await load(request)
+        case ("POST", "/mb/progress"):
+            return progress(request)
         case ("POST", "/mb/unload"), ("GET", "/unload"):
             await unloadAll()
             return HTTPResponse.json(["ok": true])
@@ -69,8 +72,21 @@ enum Router {
                 processors: ProcessInfo.processInfo.processorCount
             ),
             telemetry: DeviceTelemetry.shared.snapshot(),
-            server: active()
+            server: active(),
+            progress: ProgressStore.shared.snapshot()
         )
+    }
+
+    /// What the host says its run is doing. Nothing here changes what the phone measures; it is what the screen
+    /// shows while a run is under way.
+    private static func progress(_ request: HTTPRequest) -> HTTPResponse {
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        guard let reported = try? decoder.decode(RunProgress.self, from: request.body) else {
+            return HTTPResponse.error("bad progress report", status: 400)
+        }
+        ProgressStore.shared.record(reported)
+        return HTTPResponse.json(["ok": true])
     }
 
     /// The engine that is loaded, or llama.cpp when nothing is: a run reads one server status, whichever engine
@@ -104,6 +120,7 @@ enum Router {
     }
 
     static func unloadAll() async {
+        ProgressStore.shared.clear()
         await LlamaServerRunner.shared.unload()
         #if MBENCHD_MLX
         await MLXRunner.shared.unload()
