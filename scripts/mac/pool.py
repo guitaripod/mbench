@@ -31,7 +31,7 @@ except Exception:
 os.makedirs(LOGS, exist_ok=True)
 free = queue.Queue()
 children = []
-WORKER_TIMEOUT_S = 1200
+WORKER_TIMEOUT_S = 7200
 
 
 def revive(index, port):

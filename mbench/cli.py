@@ -11,6 +11,7 @@ from typing import NoReturn
 
 from . import __version__, board, doctor, hosts, lmx, metrics, paths, phone, profiles, schedule, sources, stack, store, suite, swap
 from .engine import resolve_effort
+from . import units
 from .units import ACTIVE, MAX_SHARED_RUNS, busy, reconcile, spawn, unit_active, unit_name
 
 DURATIONS = {"full": "2–5 hours", "quick": "45–90 minutes", "phone": "30–60 minutes", "smoke": "about 10 minutes"}
