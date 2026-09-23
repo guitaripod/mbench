@@ -455,7 +455,7 @@ def print_schedule(db):
     waiting = sorted((run for run in store.list_runs(db) if run["status"] == "scheduled"),
                      key=lambda run: ((run.get("flags") or {}).get("not_before") or 0, run.get("created") or 0))
     for run in waiting:
-        print(schedule_line(run))
+        print("\n".join(run_lines(run)))
 
 
 def read_events(run_id):
@@ -465,24 +465,38 @@ def read_events(run_id):
     return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
 
 
-def session_progress(events):
-    """Progress since the run last started, so a session resumed after giving way keeps its own count and the hours it
-    spent parked don't read as slowness."""
-    starts = [index for index, event in enumerate(events) if event["phase"] == "started"]
-    return [event for event in events[starts[-1] if starts else 0:] if "done" in event]
+def sessions(events):
+    """A run's events split at each start, one list for every time a worker took the run up."""
+    chunks = [[]]
+    for event in events:
+        if event["phase"] == "started" and chunks[-1]:
+            chunks.append([])
+        chunks[-1].append(event)
+    return [chunk for chunk in chunks if chunk]
 
 
-def time_left(events, now):
-    """How long the current task has to go at this session's pace; None until the task has answered something."""
-    progress = session_progress(events)
+def time_left(events, now, running=True):
+    """How long the current task has to go at its pace so far: what it answered over the time it spent answering,
+    session by session. The hours a run spent parked don't count, and neither does a fresh session stand alone: every
+    slot starts a new question at once after a restart, and nothing finishes for minutes. A session's answers are read
+    off where the next one picked up, so the ones that landed after its last progress line still count."""
+    progress = [event for event in events if "done" in event]
     if not progress:
         return None
     current = progress[-1]
-    first = next(event for event in progress if event["phase"] == current["phase"])
-    answered = current["done"] - first["done"]
-    if answered <= 0 or now <= first["t"]:
+    spans = []
+    for chunk in sessions(events):
+        mine = [event for event in chunk if event["phase"] == current["phase"] and "done" in event]
+        if mine:
+            spans.append((mine[0], chunk[-1]))
+    answered = spent = 0.0
+    for index, (first, closing) in enumerate(spans):
+        latest = index + 1 == len(spans)
+        answered += (current["done"] if latest else spans[index + 1][0]["done"]) - first["done"]
+        spent += max(0.0, (now if latest and running else closing["t"]) - first["t"])
+    if answered <= 0 or spent <= 0:
         return None
-    return (current["total"] - current["done"]) * (now - first["t"]) / answered
+    return (current["total"] - current["done"]) * spent / answered
 
 
 def tasks_after(run, phase):
@@ -491,21 +505,31 @@ def tasks_after(run, phase):
     return order[order.index(phase) + 1:] if phase in order else []
 
 
+def progress_note(run, events, now, running):
+    """How long the task a run is on has left and which tasks follow, when the run has got far enough to tell."""
+    last = next((event for event in reversed(events) if "done" in event), None)
+    if last is None:
+        return None
+    left, after = time_left(events, now, running), tasks_after(run, last["phase"])
+    notes = [f"about {duration(left)} left in {last['phase']}"] if left is not None else []
+    notes += [f"then {', '.join(after)}"] if after else []
+    return "  " + ", ".join(notes) if notes else None
+
+
 def run_lines(run):
-    """A running run's line for `mbench status` and `mbench wait`, and when it can tell, how long the task it is on has
-    left at this session's pace and which tasks follow."""
+    """A run's lines for `mbench status` and `mbench wait`: where it is, and when it can tell, how long its task has
+    left and which tasks follow. A parked run shows when it continues instead of how long it has run."""
     now = time.time()
     events = read_events(run["id"])
-    last = events[-1] if events else {}
-    detail = f"{last.get('phase', 'queued')} {last.get('done', '')}/{last.get('total', '')}".rstrip("/ ")
-    lines = [f"{run['id']}  {run['suite']}  {detail}  running for {duration(now - (run['started'] or run['created']))}"]
-    if "done" in last:
-        left, after = time_left(events, now), tasks_after(run, last["phase"])
-        notes = [f"about {duration(left)} left in {last['phase']}"] if left is not None else []
-        notes += [f"then {', '.join(after)}"] if after else []
-        if notes:
-            lines.append("  " + ", ".join(notes))
-    return lines
+    running = run["status"] in ACTIVE
+    if running:
+        last = events[-1] if events else {}
+        detail = f"{last.get('phase', 'queued')} {last.get('done', '')}/{last.get('total', '')}".rstrip("/ ")
+        lines = [f"{run['id']}  {run['suite']}  {detail}  running for {duration(now - (run['started'] or run['created']))}"]
+    else:
+        lines = [schedule_line(run)]
+    note = progress_note(run, events, now, running)
+    return lines + ([note] if note else [])
 
 
 def cmd_status(_args):
@@ -543,7 +567,7 @@ def cmd_wait(args):
                 if run["status"] == "complete":
                     summary(db, run_id)
                 sys.exit(0 if run["status"] == "complete" else 1)
-            lines = run_lines(run) if run["status"] in ACTIVE else [schedule_line(run)]
+            lines = run_lines(run)
             events = read_events(run_id)
             state = (run["status"], events[-1]["phase"] if events else None)
             if state != said or time.time() - said_at >= args.every * 60:
@@ -655,7 +679,8 @@ def cmd_resume(args):
         fail(f"{run['id']} was measured under suite v{suite.version_of(run['suite'])} and this mbench runs v{suite.VERSION}; "
              f"`mbench run {run['model']} --reuse {run['id']}` starts a v{suite.VERSION} run that keeps what still applies")
     at, window = window_of(args)
-    flags = {**(run.get("flags") or {}), "yield": not args.keep_gpu}
+    flags = {key: value for key, value in (run.get("flags") or {}).items() if key != "parked"}
+    flags["yield"] = not args.keep_gpu
     if window:
         begins = schedule.first_start(datetime.now(), window, at).timestamp()
         store.update_run(db, run["id"], status="scheduled", error=None,

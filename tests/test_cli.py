@@ -78,13 +78,15 @@ def test_a_ranking_measured_on_two_cards_says_the_speed_columns_dont_compare():
     assert "RTX PRO 6000 · driver 610 (2), RTX 4090 · driver 570 (1)" in note
 
 
-def test_status_reckons_time_left_from_this_sessions_pace_alone():
+def test_time_left_counts_the_time_spent_answering_and_never_the_time_parked():
     events = [{"t": 0, "phase": "started"}, {"t": 10, "phase": "supergpqa", "done": 0, "total": 100},
               {"t": 1000, "phase": "yielded"}, {"t": 5000, "phase": "started"},
               {"t": 5010, "phase": "supergpqa", "done": 40, "total": 100},
               {"t": 5610, "phase": "supergpqa", "done": 50, "total": 100}]
-    assert cli.time_left(events, 6010) == 5000
-    assert cli.time_left(events[:5], 5020) is None
+    assert cli.time_left(events, 6010) == 1990
+    assert cli.time_left(events[:5], 5020) == 1500
+    assert cli.time_left(events, 90000, running=False) == 1590
+    assert cli.time_left(events[:2], 20) is None
     assert cli.time_left([], 10) is None
     assert cli.tasks_after({"flags": {"tasks": ["speed", "supergpqa", "math", "lcb"]}}, "supergpqa") == ["math", "lcb"]
     assert cli.tasks_after({"flags": {}}, "lcb") == []
@@ -109,9 +111,9 @@ def test_wait_rides_out_a_run_that_gives_way_and_exits_with_its_verdict(monkeypa
     lines = capsys.readouterr().out.splitlines()
     assert exit_info.value.code == 0
     assert lines[0].startswith("r1  full/v1  math 3/126  running for")
-    assert "then tools, mrcr, graphwalks, lcb" in lines[1]
+    assert lines[1] == lines[3] == lines[5] == "  then tools, mrcr, graphwalks, lcb"
     assert "gave the GPU to Xwayland; continues where it stopped" in lines[2]
-    assert lines[3].startswith("r1  full/v1  math 3/126") and lines[-2:] == ["r1: complete", "summary"]
+    assert lines[4].startswith("r1  full/v1  math 3/126") and lines[6:] == ["r1: complete", "summary"]
     store.update_run(db, "r1", status="failed", error="the GPU stopped answering")
     with pytest.raises(SystemExit) as exit_info:
         cli.cmd_wait(SimpleNamespace(run="r1", every=5))
