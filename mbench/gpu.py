@@ -6,6 +6,8 @@ from collections import defaultdict
 from pathlib import Path
 
 SERVER_PROCESS_NAMES = ("sglang", "llama-server", "llama-swap", "vllm")
+DISPLAY_PROCESS_NAMES = ("kwin_wayland", "kwin_x11", "Xwayland", "Xorg", "gnome-shell", "mutter", "sway", "Hyprland",
+                         "niri", "weston")
 INTERPRETERS = ("python", "node", "bun", "deno", "java", "ruby", "perl", "bash", "sh")
 BUSY_SM_PERCENT = 25
 HEAVY_MIB = 4096
@@ -169,8 +171,11 @@ def processes(samples=3):
 
 def contention(samples=3):
     """Other GPU work big enough to matter: a process outside the model servers using a quarter of the GPU or holding
-    4 GB, like a game or ComfyUI. A browser tab or the compositor stays under both."""
+    4 GB, like a game or ComfyUI. A browser tab stays under both. The compositor and the X server never count, even
+    past a quarter of the GPU while a video plays or an X11 window redraws: whatever keeps them busy that is worth
+    stepping aside for is a GPU process of its own."""
     return [process for process in processes(samples) if not process["server"]
+            and process["name"] not in DISPLAY_PROCESS_NAMES
             and (process["sm"] >= BUSY_SM_PERCENT or process["mib"] >= HEAVY_MIB)]
 
 

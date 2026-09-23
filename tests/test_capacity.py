@@ -29,6 +29,17 @@ def test_contention_skips_model_servers_and_light_desktop_use(monkeypatch):
     assert "Borderlands4.exe (80% GPU, 8.9 GB)" == gpu.describe_contention(found)
 
 
+def test_the_compositor_and_the_x_server_are_never_contention(monkeypatch):
+    busy = PMON.replace("      2      0      -      -      -      -    277", "     26      0      -      -      -      -    277")
+    busy += "    0       1775     G     42      0      -      -      -      -     16      0    Xwayland\n"
+    monkeypatch.setattr(gpu.subprocess, "run", lambda *args, **kwargs: SimpleNamespace(stdout=busy, returncode=0))
+    arguments = {1673: ["/usr/bin/kwin_wayland", "--wayland-fd", "7"], 1775: ["/usr/bin/Xwayland", ":1", "-rootless"],
+                 777777: ["/mnt/sglang/.venv/bin/python", "-m", "sglang", "serve"], 2959442: [GAME]}
+    monkeypatch.setattr(gpu, "argv", lambda pid: arguments.get(pid, []))
+    monkeypatch.setattr(gpu, "parent_of", lambda pid: 1)
+    assert [process["name"] for process in gpu.contention()] == ["Borderlands4.exe"]
+
+
 def test_a_process_is_named_by_its_executable_not_its_arguments():
     assert gpu.program_name(["/usr/bin/Xwayland", ":1", "-auth", "/run/user/1000/xauth_wlOXNO", "-listenfd", "8"]) == "Xwayland"
     assert gpu.program_name(["/home/marcus/ComfyUI/.venv/bin/python3.12", "main.py", "--listen"]) == "python3.12 main.py"
