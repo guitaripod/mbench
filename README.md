@@ -109,7 +109,7 @@ spec = { method = "EAGLE3", draft = "lmsys/EAGLE3-gpt-oss-120b-bf16", tokens_per
 - `hf_id`, `quantization`, `spec` and `engine` only matter for `--submit`.
 - [Oh My Pi](https://github.com/can1357/oh-my-pi) users: `compat.thinkingFormat`, `thinking.efforts` and `contextWindow` are read from its `models.yml` too; `models.toml` wins.
 
-**2. Check the server.** `mbench doctor <id>` loads the model and verifies tokens per request, reasoning kept apart from the answer, structured tool calls, a conversation carrying a tool result, and a 16k-token prompt.
+**2. Check the server.** `mbench doctor <id>` loads the model and verifies tokens per request, how many questions the server lets run at a time, reasoning kept apart from the answer, structured tool calls, a conversation carrying a tool result, and a 16k-token prompt. That number sets how long a run takes: with `--kv-unified`, llama.cpp's `--ctx-size` is one pool every slot shares, and a pool too small for two answers side by side runs every question alone.
 
 **3. Run it.** `mbench run <id> --effort max`, or `mbench run <a> <b> --at 02:00 --until 09:00` for a nightly window. Extra models queue and run one at a time. Answers are written as they arrive, so a pause costs nothing, and the local page rebuilds when the run ends.
 

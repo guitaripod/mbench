@@ -5,6 +5,7 @@ from openai import AsyncOpenAI
 from . import datasets, engine, paths, suite, tool_cases
 
 WEATHER_QUESTION = "What's the weather in Helsinki right now? Use celsius."
+HARDER_QUESTION = "How many positive integers below 1000 have digits that add up to 10? Reply with just the number."
 TEXT_TOOL_MARKERS = ("get_weather", "<tool_call>", "<|call|>", "[TOOL_CALLS]")
 
 
@@ -20,13 +21,28 @@ def tokens(value):
     return f"{value // 1024}k" if value else "?"
 
 
-def check_capacity(context, capacity):
-    detail = (f"{capacity.get('slots') or '?'} requests at once, {tokens(context)} tokens per request, "
-              f"{tokens(capacity.get('pool'))} shared")
+def idle_slots(slots, pool):
+    """A pool too small for two answers side by side runs every question alone, however many slots the server has:
+    llama.cpp with --kv-unified shares one --ctx-size across all of them."""
+    return (f"the {tokens(pool)} pool holds one question at a time (its prompt plus {tokens(engine.ANSWER_RESERVE)} "
+            f"kept for the answer), so {slots - 1} of the {slots} slots sit idle; a bigger --ctx-size, or llama.cpp "
+            "without --kv-unified so each slot keeps a window of its own, runs them side by side")
+
+
+def check_capacity(context, capacity, phone=False):
+    """What the server holds, and for a run that asks questions how many it answers at a time. A phone only measures
+    speed, so how its pool would pace questions says nothing."""
+    slots, pool = capacity.get("slots"), capacity.get("pool")
+    together = engine.answers_at_once(slots, pool)
+    detail = f"{slots or '?'} requests at once, {tokens(context)} tokens per request, {tokens(pool)} shared"
+    problems = []
+    if not phone:
+        detail += f", so questions run {together} at a time"
+        if (slots or 1) > together == 1:
+            problems.append(idle_slots(slots, pool))
     if context and context < longest_prompt():
-        return outcome("capacity", "warn", f"{detail}; prompts past {tokens(context)} (MRCR at 128k, the longest speed "
-                                           "tests) will score zero")
-    return outcome("capacity", "ok", detail)
+        problems.append(f"prompts past {tokens(context)} (MRCR at 128k, the longest speed tests) will score zero")
+    return outcome("capacity", "warn" if problems else "ok", "; ".join([detail, *problems]))
 
 
 async def ask(client, profile, effort, messages, max_tokens, tools=None):
@@ -51,8 +67,22 @@ async def check_answer(client, profile, effort):
         return outcome("answer", "warn", f"expected 144, got {content[:80]!r} "
                                          f"(finish reason {response.choices[0].finish_reason})")
     if profile.thinking != "none" and effort != engine.EFFORT_OFF and not reasoning:
-        return outcome("answer", "warn", "no reasoning came back beside the answer; thinking may be off")
+        if await reasons_when_it_must(client, profile, effort):
+            return outcome("answer", "ok", "answers, reasoning kept apart (none for a question this easy)")
+        return outcome("answer", "warn", "no reasoning came back beside the answer, even to a harder question; "
+                                         "thinking may be off")
     return outcome("answer", "ok", "answers" + (", reasoning kept apart" if reasoning else ""))
+
+
+async def reasons_when_it_must(client, profile, effort):
+    """Some thinking models answer 12 times 12 straight away, which says nothing about whether their template turned
+    thinking on; a question that takes some working out does. Its answer doesn't matter, only whether reasoning
+    starts, so a short budget does."""
+    try:
+        response = await ask(client, profile, effort, [{"role": "user", "content": HARDER_QUESTION}], 1024)
+    except Exception:
+        return False
+    return bool(getattr(response.choices[0].message, "reasoning_content", None))
 
 
 async def check_tool_call(client, profile, effort):
@@ -145,7 +175,7 @@ async def run(profile, effort, context, capacity, moved=()):
     client = AsyncOpenAI(base_url=(profile.base_url or paths.SWAP_URL) + "/v1", api_key="none", timeout=900,
                          max_retries=0)
     checks = [*([check_stack(moved)] if moved else []),
-              check_capacity(context, capacity), await check_answer(client, profile, effort)]
+              check_capacity(context, capacity, phone=bool(profile.phone)), await check_answer(client, profile, effort)]
     tool, message = await check_tool_call(client, profile, effort)
     checks += [tool, await check_tool_result(client, profile, effort, message)]
     checks.append(await check_long_prompt(client, profile, effort, context))

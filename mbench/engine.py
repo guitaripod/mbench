@@ -14,6 +14,7 @@ CONTEXT_ERROR_WORDS = ("context", "too long", "maximum", "exceeds", "max_tokens"
 TEMPLATE_ERROR_WORDS = ("template", "parser", "alternate", "role")
 MIN_ANSWER_TOKENS = 2048
 ANSWER_RESERVE = 16384
+TYPICAL_PROMPT = 1024
 POOL_HEADROOM = 0.9
 SERVER_GONE_STREAK = 8
 FALLBACK_TOKENS_PER_SECOND = 40
@@ -159,6 +160,15 @@ def prompt_tokens(item):
 def weight(item):
     """Context an item may hold on the server while it runs: its prompt plus room for a typical answer."""
     return prompt_tokens(item) + min(item["max_tokens"], ANSWER_RESERVE)
+
+
+def answers_at_once(slots, pool):
+    """How many ordinary questions (a short prompt plus room for a typical answer) the Gate lets run together, which
+    is what sets the pace of every quality task but the long-context ones."""
+    slots = max(1, min(slots or suite.CONCURRENCY, suite.MAX_CONCURRENCY))
+    if not pool:
+        return slots
+    return max(1, min(slots, int(pool * POOL_HEADROOM) // (TYPICAL_PROMPT + ANSWER_RESERVE)))
 
 
 class Gate:

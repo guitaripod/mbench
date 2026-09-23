@@ -81,6 +81,28 @@ def test_a_changed_stack_is_a_warning_not_a_failure():
     assert doctor.failures([check]) == []
 
 
+def test_a_pool_that_holds_one_question_leaves_the_other_slots_idle():
+    check = doctor.check_capacity(16384, {"slots": 4, "context": 16384, "pool": 16384})
+    assert check["status"] == "warn" and "questions run 1 at a time" in check["detail"]
+    assert "3 of the 4 slots sit idle" in check["detail"] and "will score zero" in check["detail"]
+    roomy = doctor.check_capacity(262144, ROOMY)
+    assert roomy["status"] == "ok" and "questions run 4 at a time" in roomy["detail"]
+
+
+def test_a_phone_is_not_told_how_its_pool_would_pace_questions():
+    check = doctor.check_capacity(131072, {"slots": 4, "context": 131072, "pool": 16384}, phone=True)
+    assert check["status"] == "ok" and "questions" not in check["detail"]
+
+
+def test_a_model_that_skips_reasoning_on_an_easy_question_is_asked_a_harder_one(monkeypatch):
+    rest = [reply(tool_calls=weather_call()), reply("14 °C"), reply("abc")]
+    checks, server = examine(monkeypatch, [reply("144"), reply("", "digits of n: a+b+c=10"), *rest])
+    assert checks["answer"]["status"] == "ok" and "none for a question this easy" in checks["answer"]["detail"]
+    assert server.seen[1]["messages"][0]["content"] == doctor.HARDER_QUESTION
+    checks, _ = examine(monkeypatch, [reply("144"), reply("63"), *rest])
+    assert checks["answer"]["status"] == "warn" and "even to a harder question" in checks["answer"]["detail"]
+
+
 def test_the_fingerprint_keeps_a_greedy_answer(monkeypatch):
     server = Server([reply("2 3 5 7 11 13 17 19", "primes: ")])
     monkeypatch.setattr(doctor, "AsyncOpenAI", lambda **kwargs: server)
