@@ -14,7 +14,10 @@ from .engine import resolve_effort
 from . import units
 from .units import ACTIVE, MAX_SHARED_RUNS, busy, reconcile, spawn, unit_active, unit_name
 
-DURATIONS = {"full": "2–5 hours", "quick": "45–90 minutes", "phone": "30–60 minutes", "smoke": "about 10 minutes"}
+DURATIONS = {"full": "3–6 hours (10+ for a slow or rambling model)", "quick": "45–90 minutes",
+             "phone": "30–60 minutes", "smoke": "about 10 minutes"}
+TERMINAL = ("complete", "failed", "cancelled")
+WAIT_POLL_S = 30
 REUSE_FILES = {"speed": ("speed.json",), "lcb": ("lcb.jsonl", "lcb.graded.jsonl")}
 REUSE_STATUSES = ("complete", "failed", "cancelled")
 
@@ -438,17 +441,71 @@ def latest_run(db, run_id=None):
     return runs[0] if runs else fail("no runs yet; start one with `mbench run <llama-swap model>`")
 
 
+def schedule_line(run):
+    flags = run.get("flags") or {}
+    window = flags.get("window") or {}
+    start = f"starts {schedule.describe(flags['not_before'])}" if flags.get("not_before", 0) > time.time() else "due next"
+    return (f"{run['id']}  {run['suite']}  scheduled, {start}"
+            + (f", only {window['start']}–{window['end']}, continuing the next night if unfinished"
+               if window.get("end") else "")
+            + (f" ({flags['parked']}; continues where it stopped)" if flags.get("parked") else ""))
+
+
 def print_schedule(db):
     waiting = sorted((run for run in store.list_runs(db) if run["status"] == "scheduled"),
                      key=lambda run: ((run.get("flags") or {}).get("not_before") or 0, run.get("created") or 0))
     for run in waiting:
-        flags = run.get("flags") or {}
-        window = flags.get("window") or {}
-        start = f"starts {schedule.describe(flags['not_before'])}" if flags.get("not_before", 0) > time.time() else "due next"
-        print(f"{run['id']}  {run['suite']}  scheduled, {start}"
-              + (f", only {window['start']}–{window['end']}, continuing the next night if unfinished"
-                 if window.get("end") else "")
-              + (f" ({flags['parked']}; continues where it stopped)" if flags.get("parked") else ""))
+        print(schedule_line(run))
+
+
+def read_events(run_id):
+    path = paths.RUNS / run_id / "events.jsonl"
+    if not path.exists():
+        return []
+    return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+
+
+def session_progress(events):
+    """Progress since the run last started, so a session resumed after giving way keeps its own count and the hours it
+    spent parked don't read as slowness."""
+    starts = [index for index, event in enumerate(events) if event["phase"] == "started"]
+    return [event for event in events[starts[-1] if starts else 0:] if "done" in event]
+
+
+def time_left(events, now):
+    """How long the current task has to go at this session's pace; None until the task has answered something."""
+    progress = session_progress(events)
+    if not progress:
+        return None
+    current = progress[-1]
+    first = next(event for event in progress if event["phase"] == current["phase"])
+    answered = current["done"] - first["done"]
+    if answered <= 0 or now <= first["t"]:
+        return None
+    return (current["total"] - current["done"]) * (now - first["t"]) / answered
+
+
+def tasks_after(run, phase):
+    chosen = (run.get("flags") or {}).get("tasks") or ["speed", *suite.QUALITY_TASKS]
+    order = [task for task in ("speed", *suite.QUALITY_TASKS) if task in chosen]
+    return order[order.index(phase) + 1:] if phase in order else []
+
+
+def run_lines(run):
+    """A running run's line for `mbench status` and `mbench wait`, and when it can tell, how long the task it is on has
+    left at this session's pace and which tasks follow."""
+    now = time.time()
+    events = read_events(run["id"])
+    last = events[-1] if events else {}
+    detail = f"{last.get('phase', 'queued')} {last.get('done', '')}/{last.get('total', '')}".rstrip("/ ")
+    lines = [f"{run['id']}  {run['suite']}  {detail}  running for {duration(now - (run['started'] or run['created']))}"]
+    if "done" in last:
+        left, after = time_left(events, now), tasks_after(run, last["phase"])
+        notes = [f"about {duration(left)} left in {last['phase']}"] if left is not None else []
+        notes += [f"then {', '.join(after)}"] if after else []
+        if notes:
+            lines.append("  " + ", ".join(notes))
+    return lines
 
 
 def cmd_status(_args):
@@ -464,11 +521,37 @@ def cmd_status(_args):
         print_schedule(db)
         return
     for run in active:
-        events = paths.RUNS / run["id"] / "events.jsonl"
-        last = json.loads(events.read_text().splitlines()[-1]) if events.exists() and events.read_text().strip() else {}
-        detail = f"{last.get('phase', 'queued')} {last.get('done', '')}/{last.get('total', '')}".rstrip("/ ")
-        print(f"{run['id']}  {run['suite']}  {detail}  running for {duration(time.time() - (run['started'] or run['created']))}")
+        print("\n".join(run_lines(run)))
     print_schedule(db)
+
+
+def cmd_wait(args):
+    """Blocks until a run completes, fails or is cancelled, through every time it gives way or pauses in between. It
+    says where the run is whenever the task or state changes and every --every minutes besides, so whatever waits on
+    it can tell a long task from a hung wait."""
+    db = store.connect()
+    run_id = latest_run(db, args.run)["id"]
+    said, said_at = None, 0.0
+    try:
+        while True:
+            reconcile(db)
+            run = store.get_run(db, run_id)
+            if run is None:
+                fail(f"{run_id} was removed")
+            if run["status"] in TERMINAL:
+                print(f"{run_id}: {run['status']}" + (f" ({run['error']})" if run.get("error") else ""), flush=True)
+                if run["status"] == "complete":
+                    summary(db, run_id)
+                sys.exit(0 if run["status"] == "complete" else 1)
+            lines = run_lines(run) if run["status"] in ACTIVE else [schedule_line(run)]
+            events = read_events(run_id)
+            state = (run["status"], events[-1]["phase"] if events else None)
+            if state != said or time.time() - said_at >= args.every * 60:
+                print("\n".join(lines), flush=True)
+                said, said_at = state, time.time()
+            time.sleep(WAIT_POLL_S)
+    except KeyboardInterrupt:
+        sys.exit(130)
 
 
 def cmd_logs(args):
@@ -813,13 +896,14 @@ def cmd_worker(args):
 
 ROOT_EPILOG = """\
 examples:
-  mbench run qwen3-32b                          full suite at medium effort (2–5 h, in the background)
+  mbench run qwen3-32b                          full suite at medium effort (3–6 h, in the background)
   mbench run qwen3-32b --effort max --submit
                                                 the model at its maximum effort, recorded and submitted
   mbench run qwen3-32b --quick                  45–90 min, ranked as provisional
   mbench run qwen3-32b gpt-oss-120b --at 03:00 --until 08:00
                                                 both models, one after the other, only at night
-  mbench status                                 what is running and how far along it is
+  mbench status                                 what is running, how far along it is and how long it has left
+  mbench wait                                   block until the latest run finishes, however often it gives way
   mbench ls --effort max                        ranked table for one effort level
   mbench compare qwen3-32b gpt-oss-120b         which differences are real, task by task
   mbench doctor qwen3-32b                       check a model's server before spending a night on it
@@ -846,7 +930,8 @@ RAM drops under 4 GB.
 
 RUN_EPILOG = """\
 suites:
-  (default)  full: ~2 h for a fast MoE model, up to ~5 h for a verbose dense 27B at medium
+  (default)  full: ~3 h for a fast model, 5–6 h for a dense 27B at medium, 10 h+ for a slow
+             one or one that rambles to its token limit
   --quick    45–90 min, smaller samples, shown as provisional
   --smoke    a few items per task, checks the pipeline, never shown on the board
 
@@ -866,9 +951,10 @@ scheduling (--at TIME [--until TIME]):
   five minutes and switches itself off when nothing is scheduled; it keeps working after
   a reboot if lingering is on (loginctl enable-linger). Without --at, several models
   queue behind each other, and a run started while another is going waits its turn.
-  Runs with --at give way to other GPU work: when a game or ComfyUI holds the GPU for a
-  minute, the run stops, llama-swap unloads, and it tries again every ten minutes. Near
-  the end of a window a run stops taking new questions that couldn't finish in time.
+  Every run gives way to other GPU work unless started with --keep-gpu: when a game or
+  ComfyUI holds the GPU for a minute, the run stops, llama-swap unloads, and it tries
+  again every ten minutes. Near the end of a window a run stops taking new questions
+  that couldn't finish in time.
 
 every run:
   starts with the checks `mbench doctor` runs (context per request, reasoning and
@@ -914,7 +1000,7 @@ def parser():
                                    epilog=ROOT_EPILOG, formatter_class=formatter)
     root.add_argument("--version", action="version", version=f"mbench {__version__}")
     commands = root.add_subparsers(dest="command", required=True, title="commands",
-                                   metavar="{run,status,logs,cancel,resume,ls,compare,doctor,sources,export,board,profile}")
+                                   metavar="{run,status,wait,logs,cancel,resume,ls,compare,doctor,sources,export,board,profile}")
 
     run = commands.add_parser("run", help="benchmark a llama-swap model", description=RUN_DESCRIPTION,
                               epilog=RUN_EPILOG, formatter_class=formatter)
@@ -942,6 +1028,14 @@ def parser():
     run.set_defaults(handler=cmd_run)
 
     commands.add_parser("status", help="show the run in progress and how far along it is").set_defaults(handler=cmd_status)
+    wait = commands.add_parser("wait", help="block until a run finishes, through every time it gives way",
+                               description="Waits for a run to complete, fail or be cancelled, however often it gives the "
+                                           "GPU away in between. Exits 0 when it completed, 1 otherwise. Made for "
+                                           "scripts and agent sessions, whose shells may be ended when they go quiet.")
+    wait.add_argument("run", nargs="?", help="run id; defaults to the latest")
+    wait.add_argument("--every", type=float, default=5, metavar="MINUTES",
+                      help="say where the run is at least this often (default 5)")
+    wait.set_defaults(handler=cmd_wait)
     logs = commands.add_parser("logs", help="print a run's log (latest run by default)")
     logs.add_argument("run", nargs="?", help="run id; defaults to the latest")
     logs.add_argument("-f", "--follow", action="store_true", help="keep printing until the run ends")

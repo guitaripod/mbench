@@ -131,7 +131,8 @@ mbench run <id> --quality-from <run>  for a phone run: whose quality the board s
 mbench run <a> <b> --at 03:00 --until 08:00
                                       several models, one after another, only at night
 mbench run <id> --submit              also submit to localmaxxing (all, speed or evals)
-mbench status                         what is running, and what is scheduled
+mbench status                         what is running, how long its task has left, what is scheduled
+mbench wait [<run>]                   block until a run finishes, however often it gives way
 mbench logs -f                        follow the worker log
 mbench cancel / mbench resume         stop a run; continue it later
 mbench ls [--effort max] [--device phone] [--markdown]

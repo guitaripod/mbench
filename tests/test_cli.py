@@ -1,8 +1,9 @@
 import json
+from types import SimpleNamespace
 
 import pytest
 
-from mbench import cli, paths, suite
+from mbench import cli, paths, store, suite
 from mbench.profiles import Profile
 
 
@@ -75,3 +76,43 @@ def test_a_ranking_measured_on_two_cards_says_the_speed_columns_dont_compare():
     note = cli.setups_note([{"label": "RTX PRO 6000 · driver 610", "models": 2}, {"label": "RTX 4090 · driver 570", "models": 1}])
     assert note.startswith("tok/s, Peak and Wh/correct come from 2 setups")
     assert "RTX PRO 6000 · driver 610 (2), RTX 4090 · driver 570 (1)" in note
+
+
+def test_status_reckons_time_left_from_this_sessions_pace_alone():
+    events = [{"t": 0, "phase": "started"}, {"t": 10, "phase": "supergpqa", "done": 0, "total": 100},
+              {"t": 1000, "phase": "yielded"}, {"t": 5000, "phase": "started"},
+              {"t": 5010, "phase": "supergpqa", "done": 40, "total": 100},
+              {"t": 5610, "phase": "supergpqa", "done": 50, "total": 100}]
+    assert cli.time_left(events, 6010) == 5000
+    assert cli.time_left(events[:5], 5020) is None
+    assert cli.time_left([], 10) is None
+    assert cli.tasks_after({"flags": {"tasks": ["speed", "supergpqa", "math", "lcb"]}}, "supergpqa") == ["math", "lcb"]
+    assert cli.tasks_after({"flags": {}}, "lcb") == []
+
+
+def test_wait_rides_out_a_run_that_gives_way_and_exits_with_its_verdict(monkeypatch, tmp_path, capsys):
+    monkeypatch.setattr(paths, "DATA", tmp_path)
+    monkeypatch.setattr(paths, "DB", tmp_path / "bench.db")
+    monkeypatch.setattr(paths, "RUNS", tmp_path / "runs")
+    (tmp_path / "runs" / "r1").mkdir(parents=True)
+    (tmp_path / "runs" / "r1" / "events.jsonl").write_text(
+        json.dumps({"t": 1.0, "phase": "math", "done": 3, "total": 126}) + "\n")
+    db = store.connect()
+    store.insert_run(db, {"id": "r1", "model": "m", "suite": "full/v1", "status": "running", "started": 1.0, "flags": {}})
+    later = iter([{"status": "scheduled", "flags": {"not_before": 4e9, "parked": "gave the GPU to Xwayland"}},
+                  {"status": "running"}, {"status": "complete"}])
+    monkeypatch.setattr(cli, "reconcile", lambda db: None)
+    monkeypatch.setattr(cli.time, "sleep", lambda seconds: store.update_run(db, "r1", **next(later)))
+    monkeypatch.setattr(cli, "summary", lambda db, run_id: print("summary"))
+    with pytest.raises(SystemExit) as exit_info:
+        cli.cmd_wait(SimpleNamespace(run=None, every=5))
+    lines = capsys.readouterr().out.splitlines()
+    assert exit_info.value.code == 0
+    assert lines[0].startswith("r1  full/v1  math 3/126  running for")
+    assert "then tools, mrcr, graphwalks, lcb" in lines[1]
+    assert "gave the GPU to Xwayland; continues where it stopped" in lines[2]
+    assert lines[3].startswith("r1  full/v1  math 3/126") and lines[-2:] == ["r1: complete", "summary"]
+    store.update_run(db, "r1", status="failed", error="the GPU stopped answering")
+    with pytest.raises(SystemExit) as exit_info:
+        cli.cmd_wait(SimpleNamespace(run="r1", every=5))
+    assert exit_info.value.code == 1 and "r1: failed (the GPU stopped answering)" in capsys.readouterr().out
