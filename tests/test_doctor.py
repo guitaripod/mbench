@@ -79,3 +79,11 @@ def test_a_changed_stack_is_a_warning_not_a_failure():
     check = doctor.check_stack(["SGLang aaaa → SGLang bbbb"])
     assert check["status"] == "warn" and "SGLang aaaa → SGLang bbbb" in check["detail"]
     assert doctor.failures([check]) == []
+
+
+def test_the_fingerprint_keeps_a_greedy_answer(monkeypatch):
+    server = Server([reply("2 3 5 7 11 13 17 19", "primes: ")])
+    monkeypatch.setattr(doctor, "AsyncOpenAI", lambda **kwargs: server)
+    probe = asyncio.run(doctor.fingerprint(PROFILE, "medium"))
+    assert probe == {"prompt": doctor.FINGERPRINT_PROMPT, "answer": "primes: 2 3 5 7 11 13 17 19"}
+    assert server.seen[0]["temperature"] == 0

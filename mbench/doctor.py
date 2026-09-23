@@ -168,7 +168,7 @@ async def fingerprint(profile, effort):
     try:
         answer = await client.chat.completions.create(
             model=profile.served, messages=[{"role": "user", "content": FINGERPRINT_PROMPT}], max_tokens=64,
-            **request_kwargs(profile, effort, greedy=True))
+            **engine.request_kwargs(profile, effort, greedy=True))
     except Exception as error:
         return {"error": repr(error)[:200]}
     message = answer.choices[0].message
