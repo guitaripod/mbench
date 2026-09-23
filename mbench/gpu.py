@@ -6,6 +6,7 @@ from collections import defaultdict
 from pathlib import Path
 
 SERVER_PROCESS_NAMES = ("sglang", "llama-server", "llama-swap", "vllm")
+INTERPRETERS = ("python", "node", "bun", "deno", "java", "ruby", "perl", "bash", "sh")
 BUSY_SM_PERCENT = 25
 HEAVY_MIB = 4096
 
@@ -74,10 +75,26 @@ def compute_apps():
     return apps
 
 
-def short_name(process_name):
-    """The executable's name, from a Linux path or a Windows one (games under Proton report S:\\...\\Game.exe)."""
-    first = (process_name or "").split(" --")[0].strip()
-    return first.replace("\\", "/").rsplit("/", 1)[-1] or "?"
+def basename(path):
+    """The last part of a Linux path or a Windows one (games under Proton report S:\\...\\Game.exe)."""
+    return path.replace("\\", "/").rstrip("/").rsplit("/", 1)[-1]
+
+
+def program_name(args):
+    """What a process is called: its executable, and for an interpreter the script it runs (ComfyUI is python main.py).
+    Read from the argument list, since in the joined command line the last slash can sit in an argument (Xwayland's
+    -auth path) and a space can sit in the executable's own path (a game under Proton). A process that rewrote its
+    title into one string gets it cut at the first option instead."""
+    if not args:
+        return "?"
+    if len(args) == 1:
+        args = [args[0].split(" -")[0].strip()]
+    name = basename(args[0])
+    if name.rstrip("0123456789.") in INTERPRETERS:
+        script = next((arg for arg in args[1:] if not arg.startswith("-")), None)
+        if script and "-c" not in args[1:args.index(script)]:
+            return f"{name} {basename(script)}"
+    return name or "?"
 
 
 def number(text):
@@ -101,11 +118,16 @@ def pmon_rows(text):
     return rows
 
 
-def cmdline(pid):
+def argv(pid):
     try:
-        return Path(f"/proc/{pid}/cmdline").read_bytes().replace(b"\0", b" ").decode(errors="replace").strip()
+        raw = Path(f"/proc/{pid}/cmdline").read_bytes()
     except OSError:
-        return ""
+        return []
+    return [part.decode(errors="replace") for part in raw.split(b"\0") if part]
+
+
+def cmdline(pid):
+    return " ".join(argv(pid)).strip()
 
 
 def parent_of(pid):
@@ -141,7 +163,7 @@ def processes(samples=3):
     if not names:
         for app in compute_apps():
             sm[app["pid"]], mib[app["pid"]], names[app["pid"]] = [0.0], float(app["mib"]), app["name"]
-    return [{"pid": pid, "name": short_name(cmdline(pid) or names[pid]), "sm": statistics.mean(sm[pid]),
+    return [{"pid": pid, "name": program_name(argv(pid) or [names[pid]]), "sm": statistics.mean(sm[pid]),
              "mib": int(mib[pid]), "server": is_server(pid)} for pid in names]
 
 

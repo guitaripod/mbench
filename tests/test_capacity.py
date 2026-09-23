@@ -21,12 +21,23 @@ def test_pmon_rows_follow_the_header():
 
 def test_contention_skips_model_servers_and_light_desktop_use(monkeypatch):
     monkeypatch.setattr(gpu.subprocess, "run", lambda *args, **kwargs: SimpleNamespace(stdout=PMON, returncode=0))
-    monkeypatch.setattr(gpu, "cmdline", lambda pid: {777777: "/mnt/sglang/.venv/bin/python -m sglang serve",
-                                                     2959442: GAME}.get(pid, ""))
+    arguments = {777777: ["/mnt/sglang/.venv/bin/python", "-m", "sglang", "serve"], 2959442: [GAME]}
+    monkeypatch.setattr(gpu, "argv", lambda pid: arguments.get(pid, []))
     monkeypatch.setattr(gpu, "parent_of", lambda pid: 1)
     found = gpu.contention()
     assert [(process["name"], process["sm"], process["mib"]) for process in found] == [("Borderlands4.exe", 80.0, 9085)]
     assert "Borderlands4.exe (80% GPU, 8.9 GB)" == gpu.describe_contention(found)
+
+
+def test_a_process_is_named_by_its_executable_not_its_arguments():
+    assert gpu.program_name(["/usr/bin/Xwayland", ":1", "-auth", "/run/user/1000/xauth_wlOXNO", "-listenfd", "8"]) == "Xwayland"
+    assert gpu.program_name(["/home/marcus/ComfyUI/.venv/bin/python3.12", "main.py", "--listen"]) == "python3.12 main.py"
+    assert gpu.program_name(["/usr/bin/python", "-m", "comfy"]) == "python comfy"
+    assert gpu.program_name(["python3", "-c", "import torch; open('/tmp/x')"]) == "python3"
+    assert gpu.program_name([GAME, "-dx12"]) == "Borderlands4.exe"
+    assert gpu.program_name(["/opt/vivaldi/vivaldi-bin --type=gpu-process --render-node-override=/dev/dri/renderD128"]) == "vivaldi-bin"
+    assert gpu.program_name(["renderD128 --us"]) == "renderD128"
+    assert gpu.program_name([]) == "?"
 
 
 def test_anything_llama_swap_started_counts_as_a_server(monkeypatch):
