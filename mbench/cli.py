@@ -679,7 +679,7 @@ def cmd_resume(args):
         fail(f"{run['id']} was measured under suite v{suite.version_of(run['suite'])} and this mbench runs v{suite.VERSION}; "
              f"`mbench run {run['model']} --reuse {run['id']}` starts a v{suite.VERSION} run that keeps what still applies")
     at, window = window_of(args)
-    flags = {key: value for key, value in (run.get("flags") or {}).items() if key != "parked"}
+    flags = {key: value for key, value in (run.get("flags") or {}).items() if key not in ("parked", "stall")}
     flags["yield"] = not args.keep_gpu
     if window:
         begins = schedule.first_start(datetime.now(), window, at).timestamp()

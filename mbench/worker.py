@@ -18,6 +18,7 @@ CARD_CHECK_S = 15
 GPU_CHECK_S = 30
 YIELD_STRIKES = 2
 YIELD_RETRY_S = 600
+STALL_LIMIT = 3
 MIN_WINDOW_S = 900
 SPEED_WINDOW_S = 1800
 
@@ -310,6 +311,27 @@ def give_way(db, run, events, found, host):
                     run=run["id"], status="yielded")
 
 
+def answers_kept(run_dir):
+    """Answers written so far across the quality tasks: what a run has to show for its sessions."""
+    count = 0
+    for task in suite.QUALITY_TASKS:
+        path = run_dir / f"{task}.jsonl"
+        if path.exists():
+            count += sum(1 for line in path.read_text().splitlines() if line.strip())
+    return count
+
+
+def stalled(db, run_id, run_dir):
+    """Counts the sessions in a row that ended with the server failing and no answer gained since the last one did.
+    A server that died comes back when it is loaded again; the same questions failing session after session will fail
+    the same way at the next retry, and giving way every ten minutes would go on all night."""
+    flags = (store.get_run(db, run_id) or {}).get("flags") or {}
+    kept, last = answers_kept(run_dir), flags.get("stall") or {}
+    count = last.get("count", 0) + 1 if kept == last.get("answers") else 1
+    store.update_run(db, run_id, flags={**flags, "stall": {"answers": kept, "count": count}})
+    return count
+
+
 def finished_note(db, run_id, model):
     entry = store.metrics_of(db, run_id).get("index.quality")
     return f"{model}: quality index {entry['value']:.1f}" if entry and entry.get("value") is not None else f"{model}: done"
@@ -442,7 +464,14 @@ def execute(run_id):
         notify.send("mbench finished", finished_note(db, run_id, profile.id), run=run_id, status="complete")
     except engine.ServerGone as error:
         events.emit("server gone", reason=str(error)[:200])
-        give_way(db, run, events, [{"name": "a server that stopped answering"}], host)
+        if stalled(db, run_id, run_dir) < STALL_LIMIT:
+            give_way(db, run, events, [{"name": "a server that stopped answering"}], host)
+            return
+        fault = f"the same questions failed {STALL_LIMIT} sessions running, so another try would too: {error}"
+        store.update_run(db, run_id, status="failed", finished=time.time(), error=fault[:500])
+        events.emit("failed", error=fault[:300])
+        host.unload()
+        notify.send("mbench failed", f"{profile.id}: {fault[:200]}", run=run_id, status="failed")
     except Exception as error:
         store.update_run(db, run_id, status="failed", finished=time.time(), error=str(error)[:500])
         events.emit("failed", error=str(error)[:300])
