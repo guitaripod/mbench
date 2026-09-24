@@ -13,6 +13,7 @@ from . import gpu, paths, scoring, suite, tool_cases
 CONTEXT_ERROR_WORDS = ("context", "too long", "maximum", "exceeds", "max_tokens")
 TEMPLATE_ERROR_WORDS = ("template", "parser", "alternate", "role")
 UNPARSED_WORDS = ("does not match the expected",)
+OVERFLOW_WORDS = ("context size has been exceeded",)
 MIN_ANSWER_TOKENS = 2048
 ANSWER_RESERVE = 16384
 TYPICAL_PROMPT = 1024
@@ -89,6 +90,14 @@ def unparsed_output(error):
     the server going away, so it gets the retry every failure gets and then scores zero."""
     return (isinstance(error, openai.InternalServerError)
             and any(word in str(error).lower() for word in UNPARSED_WORDS))
+
+
+def pool_overflow(error):
+    """Answers in flight together outgrew the cache they share: llama.cpp with --kv-unified fails every request in the
+    batch at once when the pool fills, although each would fit alone. The server is fine and so are the questions,
+    so they go again one at a time."""
+    return (isinstance(error, openai.InternalServerError)
+            and any(word in str(error).lower() for word in OVERFLOW_WORDS))
 
 
 def context_error(error):
@@ -354,8 +363,8 @@ class QualityRunner:
     def note_failure(self, error):
         """A server that has died answers nothing at all, so its failures arrive one after another. A model whose own
         template refuses a shape of conversation also fails every time, and so does output the server can't parse:
-        both are the model answering, not the server going away."""
-        if template_error(error) or unparsed_output(error):
+        both are the model answering, not the server going away. Nor is a shared cache that filled up."""
+        if template_error(error) or unparsed_output(error) or pool_overflow(error):
             self.streak = 0
             return
         self.streak += 1
@@ -419,8 +428,10 @@ class QualityRunner:
                         record = refused(task, item, started)
                     elif unparsed_output(error) and item["id"] in retried:
                         record = garbled(task, item, started)
+                    elif pool_overflow(error) and item["id"] in retried:
+                        record = out_of_context(task, item, started)
                     elif not context_error(error):
-                        failures.append({"id": item["id"], "error": repr(error)[:500]})
+                        failures.append({"id": item["id"], "error": repr(error)[:500], "overflow": pool_overflow(error)})
                         self.note_failure(error)
                         return
                     else:
@@ -446,6 +457,8 @@ class QualityRunner:
         if failures and not self.stop.is_set() and not self.drained and not self.gone:
             retry_ids = {failure["id"] for failure in failures}
             retried.update(retry_ids)
+            if any(failure["overflow"] for failure in failures):
+                gate = Gate(1, self.pool)
             failures.clear()
             await asyncio.sleep(15)
             await wave([item for item in pending if item["id"] in retry_ids])

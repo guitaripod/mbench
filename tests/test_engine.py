@@ -197,3 +197,26 @@ def test_output_the_server_cannot_parse_is_retried_then_scored_zero_not_a_dead_s
         "upstream command exited prematurely",
         response=httpx.Response(500, request=httpx.Request("POST", "http://swap")), body=None))
 
+
+
+def test_answers_that_outgrow_a_shared_cache_together_go_again_one_at_a_time(tmp_path):
+    instance = QualityRunner(profile(), tmp_path, "medium", lambda *args: None, threading.Event(), slots=4)
+    flight = {"now": 0, "most": 0}
+
+    async def fake_call(item, messages=None, seed_key=None):
+        flight["now"] += 1
+        flight["most"] = max(flight["most"], flight["now"])
+        await asyncio.sleep(0.01)
+        crowded = flight["now"] > 1
+        flight["now"] -= 1
+        if crowded:
+            raise openai.InternalServerError(
+                "Error code: 500 - Context size has been exceeded.",
+                response=httpx.Response(500, request=httpx.Request("POST", "http://swap/v1/chat/completions")), body=None)
+        return response(message("Answer: A"))
+
+    instance.call = fake_call
+    failures = asyncio.run(instance.run("graphwalks", items_for("graphwalks", 4)))
+    records = [json.loads(line) for line in (tmp_path / "graphwalks.jsonl").read_text().splitlines()]
+    assert failures == [] and flight["most"] == 4 and len(records) == 4
+    assert all(record["finish"] == "stop" for record in records)
