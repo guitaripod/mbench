@@ -123,6 +123,7 @@ def test_malformed_arguments_are_reported_back_and_counted(tmp_path):
     record = asyncio.run(runner(tmp_path, script, seen).episode(tools_item("refund-too-old"), 0.0))
     assert record["malformed"] == 1 and record["score"] == 0.0
     assert "not a valid JSON object" in seen[-1][-1]["content"]
+    assert seen[-1][-2]["tool_calls"][0]["function"]["arguments"] == "{}"
 
 
 def test_unreachable_items_score_zero_without_a_request(tmp_path):
@@ -165,3 +166,34 @@ def test_a_few_failures_are_only_failures(tmp_path, monkeypatch):
     runner_instance, items = dead(tmp_path, monkeypatch, failures=2, total=20)
     failures = asyncio.run(runner_instance.run("supergpqa", items))
     assert failures == [] and len(runner_instance.done("supergpqa")) == 20
+
+
+def unparsed(tmp_path, garbled_ids):
+    """A llama.cpp server that refuses the model's output for some questions every time they are asked."""
+    instance = QualityRunner(profile(), tmp_path, "medium", lambda *args: None, threading.Event(), slots=4)
+
+    async def fake_call(item, messages=None, seed_key=None):
+        if item["id"] in garbled_ids:
+            raise openai.InternalServerError(
+                "Error code: 500 - The model produced output that does not match the expected peg-native format",
+                response=httpx.Response(500, request=httpx.Request("POST", "http://swap/v1/chat/completions")), body=None)
+        return response(message("Answer: A"))
+
+    instance.call = fake_call
+    return instance
+
+
+def test_output_the_server_cannot_parse_is_retried_then_scored_zero_not_a_dead_server(tmp_path):
+    items = items_for("supergpqa", 20)
+    garbled_ids = {item["id"] for item in items[:12]}
+    failures = asyncio.run(unparsed(tmp_path, garbled_ids).run("supergpqa", items))
+    records = {record["id"]: record for record in map(json.loads, (tmp_path / "supergpqa.jsonl").read_text().splitlines())}
+    assert failures == [] and len(records) == 20
+    assert all((records[item_id]["finish"], records[item_id]["score"]) == ("unparsed", 0.0) for item_id in garbled_ids)
+    assert engine.unparsed_output(openai.InternalServerError(
+        "The model produced output that does not match the expected peg-native format",
+        response=httpx.Response(500, request=httpx.Request("POST", "http://swap")), body=None))
+    assert not engine.unparsed_output(openai.InternalServerError(
+        "upstream command exited prematurely",
+        response=httpx.Response(500, request=httpx.Request("POST", "http://swap")), body=None))
+

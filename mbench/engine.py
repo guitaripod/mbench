@@ -12,6 +12,7 @@ from . import gpu, paths, scoring, suite, tool_cases
 
 CONTEXT_ERROR_WORDS = ("context", "too long", "maximum", "exceeds", "max_tokens")
 TEMPLATE_ERROR_WORDS = ("template", "parser", "alternate", "role")
+UNPARSED_WORDS = ("does not match the expected",)
 MIN_ANSWER_TOKENS = 2048
 ANSWER_RESERVE = 16384
 TYPICAL_PROMPT = 1024
@@ -82,6 +83,14 @@ def template_error(error):
             and any(word in str(error).lower() for word in TEMPLATE_ERROR_WORDS))
 
 
+def unparsed_output(error):
+    """An answer the server could not take apart into reasoning, text and tool calls: llama.cpp refuses the whole
+    response when the model's output breaks the format its chat template promises. That is the model answering, not
+    the server going away, so it gets the retry every failure gets and then scores zero."""
+    return (isinstance(error, openai.InternalServerError)
+            and any(word in str(error).lower() for word in UNPARSED_WORDS))
+
+
 def context_error(error):
     """A request the server refused because prompt plus answer don't fit its window, which scores zero rather than failing."""
     return isinstance(error, openai.BadRequestError) and any(word in str(error).lower() for word in CONTEXT_ERROR_WORDS)
@@ -122,6 +131,11 @@ def refused(task, item, started):
     return {**base_record(task, item, "template", started), "prediction": None, "score": 0.0}
 
 
+def garbled(task, item, started):
+    return {**base_record(task, item, "unparsed", started), "prediction": None, "score": 0.0,
+            **({"malformed": 1} if task == "tools" else {})}
+
+
 def build_record(task, item, response, started):
     choice = response.choices[0]
     message = choice.message
@@ -147,6 +161,13 @@ def parse_arguments(raw):
     except json.JSONDecodeError:
         return None
     return arguments if isinstance(arguments, dict) else None
+
+
+def echoed(raw, arguments):
+    """The arguments a call goes back with in the conversation. A call whose arguments aren't a JSON object goes back as
+    {}, which is how it is recorded too: for templates that take arguments as objects, llama.cpp parses every earlier
+    call in the conversation, and one malformed call sent back as it came would fail every later step of the episode."""
+    return raw if raw and arguments is not None else "{}"
 
 
 def prompt_tokens(item):
@@ -293,9 +314,9 @@ class QualityRunner:
             for index, tool_call in enumerate(message.tool_calls):
                 call_id = tool_call.id or f"call_{step}_{index}"
                 name, raw = tool_call.function.name, tool_call.function.arguments
-                assistant["tool_calls"].append({"id": call_id, "type": "function",
-                                                "function": {"name": name, "arguments": raw or "{}"}})
                 arguments = parse_arguments(raw)
+                assistant["tool_calls"].append({"id": call_id, "type": "function",
+                                                "function": {"name": name, "arguments": echoed(raw, arguments)}})
                 if arguments is None:
                     malformed += 1
                     result = {"error": "arguments are not a valid JSON object"}
@@ -332,9 +353,9 @@ class QualityRunner:
 
     def note_failure(self, error):
         """A server that has died answers nothing at all, so its failures arrive one after another. A model whose own
-        template refuses a shape of conversation also fails every time, and that is the model answering, not the
-        server going away."""
-        if template_error(error):
+        template refuses a shape of conversation also fails every time, and so does output the server can't parse:
+        both are the model answering, not the server going away."""
+        if template_error(error) or unparsed_output(error):
             self.streak = 0
             return
         self.streak += 1
@@ -367,6 +388,7 @@ class QualityRunner:
         gate = Gate(self.slots, self.pool)
         lock = asyncio.Lock()
         failures = []
+        retried = set()
 
         async def write(record):
             async with lock:
@@ -395,13 +417,15 @@ class QualityRunner:
                 except Exception as error:
                     if template_error(error):
                         record = refused(task, item, started)
+                    elif unparsed_output(error) and item["id"] in retried:
+                        record = garbled(task, item, started)
                     elif not context_error(error):
                         failures.append({"id": item["id"], "error": repr(error)[:500]})
                         self.note_failure(error)
                         return
                     else:
                         record = await self.retry_fitted(task, item, error, started)
-                if record["finish"] not in ("context", "template"):
+                if record["finish"] not in ("context", "template", "unparsed"):
                     self.latencies[task].append(record["latency"])
                 self.streak = 0
                 await write(record)
@@ -421,6 +445,7 @@ class QualityRunner:
         await wave(pending)
         if failures and not self.stop.is_set() and not self.drained and not self.gone:
             retry_ids = {failure["id"] for failure in failures}
+            retried.update(retry_ids)
             failures.clear()
             await asyncio.sleep(15)
             await wave([item for item in pending if item["id"] in retry_ids])
