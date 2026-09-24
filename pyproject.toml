@@ -1,6 +1,6 @@
 [project]
 name = "mbench"
-version = "1.6.2"
+version = "1.6.3"
 description = "Benchmark the local LLMs behind llama-swap and rank them on one leaderboard."
 readme = "README.md"
 license = "GPL-3.0-or-later"
